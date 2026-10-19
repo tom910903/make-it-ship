@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { stateRoot } from '../../scripts/lib/state.mjs';
 import { makeRepo, mis, MIS } from '../helpers.mjs';
 
 const CFG = { version: 1, checks: {
   unit: { argv: ['node', '-e', '0'] },
-  slow: { argv: ['node', '-e', 'setTimeout(()=>{}, 3000)'], timeoutSec: 60 },
+  // blocks until the test creates ./release, so "the fast check finished while the slow one was still running" is deterministic
+  slow: { argv: ['node', '-e', 'const fs=require("fs"); const t=setInterval(()=>{ if (fs.existsSync("release")) { clearInterval(t); } }, 20)'], timeoutSec: 120 },
 } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const env = () => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; return e; };
@@ -32,10 +36,12 @@ test('a long-running check does not hold the run lock', async () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   ok(mis(dir, ['start', '--input', 'x']));
   const slow = runAsync(dir, ['check', 'slow']);
-  await new Promise((r) => setTimeout(r, 800));
-  const t0 = Date.now();
-  ok(mis(dir, ['check', 'unit']));
-  assert.ok(Date.now() - t0 < 2500, 'other commands proceed while slow check runs');
+  const { runId } = ok(mis(dir, ['status', '--json'])).state;
+  const running = join(stateRoot(dir), 'runs', runId, 'running');
+  for (let k = 0; k < 600 && !(existsSync(running) && readdirSync(running).length); k++) await new Promise((r) => setTimeout(r, 50));
+  ok(mis(dir, ['check', 'unit'])); // must complete while the slow check is still running (it cannot end before ./release exists)
+  assert.ok(readdirSync(running).length > 0, 'slow check still running after the fast one finished');
+  writeFileSync(join(dir, 'release'), '1');
   assert.equal((await slow).code, 0);
   const ev = ok(mis(dir, ['status', '--json'])).state.evidence;
   assert.deepEqual(ev.map((e) => e.check).sort(), ['slow', 'unit']);
