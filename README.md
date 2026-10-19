@@ -18,7 +18,12 @@ There are no runtime dependencies and no build step.
 git clone <this repo> ~/make-it-ship
 claude --plugin-dir ~/make-it-ship          # one session
 ```
-Or add it through a plugin marketplace that points to this repository.
+Or install it through a marketplace. A local marketplace directory needs a `.claude-plugin/marketplace.json` that lists this repository as a plugin. Then run:
+```sh
+claude plugin marketplace add <marketplace-dir> --scope project
+claude plugin install make-it-ship@<marketplace-name>
+```
+Step-by-step instructions are in `docs/milestones/NEEDS_HUMAN.md` (NH-5). This install path has not yet been confirmed by a person.
 
 ## Use
 ```
