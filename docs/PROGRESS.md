@@ -101,7 +101,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | M5-06 | 성능 벤치마크: `mis bench <check> --runs N` 중앙값 기록, 같은 run의 이전 측정 대비 +20% 경고·+50% 회귀 표시, 보고서 반영 | DONE | `tests/integration/mis-bench.test.mjs` | §11 M5 | f5a322c | mis-bench.test.mjs (5회 반복 안정) |
 | M5-07 | 토큰 예산(호스트 지원 시): HUD가 statusLine 입력의 비용 값을 표시, 강제는 미지원으로 보고서·doctor에 명시 | DONE | `statusline.test.mjs` 확장 | §3-4, §11 M5 | 7056685 | statusline.test.mjs (cost.total_cost_usd 필드는 공식 문서 statusline.md 확인) |
 | M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | DONE | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | 7056685 | plugin-files.test.mjs; Codex 실행은 NEEDS_HUMAN |
-| M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | TODO | `docs/milestones/M5-e2e.md` | §11 M5 | | |
+| M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | DONE | `docs/milestones/M5-e2e.md` | §11 M5 | c1821cf | docs/milestones/M5-e2e.md; NH-6~9 |
 | M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | TODO | VERIFIER_PROMPT | §11 M5 | | |
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
 
