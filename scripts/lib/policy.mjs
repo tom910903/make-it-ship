@@ -14,21 +14,8 @@ const BASH_STATE = /make-it-ship\/(?:runs|current)\b|\.git\/(?:[^\s'"]*\/)?make-
 const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|write/i;
 const CONFIG = '.make-it-ship.json';
 
-const segments = (cmd) => cmd.split(/&&|\|\||[;|&\n]/).map((s) => s.trim()).filter(Boolean);
-const PREFIX = ['time', 'nohup', 'sudo', 'env', 'command', 'exec', 'nice', 'then', 'do', 'else', 'if', 'while', 'until', '!'];
-const PREFIX_VALUE_FLAGS = ['-u', '-g', '-n', '-C', '-E', '-S'];
-/** Words of one segment, normalized: strip quotes and subshell/brace chars, drop VAR=val and wrapper prefixes, basename the program. */
-function words(seg) {
-  const ws = (seg.match(/"[^"]*"|'[^']*'|\S+/g) ?? [])
-    .map((w) => w.replace(/^[({]+|[)}]+$/g, '').replace(/^["']|["']$/g, '')).filter(Boolean);
-  while (ws.length && (PREFIX.includes(ws[0]) || /^[A-Za-z_]\w*=/.test(ws[0]))) {
-    const p = ws.shift();
-    if (!PREFIX.includes(p)) continue;
-    while (ws[0]?.startsWith('-')) { const f = ws.shift(); if (PREFIX_VALUE_FLAGS.includes(f)) ws.shift(); }
-  }
-  if (ws[0]?.includes('/') && !ws[0].endsWith('.mjs')) ws[0] = ws[0].split('/').pop();
-  return ws;
-}
+import { commandsOf } from './shell.mjs';
+
 const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
 function gitSub(ws) {
@@ -56,24 +43,39 @@ function dangerousRmTarget(t, cwd, repoRoot) {
   return abs === repoRoot || !(abs + sep).startsWith(repoRoot + sep);
 }
 
+/** mis subcommand of a command, if it invokes mis.mjs (node <path>/mis.mjs, the script directly, or a shell function wrapping it). */
+function misSub(ws, functions) {
+  if (ws[0] === 'node' && /(^|\/)mis\.mjs$/.test(ws[1] ?? '')) return ws.slice(2);
+  if (ws[0] === 'node' && /^\$\{?\w+\}?$/.test(ws[1] ?? '')) return ws.slice(2); // unresolved variable: could be mis.mjs
+  if (/(^|\/)mis\.mjs$/.test(ws[0])) return ws.slice(1);
+  if (functions.has(ws[0]) && /mis\.mjs/.test(functions.get(ws[0]))) return ws.slice(1);
+  return null;
+}
+
 function classifyBash(cmd, ctx, cwd) {
-  if (BASH_STATE.test(cmd)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
+  const { commands, text, functions } = commandsOf(cmd);
+  // Heredoc bodies are data (plans, reviews) and are excluded from `text`.
+  if (BASH_STATE.test(text)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
+  for (const c of commands) if (c.redirects.some((t) => BASH_STATE.test(t))) return deny('run state is written only by mis.mjs');
+  let dir = cwd;
+  for (const c of commands) {
+    if (c.argv[0] === 'cd' && c.argv[1] && /\.git(\/|$)/.test(c.argv[1]) && /make-it-ship/.test(resolve(dir, c.argv[1]))) {
+      return deny('run state is written only by mis.mjs');
+    }
+  }
   if (!ctx.activeRun) return allow;
-  if (/mis\.mjs["']?\s+init\b.*--write/.test(cmd)) return ask('writing .make-it-ship.json changes verification rules');
-  if (cmd.includes(CONFIG) && (new RegExp(`>\\s*\\S*${CONFIG.replace('.', '\\.')}`).test(cmd) || /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(cmd))) {
+  if (commands.some((c) => c.redirects.some((t) => t.endsWith(CONFIG))) ||
+      (text.includes(CONFIG) && /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(text))) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
   }
-  let dir = cwd;
   let verdict = allow;
-  for (const seg of segments(cmd)) {
-    const ws = words(seg);
+  for (const { argv: ws } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     const g = gitSub(ws);
+    const mis = misSub(ws, functions);
     let r = allow;
-    // `approve` right after a mis invocation: the script path, a shell variable holding it, or a `mis` function.
-    const ai = ws.indexOf('approve');
-    if (ai > 0 && /(^|\/)mis(\.mjs)?$|^\$\{?\w+\}?$/.test(ws[ai - 1])) r = ask('approval is recorded only when you confirm this command');
-    else if (/^(ba|z|da)?sh$/.test(ws[0]) && /^-\w*c$/.test(ws[1] ?? '') && ws[2]) r = classifyBash(ws[2], ctx, dir);
+    if (mis?.[0] === 'approve') r = ask('approval is recorded only when you confirm this command');
+    else if (mis?.[0] === 'init' && mis.includes('--write')) r = ask('writing .make-it-ship.json changes verification rules');
     else if (g?.sub === 'push') r = classifyPush(g.rest, ctx);
     else if (g?.sub === 'reset' && g.rest.includes('--hard')) r = ask('git reset --hard discards local changes');
     else if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) r = ask('git clean -f deletes untracked files');

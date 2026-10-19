@@ -48,7 +48,7 @@ Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix 
 
 Read each phase file **when you reach it** (not all up front):
 
-0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. If you were started non-interactively (`claude -p`, nobody can answer) or the user already asked you to proceed without questions, write the detected proposal yourself and say so in the report; never wait for an answer that cannot come. Then `mis start --input <file or the request text>`. If a run is already active, show `mis status` and ask whether to continue it or `mis cancel`.
+0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. Only if the user's request explicitly says to proceed without questions does that count as their confirmation: then write the detected proposal and state it in your final message. Otherwise ask and wait (Spec §9 step 1); a non-interactive session simply stops there. Then `mis start --input <file or the request text>`. If a run is already active, show `mis status` and ask whether to continue it or `mis cancel`.
 1. **discover** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/discover.md`
 2. **interview** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/interview.md`
 3. **plan** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan.md` (includes `mis plan set` and `mis mode set`)
