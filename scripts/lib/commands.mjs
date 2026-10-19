@@ -21,6 +21,8 @@ import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
 import { renderShip } from './ship.mjs';
+import { loadRuns, retroMetrics, renderRetro } from './retro.mjs';
+import { stateRoot } from './state.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -571,6 +573,17 @@ function ship(args, cwd) {
   });
 }
 
+function retro(args, cwd) {
+  const days = flag(args, '--days');
+  const root = repoRoot(cwd);
+  const metrics = retroMetrics(loadRuns(stateRoot(cwd)), { sinceMs: days ? Date.now() - Number(days) * 86400000 : 0 });
+  const date = new Date().toISOString().slice(0, 10);
+  const rel = `${REPORT_DIR}/retro-${date}.md`;
+  mkdirSync(join(root, REPORT_DIR), { recursive: true });
+  writeFileSync(join(root, rel), renderRetro(metrics, date));
+  return { path: rel, metrics };
+}
+
 function qa([sub], cwd) {
   if (sub !== 'detect') fail('usage: mis qa detect');
   return detectQa(repoRoot(cwd));
@@ -599,5 +612,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, block, cancel };
 export { requiredChecks };
