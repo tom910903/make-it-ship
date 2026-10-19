@@ -1,7 +1,7 @@
 // mis subcommands (Spec §8). Every state change goes through mutate(): lock → change → atomic save + event.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig, requiredChecks } from './config.mjs';
 import { createRun, loadRun, saveState, withLock, transition, TERMINAL } from './state.mjs';
@@ -59,7 +59,7 @@ function flag(args, name) {
 function readJsonArg(cwd, arg) {
   if (!arg) fail('missing JSON argument');
   const p = resolve(cwd, arg);
-  const text = existsSync(p) ? readFileSync(p, 'utf8') : arg;
+  const text = arg === '-' ? readFileSync(0, 'utf8') : existsSync(p) ? readFileSync(p, 'utf8') : arg;
   try { return JSON.parse(text); } catch (e) { return fail(`invalid JSON: ${e.message}`); }
 }
 
@@ -117,7 +117,7 @@ function start(args, cwd) {
 }
 
 function plan([sub, file], cwd) {
-  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file>');
+  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file|->');
   const p = readJsonArg(cwd, file);
   const errs = validatePlan(p);
   if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
@@ -197,17 +197,18 @@ export function parseReview(text) {
 }
 
 function review([sub, kind, file], cwd) {
-  if (sub !== 'add' || !REVIEW_KINDS.includes(kind) || !file) fail(`usage: mis review add <${REVIEW_KINDS.join('|')}> <md-file>`);
+  if (sub !== 'add' || !REVIEW_KINDS.includes(kind) || !file) fail(`usage: mis review add <${REVIEW_KINDS.join('|')}> <md-file|->`);
   const src = resolve(cwd, file);
-  if (!existsSync(src)) fail(`review file not found: ${file}`);
-  const counts = parseReview(readFileSync(src, 'utf8'));
+  if (file !== '-' && !existsSync(src)) fail(`review file not found: ${file}`);
+  const text = file === '-' ? readFileSync(0, 'utf8') : readFileSync(src, 'utf8');
+  const counts = parseReview(text);
   return mutate(cwd, (run) => {
     const s = run.state;
     if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
     const n = s.reviews.length + 1;
     mkdirSync(join(run.dir, 'reviews'), { recursive: true });
     const dest = `reviews/${n}-${kind}.md`;
-    copyFileSync(src, join(run.dir, dest));
+    writeFileSync(join(run.dir, dest), text);
     const rec = { kind, treeHash: treeHash(cwd), planHash: s.planHash, ...counts, file: dest, at: new Date().toISOString() };
     s.reviews.push(rec);
     return { event: { type: 'review', kind, ...counts }, result: rec };

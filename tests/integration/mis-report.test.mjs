@@ -75,3 +75,13 @@ test('human status, block and cancel', () => {
   assert.ok(existsSync(join(dir, r.path)));
   assert.match(readFileSync(join(dir, r.path), 'utf8'), /needs hardware/);
 });
+
+test('plan and review can be piped on stdin (no temp files in the repo)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  const r = ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 1\nMAJOR: 2\n' }));
+  assert.equal(r.blocking, 1);
+  assert.equal(r.major, 2);
+  assert.notEqual(mis(dir, ['review', 'add', 'quality', '-'], { input: 'looks good' }).code, 0);
+});
