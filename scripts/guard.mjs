@@ -14,7 +14,11 @@ function context(cwd) {
     let currentBranch = null;
     try { currentBranch = execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* detached */ }
     const plan = run?.state.plan;
-    const plannedFiles = plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
+    // In a task worktree (branch mis/<run>/<task>) the scope is that task's files only.
+    const wt = currentBranch?.match(/^mis\/([^/]+)\/(.+)$/);
+    const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
+    const plannedFiles = wtTask ? (wtTask.files ?? [])
+      : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
     return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
   } catch {
     return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo

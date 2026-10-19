@@ -57,6 +57,9 @@ export function verdict(state, ctx) {
   for (const [n, s] of req) if (s === 'STALE' || s === 'MISSING') partial.push(`required check ${n} is ${s === 'STALE' ? 'stale (code or config changed)' : 'not run'}`);
   for (const k of requiredReviews(state)) if (!reviews.has(k)) partial.push(`${k} review missing for current code`);
   for (const q of state.interview ?? []) if (q.impact === 'HIGH' && !q.answer) partial.push(`HIGH ambiguity ${q.id} unresolved`);
+  for (const [id, w] of Object.entries(state.worktrees ?? {})) {
+    if (!w.merged) partial.push(`task ${id} worktree not merged${w.conflicts?.length ? ` (conflicts: ${w.conflicts.join(', ')})` : ''}`);
+  }
   if (ctx.dependencyChanged && !(state.notes ?? []).some((n) => n.kind === 'dep')) partial.push('dependency manifest changed without a recorded reason (mis note dep)');
   if (partial.length) return { verdict: 'PARTIAL', reasons: partial, checks };
 

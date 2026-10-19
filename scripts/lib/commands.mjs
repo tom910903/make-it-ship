@@ -18,6 +18,7 @@ import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
+import { planWaves } from './parallel.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -97,6 +98,15 @@ function executionGates(s, cwd) {
   }
   const open = openAmbiguities(s, cwd);
   if (open.length) fail(`unresolved ambiguity: ${open.map((q) => `${q.id} (${q.impact}) ${q.question}`).join('; ')}`);
+}
+
+/** Move into EXECUTING: quick low-risk runs may skip approval; everything else must be approved already. */
+function beginExecution(s, cwd) {
+  if (s.state === 'PLANNING' || s.state === 'AWAITING_APPROVAL') {
+    if (needsApproval(s)) fail(`plan approval required before execution (mode ${s.mode ?? 'unset'}${s.riskFlags.length ? ', risk flags' : ''}): mis approve plan`);
+    executionGates(s, cwd);
+    transition(s, 'EXECUTING');
+  } else if (s.state === 'VERIFYING') transition(s, 'EXECUTING');
 }
 
 // ---------------------------------------------------------------- commands
@@ -269,11 +279,7 @@ function task([id, action], cwd) {
       t.status = 'IN_PROGRESS';
       t.attempts += 1;
     } else if (action === 'start') {
-      if (s.state === 'PLANNING' || s.state === 'AWAITING_APPROVAL') {
-        if (needsApproval(s)) fail(`plan approval required before execution (mode ${s.mode ?? 'unset'}${s.riskFlags.length ? ', risk flags' : ''}): mis approve plan`);
-        executionGates(s, cwd);
-        transition(s, 'EXECUTING');
-      } else if (s.state === 'VERIFYING') transition(s, 'EXECUTING');
+      beginExecution(s, cwd);
       needState(run, ['EXECUTING'], 'task start');
       if (t.status === 'FAILED') fail(`task ${id} failed before; use mis task ${id} retry after recording a root cause`);
       if (t.status !== 'TODO') fail(`task ${id} is ${t.status}`);
@@ -468,6 +474,70 @@ function resume([runId], cwd) {
   });
 }
 
+const gitOut = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const gitTry = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
+
+function parallel([sub], cwd) {
+  if (sub !== 'plan') fail('usage: mis parallel plan');
+  const run = requireRun(cwd);
+  if (!run.state.plan) fail('no plan');
+  return planWaves(run.state.plan.tasks);
+}
+
+function mainRoot(cwd) {
+  const root = repoRoot(cwd);
+  if (resolve(root, gitOut(root, 'rev-parse', '--git-dir')) !== resolve(root, gitOut(root, 'rev-parse', '--git-common-dir'))) {
+    fail('run worktree commands from the main working tree, not from a task worktree');
+  }
+  return root;
+}
+
+/** mis worktree add|merge <task>: isolate a task on its own branch, then merge it back (aborting cleanly on conflict). */
+function worktree([sub, id], cwd) {
+  if (!['add', 'merge'].includes(sub) || !id) fail('usage: mis worktree <add|merge> <task>');
+  const root = mainRoot(cwd);
+  if (gitOut(root, 'status', '--porcelain')) fail('main working tree has uncommitted changes; commit them first so task worktrees start from the same code');
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const t = s.plan?.tasks.find((x) => x.id === id);
+    if (!t) fail(`no task ${id} in plan`);
+    s.worktrees ??= {};
+    if (sub === 'add') {
+      if (s.worktrees[id]) fail(`task ${id} already has a worktree: ${s.worktrees[id].path}`);
+      if (t.status !== 'TODO') fail(`task ${id} is ${t.status}`);
+      beginExecution(s, cwd);
+      const exclude = join(gitOut(root, 'rev-parse', '--git-common-dir').replace(/^(?!\/)/, `${root}/`), 'info', 'exclude');
+      mkdirSync(join(exclude, '..'), { recursive: true });
+      if (!(existsSync(exclude) && readFileSync(exclude, 'utf8').split('\n').includes('.worktrees/'))) writeFileSync(exclude, `${existsSync(exclude) ? readFileSync(exclude, 'utf8').replace(/\n?$/, '\n') : ''}.worktrees/\n`);
+      const path = join(root, '.worktrees', `${s.runId}-${id}`);
+      const branch = `mis/${s.runId}/${id}`;
+      const base = gitOut(root, 'rev-parse', 'HEAD');
+      gitOut(root, 'worktree', 'add', '-q', '-b', branch, path, base);
+      s.worktrees[id] = { path, branch, base, merged: false, conflicts: null };
+      return { event: { type: 'worktree-add', task: id, branch }, result: { task: id, path, branch, files: t.files ?? [] } };
+    }
+    const w = s.worktrees[id];
+    if (!w) fail(`task ${id} has no worktree`);
+    if (w.merged) fail(`task ${id} is already merged`);
+    if (t.status !== 'DONE') fail(`task ${id} is ${t.status}; finish it (mis task ${id} done) before merging`);
+    if (gitOut(w.path, 'status', '--porcelain')) fail(`worktree ${w.path} has uncommitted changes; commit them on ${w.branch} first`);
+    const m = gitTry(root, 'merge', '--no-ff', '--no-edit', w.branch);
+    if (m.status !== 0) {
+      const conflicts = gitOut(root, 'diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
+      gitTry(root, 'merge', '--abort');
+      w.conflicts = conflicts;
+      return { event: { type: 'worktree-conflict', task: id, conflicts }, result: { task: id, merged: false, conflicts,
+        next: `resolve in ${w.path} (rebase ${w.branch} on the current branch and fix ${conflicts.join(', ')}), then mis worktree merge ${id}` } };
+    }
+    w.merged = true;
+    w.conflicts = null;
+    w.mergeCommit = gitOut(root, 'rev-parse', 'HEAD');
+    gitTry(root, 'worktree', 'remove', w.path);
+    gitTry(root, 'branch', '-d', w.branch);
+    return { event: { type: 'worktree-merge', task: id, commit: w.mergeCommit }, result: { task: id, merged: true, commit: w.mergeCommit } };
+  });
+}
+
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
@@ -491,5 +561,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, block, cancel };
 export { requiredChecks };

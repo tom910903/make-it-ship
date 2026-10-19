@@ -61,8 +61,8 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | TODO | `docs/adr/0002-parallel-state.md` | ADR-004 | | |
-| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | TODO | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | | |
+| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | DONE | `docs/adr/0002-parallel-state.md` | ADR-004 | cc8f5f7 | ADR-0002 |
+| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | DONE | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | cc8f5f7 | npm test 231/231 (동시 8 writer 무손실) |
 | M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | TODO | `tests/unit/parallel.test.mjs` | §14 parallel | | |
 | M3-04 | `mis worktree add|merge <task>`: 격리 worktree, 소유 파일 범위 guard, 충돌 시 안전 중단 | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | §11 M3 종료 기준 | | |
 | M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | TODO | `plugin-files.test.mjs` | §14 parallel | | |
