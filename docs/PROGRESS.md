@@ -54,7 +54,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | DONE | `policy.test.mjs` 확장 | §7, AC#11 | 1739049 | npm test 211/211 (우회 변형 26건 포함) |
 | M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | DONE | `tests/unit/statusline.test.mjs` | §14 hud | 8c48f4e | npm test 214/214 |
 | M2-09 | doctor (M1-10에서 구현됨) 재확인 | DONE | 기존 테스트 | AC#12 | 07f7a97 (M1-10), cc1f768 | mis-init-doctor.test.mjs 통과; 경고 문구 'enabled in settings' 정정 |
-| M2-07b | guard 매트릭스 밖 형태(M1 4차 R-1~R-6) 처리 + 조합 테스트 확장 | TODO | `shell.test.mjs` | §7, M2 종료 기준 | | |
+| M2-07b | guard 매트릭스 밖 형태(M1 4차 R-1~R-6) 처리 + 조합 테스트 확장 | DONE | `shell.test.mjs` | §7, M2 종료 기준 | fddc253 | npm test 253/253 (조합 행렬 확장) |
 | M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | DONE | `docs/milestones/M2-e2e.md` | 데모 D | d4cb653 | d1/d2 강제 종료→resume→VERIFIED; NH-2, NH-3 |
 | M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | TODO | VERIFIER_PROMPT | §11 M2 | | |
 ## M3 — 선택형 협업
