@@ -38,7 +38,23 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 ### 원본 흡수 근거 (§14)
 - phase별로 읽은 원본 파일 목록과 핵심 동작 요약: `docs/research/source-absorption-m1.md` (discover·interview·plan·plan-critique·implement·debug·verify·review·simplify). 각 phase 문서 첫 줄 `Absorbs:`에 원본 기능명을 명시하고 `tests/unit/plugin-files.test.mjs`가 이를 검사한다.
 
-## M2
+## M2 — 신뢰성
+
+종료 기준(Spec §11): 데모 D 통과, guard 우회 사례 테스트.
+
+| ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
+|---|---|---|---|---|---|---|
+| M2-01 | `mis resume`: lock 회수, STALE 재계산, 마지막 이벤트 이후 변경 파일 목록 + resume 스킬 | TODO | `tests/integration/mis-resume.test.mjs` (check 도중 SIGKILL → resume) | AC#10 | | |
+| M2-02 | 재시도 상한 + rootcause 게이트: `task retry`, `note rootcause`, 상한 초과 BLOCKED | TODO | `tests/integration/mis-retry.test.mjs` | PRD 5.4, 8.3 | | |
+| M2-03 | 실행 시간 상한: deadline 초과 시 실행 명령 BLOCKED | TODO | `tests/integration/mis-retry.test.mjs` | PRD 8.3, §3-4 | | |
+| M2-04 | debug phase + `/make-it-ship:debug` | TODO | `plugin-files.test.mjs` 확장 | §14 debug | | |
+| M2-05 | security-reviewer 에이전트 + review phase 보안 리뷰 | TODO | `plugin-files.test.mjs`, verdict 표(이미 있음) | PRD 8.1 | | |
+| M2-06 | simplify: `mis check` 의존성 변경 경고·`note dep`, 보고서 shortcut 목록, simplify phase | TODO | `tests/integration/mis-simplify.test.mjs` | AC#7, §14 simplify | | |
+| M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | TODO | `policy.test.mjs` 확장 | §7, AC#11 | | |
+| M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | TODO | `tests/unit/statusline.test.mjs` | §14 hud | | |
+| M2-09 | doctor (M1-10에서 구현됨) 재확인 | TODO | 기존 테스트 | AC#12 | | |
+| M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | TODO | `docs/milestones/M2-e2e.md` | 데모 D | | |
+| M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | TODO | VERIFIER_PROMPT | §11 M2 | | |
 ## M3
 ## M4
 ## M5

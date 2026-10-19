@@ -16,4 +16,4 @@ For each task, in plan order:
 6. FAIL: read the full log tail, reproduce, find the root cause before changing code — form one hypothesis ("X because Y"), test it with the smallest experiment, never stack guesses. Fix the cause, not the test. After 3 failed hypotheses, stop and ask the user.
 7. `mis task <id> done` when its acceptance criteria are met by the code and its tests; `mis task <id> fail` if it cannot be completed (say why).
 
-Do not commit or push unless the user asked. Never run package installs or remote writes without the user's approval (the guard will ask them).
+Do not commit or push unless the user asked. Never run package installs or remote writes without the user's approval (the guard will ask them). If a new dependency is truly needed, record why: `mis note dep "<why the standard library or existing code is not enough>"`; otherwise the verdict stays PARTIAL.

@@ -17,6 +17,7 @@ const bad = [
   ['wrong version', { ...ok, version: 2 }, /version/],
   ['missing checks', { version: 1 }, /checks/],
   ['no checks at all', { version: 1, checks: {} }, /at least one check/],
+  ['empty required list', { ...ok, required: { quick: [] } }, /required.quick must list at least one check/],
   ['empty argv', { ...ok, checks: { unit: { argv: [] } } }, /argv/],
   ['non-string argv', { ...ok, checks: { unit: { argv: ['npm', 1] } }, required: {} }, /argv/],
   ['unknown check key', { ...ok, checks: { unit: { argv: ['x'], shell: true } }, required: {} }, /unknown key: checks.unit.shell/],

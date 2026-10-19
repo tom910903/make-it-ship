@@ -31,7 +31,7 @@ export function detectConfig(root) {
   if (!checks.unit && has(root, 'go.mod')) { checks.unit = { argv: ['go', 'test', './...'], timeoutSec: 900 }; detected.push('Go'); }
   if (!checks.unit && has(root, 'Package.swift')) { checks.unit = { argv: ['swift', 'test'], timeoutSec: 1200 }; detected.push('SwiftPM'); }
   if (!Object.keys(checks).length) {
-    return { config: null, detected, message: 'No test or build command detected. Define checks in .make-it-ship.json by hand; until then verification is BLOCKED.' };
+    return { config: null, detected, message: 'No test or build command detected. Define checks in .make-it-ship.json by hand; until then nothing is machine-verified and the verdict cannot be VERIFIED.' };
   }
   const names = Object.keys(checks);
   const config = { version: 1, checks, required: { quick: checks.unit ? ['unit'] : names, standard: names },
@@ -73,6 +73,6 @@ export function doctor(cwd) {
   }
   if (existsSync(join(home, '.claude', 'skills', 'gstack'))) found.add('gstack (~/.claude/skills/gstack)');
   checks.push({ name: 'plugins', status: found.size ? 'warn' : 'ok',
-    detail: found.size ? `overlapping plugins active: ${[...found].join(', ')}. Make It Ship works without them; their hooks may add duplicate prompts or reviews.` : 'no overlapping plugins' });
+    detail: found.size ? `overlapping plugins enabled in settings (may not be loaded in this session): ${[...found].join(', ')}. Make It Ship works without them; their hooks may add duplicate prompts or reviews.` : 'no overlapping plugins' });
   return { ok: !checks.some((c) => c.status === 'error'), checks };
 }

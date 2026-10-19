@@ -42,6 +42,7 @@ const cases = [
   ['resolved HIGH / open LOW ok', (s) => { s.interview = [{ id: 'Q1', impact: 'HIGH', answer: 'yes' }, { id: 'Q2', impact: 'LOW', answer: null }]; }, 'VERIFIED'],
   ['dependency change without reason → PARTIAL', (s, c) => { c.dependencyChanged = true; }, 'PARTIAL'],
   ['dependency change with reason → VERIFIED', (s, c) => { c.dependencyChanged = true; s.notes = [{ kind: 'dep', text: 'need x' }]; }, 'VERIFIED'],
+  ['no required checks at all → PARTIAL', (s, c) => { c.required = []; }, 'PARTIAL'],
   ['mode not set → PARTIAL', (s) => { s.mode = null; }, 'PARTIAL'],
   ['non-required failing check does not matter', (s) => { s.evidence.push(ev('e2e', 'FAIL')); }, 'VERIFIED'],
 ];

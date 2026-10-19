@@ -37,6 +37,7 @@ export function validateConfig(cfg) {
       unknownKeys(cfg.required, MODES, 'required.', errs);
       for (const [mode, names] of Object.entries(cfg.required)) {
         if (!isStrArr(names)) { errs.push(`required.${mode} must be a string array`); continue; }
+        if (!names.length) errs.push(`required.${mode} must list at least one check`);
         for (const n of names) if (!isObj(cfg.checks) || !cfg.checks[n]) errs.push(`required.${mode}: check "${n}" is not defined`);
       }
     }

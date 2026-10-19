@@ -9,13 +9,22 @@ const ask = (reason) => ({ decision: 'ask', reason: `${R}: ${reason}` });
 const deny = (reason) => ({ decision: 'deny', reason: `${R}: ${reason}` });
 
 const STATE_PATH = /\.git\/(?:.*\/)?make-it-ship\/(?:runs\/|current$)/;
-const BASH_STATE = /make-it-ship\/(?:runs|current)\b/;
-const MIS = /mis\.mjs\b/;
+// Any mention of the state dir in a shell command is denied: mis.mjs never takes state paths as arguments.
+const BASH_STATE = /make-it-ship\/(?:runs|current)\b|\.git\/(?:[^\s'"]*\/)?make-it-ship\b/;
 const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|write/i;
 const CONFIG = '.make-it-ship.json';
 
-const segments = (cmd) => cmd.split(/&&|\|\||[;|\n]/).map((s) => s.trim()).filter(Boolean);
-const words = (seg) => seg.match(/"[^"]*"|'[^']*'|\S+/g)?.map((w) => w.replace(/^["']|["']$/g, '')) ?? [];
+const segments = (cmd) => cmd.split(/&&|\|\||[;|&\n]/).map((s) => s.trim()).filter(Boolean);
+const PREFIX = ['time', 'nohup', 'sudo', 'env', 'command', 'exec', 'nice'];
+/** Words of one segment, normalized: strip quotes and subshell/brace chars, drop VAR=val and wrapper prefixes, basename the program. */
+function words(seg) {
+  const ws = (seg.match(/"[^"]*"|'[^']*'|\S+/g) ?? [])
+    .map((w) => w.replace(/^[({]+|[)}]+$/g, '').replace(/^["']|["']$/g, '')).filter(Boolean);
+  while (ws.length && (PREFIX.includes(ws[0]) || /^[A-Za-z_]\w*=/.test(ws[0]))) ws.shift();
+  if (ws[0]?.includes('/') && !ws[0].endsWith('.mjs')) ws[0] = ws[0].split('/').pop();
+  return ws;
+}
+const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
 function gitSub(ws) {
   // git [-C dir | -c k=v | --flag]... <sub>
@@ -28,8 +37,8 @@ function gitSub(ws) {
 function classifyPush(rest, ctx) {
   const force = rest.some((w) => /^(-f|--force|--force-with-lease)(=|$)/.test(w) || /^-[a-z]*f/.test(w));
   const refs = rest.filter((w) => !w.startsWith('-'));
-  const targets = refs.slice(1).map((r) => r.replace(/^\+/, '').split(':').pop());
-  const plusMain = refs.slice(1).some((r) => /^\+(main|master)$/.test(r.split(':')[0]));
+  const targets = refs.slice(1).map(branchName);
+  const plusMain = refs.slice(1).some((r) => r.startsWith('+') && ['main', 'master'].includes(branchName(r)));
   const onMain = targets.some((t) => t === 'main' || t === 'master') || (!targets.length && ['main', 'master'].includes(ctx.currentBranch));
   if ((force && onMain) || plusMain) return deny('force push to the default branch is not allowed');
   return ask('remote write (git push) needs your approval');
@@ -43,9 +52,10 @@ function dangerousRmTarget(t, cwd, repoRoot) {
 }
 
 function classifyBash(cmd, ctx, cwd) {
-  if (BASH_STATE.test(cmd) && !MIS.test(cmd)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
+  if (BASH_STATE.test(cmd)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
   if (!ctx.activeRun) return allow;
-  if (/mis\.mjs["']?\s+approve\b/.test(cmd)) return ask('approval is recorded only when you confirm this command');
+  // Any approve through mis — direct, via a variable, or a shell function — needs the user's confirmation.
+  if (/\bapprove\b/.test(cmd) && /\bmis\b|mis\.mjs/.test(cmd)) return ask('approval is recorded only when you confirm this command');
   if (/mis\.mjs["']?\s+init\b.*--write/.test(cmd)) return ask('writing .make-it-ship.json changes verification rules');
   if (cmd.includes(CONFIG) && (new RegExp(`>\\s*\\S*${CONFIG.replace('.', '\\.')}`).test(cmd) || /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(cmd))) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
@@ -57,7 +67,8 @@ function classifyBash(cmd, ctx, cwd) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     const g = gitSub(ws);
     let r = allow;
-    if (g?.sub === 'push') r = classifyPush(g.rest, ctx);
+    if (/^(ba|z|da)?sh$/.test(ws[0]) && ws[1] === '-c' && ws[2]) r = classifyBash(ws[2], ctx, dir);
+    else if (g?.sub === 'push') r = classifyPush(g.rest, ctx);
     else if (g?.sub === 'reset' && g.rest.includes('--hard')) r = ask('git reset --hard discards local changes');
     else if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) r = ask('git clean -f deletes untracked files');
     else if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) r = ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);

@@ -50,6 +50,7 @@ export function verdict(state, ctx) {
 
   const partial = [];
   if (!state.mode) partial.push('mode not set');
+  if (!ctx.required.length) partial.push('no required checks defined: nothing was machine-verified');
   const tasks = state.plan?.tasks;
   if (!tasks) partial.push('no plan');
   else for (const t of tasks) if (t.status !== 'DONE') partial.push(`task ${t.id} is ${t.status}`);

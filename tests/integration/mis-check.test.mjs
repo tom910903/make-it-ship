@@ -108,3 +108,15 @@ test('verdict: dependency manifest change needs a reason; missing config is neve
   assert.notEqual(b.verdict, 'VERIFIED');
   assert.ok(b.reasons.some((r) => /no \.make-it-ship\.json/.test(r)));
 });
+
+test('mis note dep records a reason that satisfies the dependency rule (M-4)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { pass: { argv: node('0') } } }, 'package.json': '{"name":"a"}' });
+  ok(mis(dir, ['start', '--input', 'x']));
+  write(dir, { 'package.json': '{"name":"a","dependencies":{"zod":"3"}}' });
+  assert.notEqual(mis(dir, ['note', 'dep']).code, 0, 'text required');
+  const n = ok(mis(dir, ['note', 'dep', 'zod', 'validates', 'the', 'config', 'schema']));
+  assert.equal(n.kind, 'dep');
+  assert.equal(n.text, 'zod validates the config schema');
+  const v = ok(mis(dir, ['verdict']));
+  assert.ok(!v.reasons.some((r) => /dependency/.test(r)), v.reasons.join());
+});

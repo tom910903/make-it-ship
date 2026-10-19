@@ -77,3 +77,24 @@ test('every non-allow decision carries a reason', () => {
   const r = classify(bash('git push'), ctx);
   assert.match(r.reason, /make-it-ship/);
 });
+
+// M1 verification defects H-1, M-1..M-3, L-5: habitual (non-adversarial) variants
+const MORE = {
+  ask: [
+    'MIS=/p/scripts/mis.mjs; node $MIS approve plan',                       // H-1 variable
+    'mis(){ node "/p/scripts/mis.mjs" "$@"; }; mis approve plan',            // H-1 shell function
+    '(cd sub && git push)', 'GIT_TRACE=1 git push', 'time git push', 'nohup git push &', 'sudo git push',
+    'env FOO=1 npm install x', 'command git push', '/usr/bin/git push origin x', 'bash -c "git push origin x"',
+    'git -c core.x=y push',
+  ],
+  deny: [
+    'node /p/scripts/mis.mjs status; echo x > .git/make-it-ship/runs/r/state.json', // M-1
+    'git push --force origin refs/heads/main', 'git push -f origin HEAD:refs/heads/master', // M-2
+    'git status; (git push --force origin main)',                                       // M-3
+    'cd .git/make-it-ship && echo x > runs/r/state.json',                              // L-5
+  ],
+  allow: ['grep -rn approval src', 'node /p/scripts/mis.mjs status', 'echo approved > /dev/null'],
+};
+for (const [want, cmds] of Object.entries(MORE)) {
+  for (const c of cmds) test(`bash variant ${want}: ${c}`, () => assert.equal(d(bash(c)), want));
+}

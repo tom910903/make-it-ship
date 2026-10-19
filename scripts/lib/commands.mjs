@@ -338,6 +338,17 @@ function block(args, cwd) {
   });
 }
 
+function note([kind, ...rest], cwd) {
+  const text = rest.join(' ').trim();
+  if (kind !== 'dep' || !text) fail('usage: mis note dep <reason the dependency is needed>');
+  return mutate(cwd, (run) => {
+    if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
+    const rec = { kind, text, at: new Date().toISOString() };
+    run.state.notes.push(rec);
+    return { event: { type: 'note', kind }, result: rec };
+  });
+}
+
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
@@ -357,5 +368,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, block, cancel };
 export { requiredChecks };

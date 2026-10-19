@@ -17,7 +17,7 @@
 | a2b | a2 이어서 | 운영자가 터미널에서 `mis approve plan`을 직접 실행(훅 밖) 후 `... Continue the active run` | Standard | REPORTED · **VERIFIED**. spec·quality 리뷰 기록, 첫 리뷰 후 코드 수정 → check·리뷰 재실행(해시 바인딩 동작), 잘못된 리뷰 지적은 실행 근거로 반박 | `evidence/m1/a2b-final-message.txt`, `a2-report.md` |
 
 관찰 사항
-- 세 실행 모두 `.make-it-ship.json`을 탐지값으로 쓰고 그 사실을 사용자에게 알렸다(비대화형이라 확인 불가 → 스킬 지시대로 보고).
+- 이 기록의 세 실행은 `.make-it-ship.json`을 탐지값으로 쓰고 그 사실을 알렸다. 그러나 독립 검증(M1-report L-1)의 재실행 3회는 모두 설정 확인을 기다리며 멈췄다. 모델 동작이 비결정적이다. 확인을 기다리는 쪽은 안전한 실패이고, 스킬 지시를 "비대화형이면 기다리지 말라"로 명확히 했다(재검증에서 재확인).
 - 판정 문구는 모두 `mis verdict` 출력을 인용했다.
 - 보고서의 "사용자 결정" 절에 인터뷰에서 기본값으로 정한 가정이 빠져 있던 결함을 발견해 수정함(`render.mjs`, 테스트 `mis-report.test.mjs`).
 
