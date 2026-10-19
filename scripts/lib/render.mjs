@@ -60,6 +60,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
   const checks = evRows.length
     ? ['| ID | check | 명령(argv) | exit | 기록 당시 | 현재 코드 기준 | 종료 시각 |', '|---|---|---|---|---|---|---|', ...evRows].join('\n')
     : '실행된 check가 없다.';
+  const opinions = (s.notes ?? []).filter((n) => n.kind === 'second-opinion').map((n) => `second opinion (다른 모델, 판정에 미반영): ${n.text.trim().split('\n')[0]}`);
   const basis = (r) => (['plan-critic', 'product'].includes(r.kind)
     ? (r.planHash === s.planHash ? '현재 계획 기준' : '이전 계획 기준(무효)')
     : (r.treeHash === ctx.treeHash ? '현재 코드 기준' : '이전 코드 기준(무효)'));
@@ -84,6 +85,10 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
   for (const q of (s.interview ?? []).filter((x) => x.answer)) decisions.push(`가정: ${q.id} (${q.impact}) ${q.question} → ${q.answer} (다르면 알려 달라)`);
   for (const r of (s.reviews ?? []).filter((x) => x.major > 0 && x.treeHash === ctx.treeHash)) decisions.push(`${r.kind} 리뷰의 major 이슈 ${r.major}건 확인 필요 (\`${r.file}\`)`);
   if (s.blockedReason) decisions.push(`차단 사유: ${s.blockedReason}`);
+  const lastBench = new Map((s.notes ?? []).filter((n) => n.kind === 'bench').map((n) => [n.check, n]));
+  for (const b of lastBench.values()) {
+    if (b.status === 'REGRESSION' || b.status === 'WARN') decisions.push(`성능 ${b.status === 'REGRESSION' ? '회귀' : '저하 경고'}: ${b.check} 중앙값 ${b.baselineMs}ms → ${b.medianMs}ms (${b.deltaPct > 0 ? '+' : ''}${b.deltaPct}%)`);
+  }
   if (ctx.changedManifests?.length) decisions.push(`의존성 매니페스트 변경: ${ctx.changedManifests.join(', ')}`);
   decisions.push('원격 push·PR·배포는 사용자 승인 후에만 수행한다.');
   const howto = [...(s.plan?.howToRun ?? []).map((c) => `\`${c}\``),
@@ -96,7 +101,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
     tasks: tasks.length ? tasks.map((t) => `- [${t.status}] ${t.id} ${t.title} — 수용 기준: ${t.acceptance.join('; ')}`).join('\n') : '작업 없음',
     changes: list(changes.map((c) => `${c.status} \`${c.path}\``), '기준 커밋 이후 변경된 파일이 없다.'),
     checks,
-    reviews: list(reviews, '기록된 리뷰가 없다.'),
+    reviews: list([...reviews, ...opinions], '기록된 리뷰가 없다.'),
     unverified: list(unverified, '없음'),
     stale: list(stale, '없음'),
     decisions: list(decisions, '없음'),

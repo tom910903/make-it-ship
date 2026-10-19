@@ -14,8 +14,8 @@ function frontmatter(text) {
 
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
-const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship'];
+const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -62,6 +62,7 @@ test('direct commands use their phase files', () => {
   assert.match(read('skills/debug/SKILL.md'), /phases\/debug\.md/);
   assert.match(read('skills/qa/SKILL.md'), /phases\/qa\.md/);
   assert.match(read('skills/ship/SKILL.md'), /phases\/ship\.md/);
+  assert.match(read('skills/retro/SKILL.md'), /phases\/retro\.md/);
 });
 
 test('every `mis <command>` mentioned in skills and phases exists', () => {
@@ -83,6 +84,7 @@ test('phases name the source features they absorb (Spec §14.2)', () => {
     'design-explore': [/design-consultation/i, /design-shotgun/i, /design-html/i, /designer/i], parallel: [/ultrawork|team/i, /dispatching-parallel-agents/i, /using-git-worktrees/i],
     qa: [/gstack qa|\bqa-only/i, /browse/i, /benchmark/i, /ios-qa/i, /qa-tester/i, /visual-verdict/i],
     ship: [/document-release/i, /document-generate/i, /finishing-a-development-branch/i, /merge-readiness/i, /git-master/i],
+    retro: [/gstack retro|\bretro\b/i, /\blearn\b/i, /learner|skillify/i, /writing-skills/i],
     debug: [/systematic-debugging/i, /investigate/i, /tracer|trace/i], simplify: [/ponytail-debt/i, /ai-slop-cleaner/i, /code-simplifier/i],
   };
   for (const [p, res] of Object.entries(expect)) {
@@ -121,6 +123,14 @@ test('ship phase never pushes on its own and the qa phase reports BLOCKED instea
   assert.match(read('skills/run/phases/ship.md'), /approv/i);
   assert.match(read('skills/run/phases/qa.md'), /mis qa detect/);
   assert.match(read('skills/run/phases/qa.md'), /BLOCKED/);
+});
+
+test('Codex adapter: mis-based flow, honest about missing guard hooks, only real mis commands', () => {
+  const t = read('adapters/codex/AGENTS.md');
+  assert.match(t, /no PreToolUse|guard hooks? (do|does) not run|not enforced/i);
+  assert.match(t, /mis approve plan/);
+  for (const m of t.matchAll(/`mis ([a-z-]+)/g)) assert.ok(commands[m[1]], `unknown mis command ${m[1]}`);
+  for (const m of t.matchAll(/skills\/run\/phases\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `skills/run/phases/${m[1]}.md`)), m[0]);
 });
 
 test('ship file edits happen before verify; after the report only drafts and branch finishing (M4 D1)', () => {

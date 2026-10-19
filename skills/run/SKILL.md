@@ -17,7 +17,7 @@ You turn the user's request into verified code. Two promises are non-negotiable:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <args>
 ```
 
-Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis note rootcause <task> -`, `mis task <id> retry`, `mis resume`, `mis approve continue`, `mis note design -`, `mis parallel plan`, `mis worktree <add|merge> <task>`, `mis qa detect`, `mis ship`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`.
+Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis note rootcause <task> -`, `mis task <id> retry`, `mis resume`, `mis approve continue`, `mis note design -`, `mis parallel plan`, `mis worktree <add|merge> <task>`, `mis qa detect`, `mis bench <check> --runs N`, `mis ship`, `mis retro`, `mis learn <add -|list>`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`.
 
 Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never write plans, reviews, or scratch files into the repository: any file there changes the code hash and pollutes the change list.
 
@@ -51,6 +51,7 @@ Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never 
 | review security | if risk flags | if risk flags | if risk flags |
 | qa (real use) | — | if a user-facing surface changed | yes |
 | ship | on request | on request | yes |
+| retro / learn | — | — | yes |
 
 Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, hardware, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
 
@@ -83,6 +84,6 @@ Read each phase file **when you reach it** (not all up front):
    - the report path (`docs/make-it-ship/<run>/report.md`).
    If the verdict is FAILED or PARTIAL and the cause is fixable within the approved plan, fix it (back to step 6) before reporting; otherwise report honestly.
 
-**ship, part B** (on request, or Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` steps 3-5 (`mis ship`, commits, finish the branch), after the report; no file edits then.
+**ship, part B** (on request, or Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` steps 3-5 (`mis ship`, commits, finish the branch), after the report; no file edits then. **retro / learn** (Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/retro.md`.
 
 If something outside your control stops progress (missing tool, hardware, credentials), run `mis block "<one-sentence reason>"`, then `mis report`, and tell the user what they need to do.

@@ -34,3 +34,16 @@ test('mis init proposes the HUD statusLine (user applies it)', () => {
   assert.match(r.json.hud.statusLine.command, /scripts\/statusline\.mjs/);
   assert.match(r.json.hud.how, /settings\.json/);
 });
+
+test('HUD shows the session cost when the host provides it (display only, no enforcement)', () => {
+  const ctx = { treeHash: T, configHash: C, required: ['unit'], dependencyChanged: false };
+  assert.match(renderHud(state, ctx, { total_cost_usd: 1.2345 }), / · \$1\.23$/);
+  assert.doesNotMatch(renderHud(state, ctx), /\$/);
+});
+
+test('doctor states that token budgets are not enforceable by a plugin', () => {
+  const r = mis(makeRepo(), ['doctor']);
+  const tb = r.json.checks.find((c) => c.name === 'token-budget');
+  assert.equal(tb.status, 'warn');
+  assert.match(tb.detail, /not supported/);
+});

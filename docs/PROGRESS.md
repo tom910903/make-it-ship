@@ -96,19 +96,20 @@ VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m
 
 | ID | 작업 | 상태 | AC (완료 조건 / 검증) | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M5-01 | retro: `mis retro`가 runs/*/events.jsonl을 집계(판정 분포, 실패→통과 주기, 재시도, 차단 사유, 리뷰 blocking, 소요 시간) → `docs/make-it-ship/retro-<date>.md`; retro phase + `/make-it-ship:retro` | TODO | `tests/integration/mis-retro.test.mjs`(합성 run 2개 집계 값 검증) | §14 retro, §14.3 | | |
-| M5-02 | learn: `mis learn add|list` — 스키마 검증, 추가 전용, 최신 우선, 참조 파일 삭제 시 STALE 표시 → `docs/make-it-ship/learnings.md`; 프로세스 변경은 제안만 | TODO | `tests/integration/mis-learn.test.mjs` | §14 learn | | |
-| M5-03 | second opinion: `mis second-opinion detect`(codex/gemini CLI 탐지), 결과는 판정에 영향 없는 노트로 기록; 실제 외부 모델 호출은 사용자 승인 대상 | TODO | `tests/integration/mis-second.test.mjs`(PATH 가짜 바이너리) | §14 second opinion | | |
-| M5-04 | iOS 실기기 브리지: `templates/ios-debug-bridge/`(SPM, 모든 소스 `#if DEBUG`, 루프백 전용) + `mis ios bridge-scan`; ship은 브리지 코드가 남으면 NOT READY; 실기기 check는 기기 없으면 BLOCKED | TODO | `tests/integration/mis-ios.test.mjs`(템플릿 불변식·스캔·ship 연동), 시뮬레이터 SDK 타입체크는 E2E 기록 | §14 ios(M5) | | |
-| M5-05 | BSP QA 프로파일: Yocto/Buildroot/커널 트리 탐지 → 빌드 check 제안 + 타깃 검증은 BLOCKED("빌드 통과 ≠ 하드웨어 동작") | TODO | `tests/integration/mis-qa.test.mjs` 확장(합성 트리) | §11 M5, PRD 10.2 | | |
-| M5-06 | 성능 벤치마크: `mis bench <check> --runs N` 중앙값 기록, 같은 run의 이전 측정 대비 +20% 경고·+50% 회귀 표시, 보고서 반영 | TODO | `tests/integration/mis-bench.test.mjs` | §11 M5 | | |
-| M5-07 | 토큰 예산(호스트 지원 시): HUD가 statusLine 입력의 비용 값을 표시, 강제는 미지원으로 보고서·doctor에 명시 | TODO | `statusline.test.mjs` 확장 | §3-4, §11 M5 | | |
-| M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | TODO | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | | |
-| M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | TODO | `docs/milestones/M5-e2e.md` | §11 M5 | | |
+| M5-01 | retro: `mis retro`가 runs/*/events.jsonl을 집계(판정 분포, 실패→통과 주기, 재시도, 차단 사유, 리뷰 blocking, 소요 시간) → `docs/make-it-ship/retro-<date>.md`; retro phase + `/make-it-ship:retro` | DONE | `tests/integration/mis-retro.test.mjs`(합성 run 2개 집계 값 검증) | §14 retro, §14.3 | 3f13c8a | npm test, mis-retro.test.mjs |
+| M5-02 | learn: `mis learn add| DONE | TODO | `tests/integration/mis-learn.test.mjs` | 3f13c8a | mis-learn.test.mjs | |
+| M5-03 | second opinion: `mis second-opinion detect`(codex/gemini CLI 탐지), 결과는 판정에 영향 없는 노트로 기록; 실제 외부 모델 호출은 사용자 승인 대상 | DONE | `tests/integration/mis-second.test.mjs`(PATH 가짜 바이너리) | §14 second opinion | be03d58 | mis-second.test.mjs; 실제 외부 모델 호출은 NEEDS_HUMAN |
+| M5-04 | iOS 실기기 브리지: `templates/ios-debug-bridge/`(SPM, 모든 소스 `#if DEBUG`, 루프백 전용) + `mis ios bridge-scan`; ship은 브리지 코드가 남으면 NOT READY; 실기기 check는 기기 없으면 BLOCKED | DONE | `tests/integration/mis-ios.test.mjs`(템플릿 불변식·스캔·ship 연동), 시뮬레이터 SDK 타입체크는 E2E 기록 | §14 ios(M5) | ad3d11c | mis-ios.test.mjs; 시뮬레이터 SDK DEBUG 타입체크 OK, Release 심볼 0; 실기기 NEEDS_HUMAN |
+| M5-05 | BSP QA 프로파일: Yocto/Buildroot/커널 트리 탐지 → 빌드 check 제안 + 타깃 검증은 BLOCKED("빌드 통과 ≠ 하드웨어 동작") | DONE | `tests/integration/mis-qa.test.mjs` 확장(합성 트리) | §11 M5, PRD 10.2 | 659c27e | mis-qa.test.mjs BSP 2건 |
+| M5-06 | 성능 벤치마크: `mis bench <check> --runs N` 중앙값 기록, 같은 run의 이전 측정 대비 +20% 경고·+50% 회귀 표시, 보고서 반영 | DONE | `tests/integration/mis-bench.test.mjs` | §11 M5 | f5a322c | mis-bench.test.mjs (5회 반복 안정) |
+| M5-07 | 토큰 예산(호스트 지원 시): HUD가 statusLine 입력의 비용 값을 표시, 강제는 미지원으로 보고서·doctor에 명시 | DONE | `statusline.test.mjs` 확장 | §3-4, §11 M5 | 7056685 | statusline.test.mjs (cost.total_cost_usd 필드는 공식 문서 statusline.md 확인) |
+| M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | DONE | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | 7056685 | plugin-files.test.mjs; Codex 실행은 NEEDS_HUMAN |
+| M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | DONE | `docs/milestones/M5-e2e.md` | §11 M5 | c1821cf | docs/milestones/M5-e2e.md; NH-6~9 |
 | M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | TODO | VERIFIER_PROMPT | §11 M5 | | |
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
 
 ## NEEDS_HUMAN
+- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용, BSP 실제 빌드·타깃. 절차: `docs/milestones/M5-e2e.md`. 미확인
 - **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: README 설치 절. 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
@@ -120,6 +121,7 @@ VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
 - (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING, BLOCKED 포함)에서만 적용한다.
 - (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.

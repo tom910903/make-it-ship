@@ -1,0 +1,25 @@
+The retro covers one run. That run was a quick-mode fix to `parseDuration`, which was multiplying seconds by 60, and it ended **VERIFIED**. I saved the report to `docs/make-it-ship/retro-2026-10-19.md`.
+
+## Metrics (counted by `mis retro`)
+
+| Metric | Value |
+|---|---|
+| Runs | 1 |
+| Final state / verdict | REPORTED / VERIFIED |
+| Mode | quick |
+| Checks run / failed / blocked | 2 / 1 / 0 |
+| Failed then passed | 1 |
+| Retries / root causes recorded / resumes | 0 / 1 / 0 |
+| Blocked reasons | none |
+| Blocking review findings | none (quality review: 0 blocking, 0 major) |
+| Median run time | 0.8 min |
+
+## Habits (my judgment, based on the metrics)
+1. **Keep writing the test first.** One check failed then passed, with no retries. The new regression test failed (E1) before the fix and passed (E2) after it.
+2. **Wait for more runs before changing anything.** One quick-mode run is too little to show a pattern. Run the retro again after about 3 or more runs.
+
+## Learnings recorded
+None. The root cause was a copied `* 60` on the seconds term, and it shows in a one-line diff. It doesn't meet the bar for a learning: it's easy to find, not specific to this codebase, and took no real effort to discover. `mis learn list` is still empty.
+
+## Process changes
+None proposed, because no failure in this run calls for one. I didn't change `.make-it-ship.json` or any phase files. I added the two habits and the learnings note to the bottom of the retro report, in Korean to match the rest of it.

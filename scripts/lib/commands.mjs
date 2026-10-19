@@ -21,6 +21,10 @@ import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
 import { renderShip } from './ship.mjs';
+import { loadRuns, retroMetrics, renderRetro } from './retro.mjs';
+import { addLearning, listLearnings } from './learn.mjs';
+import { bridgeScan, listDevices } from './ios.mjs';
+import { stateRoot } from './state.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -461,7 +465,12 @@ function note([kind, ...rest], cwd) {
     const text = file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
     if (!text.trim()) fail('design note is empty: describe the chosen variant and the design system');
     rec = { kind, text };
-  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->|design <file|->>');
+  } else if (kind === 'second-opinion') {
+    const [file] = rest;
+    const text = !file ? '' : file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
+    if (!text.trim()) fail('usage: mis note second-opinion <file|-> (the other model\'s review, verbatim)');
+    rec = { kind, text };
+  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->|design <file|->|second-opinion <file|->>');
   return mutate(cwd, (run) => {
     if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
     if (rec.task && !run.state.plan?.tasks.some((t) => t.id === rec.task)) fail(`no task ${rec.task} in plan`);
@@ -579,12 +588,85 @@ function ship(args, cwd) {
     const ctx = verdictContext(run, cwd);
     const v = judge(s, ctx);
     if (!ctx.configExists || ctx.configErrors.length) { v.reasons.push('no valid .make-it-ship.json'); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
+    const bridge = bridgeScan(root);
+    if (bridge.length) { v.reasons.push(`iOS debug bridge code remains in ${bridge.join(', ')} (remove it: templates/ios-debug-bridge/README.md)`); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
     const { ready, markdown } = renderShip({ root, state: s, verdict: v, ctx, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root) });
     const rel = `${REPORT_DIR}/${s.runId}/ship.md`;
     mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
     writeFileSync(join(root, rel), markdown + '\n');
     return { event: { type: 'ship', ready, verdict: v.verdict }, result: { ready, verdict: v.verdict, reasons: v.reasons, path: rel } };
   });
+}
+
+function retro(args, cwd) {
+  const days = flag(args, '--days');
+  const root = repoRoot(cwd);
+  const metrics = retroMetrics(loadRuns(stateRoot(cwd)), { sinceMs: days ? Date.now() - Number(days) * 86400000 : 0 });
+  const date = new Date().toISOString().slice(0, 10);
+  const rel = `${REPORT_DIR}/retro-${date}.md`;
+  mkdirSync(join(root, REPORT_DIR), { recursive: true });
+  writeFileSync(join(root, rel), renderRetro(metrics, date));
+  return { path: rel, metrics };
+}
+
+function learn([sub, arg], cwd) {
+  const root = repoRoot(cwd);
+  if (sub === 'list') return { entries: listLearnings(root) };
+  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, arg)) };
+  return fail('usage: mis learn <add <json|->|list>');
+}
+
+const OTHER_MODEL_CLIS = ['codex', 'gemini'];
+
+function secondOpinion([sub], cwd) {
+  if (sub !== 'detect') fail('usage: mis second-opinion detect');
+  const available = [];
+  for (const name of OTHER_MODEL_CLIS) {
+    for (const d of (process.env.PATH ?? '').split(':')) {
+      const p = join(d, name);
+      if (d && existsSync(p)) { available.push({ name, path: p }); break; }
+    }
+  }
+  return { available, note: 'Optional. Running another model sends repository content to an external service: the guard asks the user first. Record the result with mis note second-opinion - (it does not change the verdict).' };
+}
+
+/** mis bench <check> [--runs N]: wall-clock median of N runs, compared with the run's first measurement of that check. */
+function bench(args, cwd) {
+  const runs = Number(flag(args, '--runs') ?? 5);
+  const [name] = args;
+  if (!name || !Number.isInteger(runs) || runs < 1 || runs > 50) fail('usage: mis bench <check> [--runs 1-50]');
+  const root = repoRoot(cwd);
+  const def = loadConfig(root).config?.checks[name];
+  if (!def) fail(`check "${name}" is not defined in .make-it-ship.json`);
+  const times = [];
+  let failed = null;
+  for (let i = 0; i < runs; i++) {
+    const t0 = process.hrtime.bigint();
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env } });
+    times.push(Number(process.hrtime.bigint() - t0) / 1e6);
+    if (r.status !== 0) { failed = r.error?.message ?? `exit ${r.status ?? r.signal}`; break; }
+  }
+  times.sort((a, b) => a - b);
+  const medianMs = Math.round(times[Math.floor(times.length / 2)]);
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const base = s.notes.find((n) => n.kind === 'bench' && n.check === name && n.status !== 'FAILED');
+    const deltaPct = base && !failed ? Math.round(((medianMs - base.medianMs) / base.medianMs) * 100) : null;
+    const status = failed ? 'FAILED' : !base ? 'BASELINE' : deltaPct > 50 ? 'REGRESSION' : deltaPct > 20 ? 'WARN' : 'OK';
+    const rec = { kind: 'bench', check: name, runs: times.length, medianMs, minMs: Math.round(times[0]), maxMs: Math.round(times.at(-1)),
+      baselineMs: base?.medianMs ?? null, deltaPct, status, error: failed, treeHash: treeHash(root), at: new Date().toISOString() };
+    s.notes.push(rec);
+    return { event: { type: 'bench', check: name, medianMs, status }, result: rec };
+  });
+}
+
+function ios([sub], cwd) {
+  if (sub === 'bridge-scan') {
+    const files = bridgeScan(repoRoot(cwd));
+    return { files, clean: files.length === 0 };
+  }
+  if (sub === 'devices') return listDevices();
+  return fail('usage: mis ios <bridge-scan|devices>');
 }
 
 function qa([sub], cwd) {
@@ -615,5 +697,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel };
 export { requiredChecks };

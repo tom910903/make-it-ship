@@ -6,12 +6,13 @@ import { verdict, evidenceStatus } from './lib/verdict.mjs';
 
 const MARK = { PASS: '✓', FAIL: '✗', STALE: '~', BLOCKED: '⊘', MISSING: '·' };
 
-export function renderHud(s, ctx) {
+export function renderHud(s, ctx, cost) {
   const tasks = s.plan?.tasks ?? [];
   const latest = new Map((s.evidence ?? []).map((e) => [e.check, e]));
   const checks = ctx.required.map((n) => `${n}${MARK[latest.has(n) ? evidenceStatus(latest.get(n), ctx) : 'MISSING']}`).join(' ');
   const done = tasks.filter((t) => t.status === 'DONE').length;
-  return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}`;
+  const usd = typeof cost?.total_cost_usd === 'number' ? ` · $${cost.total_cost_usd.toFixed(2)}` : '';
+  return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}${usd}`;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -24,7 +25,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const run = loadRun(cwd);
     if (run && run.state.state !== 'CANCELLED') {
       const { verdictContext } = await import('./lib/commands.mjs');
-      console.log(renderHud(run.state, verdictContext(run, cwd)));
+      console.log(renderHud(run.state, verdictContext(run, cwd), input.cost));
     }
   } catch { /* a status line must never break the session; print nothing */ }
 }
