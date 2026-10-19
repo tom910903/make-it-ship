@@ -106,6 +106,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
 
 ## NEEDS_HUMAN
+- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용, BSP 실제 빌드·타깃. 절차: `docs/milestones/M5-e2e.md`. 미확인
 - **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: README 설치 절. 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
