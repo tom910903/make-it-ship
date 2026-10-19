@@ -1,0 +1,10 @@
+---
+name: ship
+description: Make It Ship release preparation on its own - updates docs and changelog, writes a PR draft and release checklist from the verified run, and finishes the branch only with the user's approval for any push or PR.
+---
+
+Run the ship phase standalone. `mis` = `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"`.
+
+1. Requires an active run (`mis status`). If there is none, tell the user to verify first with `/make-it-ship:run` (or `/make-it-ship:qa`), because shipping without evidence would be reported as NOT READY anyway.
+2. Read `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` and follow it.
+3. Show the user the `mis ship` result (READY / NOT READY and why), the PR draft, and the checklist. Ask before any push or PR.
