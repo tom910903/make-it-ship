@@ -93,8 +93,8 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 
 | ID | 작업 | 상태 | AC (완료 조건 / 검증) | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M5-01 | retro: `mis retro`가 runs/*/events.jsonl을 집계(판정 분포, 실패→통과 주기, 재시도, 차단 사유, 리뷰 blocking, 소요 시간) → `docs/make-it-ship/retro-<date>.md`; retro phase + `/make-it-ship:retro` | TODO | `tests/integration/mis-retro.test.mjs`(합성 run 2개 집계 값 검증) | §14 retro, §14.3 | | |
-| M5-02 | learn: `mis learn add|list` — 스키마 검증, 추가 전용, 최신 우선, 참조 파일 삭제 시 STALE 표시 → `docs/make-it-ship/learnings.md`; 프로세스 변경은 제안만 | TODO | `tests/integration/mis-learn.test.mjs` | §14 learn | | |
+| M5-01 | retro: `mis retro`가 runs/*/events.jsonl을 집계(판정 분포, 실패→통과 주기, 재시도, 차단 사유, 리뷰 blocking, 소요 시간) → `docs/make-it-ship/retro-<date>.md`; retro phase + `/make-it-ship:retro` | DONE | `tests/integration/mis-retro.test.mjs`(합성 run 2개 집계 값 검증) | §14 retro, §14.3 | 3f13c8a | npm test, mis-retro.test.mjs |
+| M5-02 | learn: `mis learn add| DONE | TODO | `tests/integration/mis-learn.test.mjs` | 3f13c8a | mis-learn.test.mjs | |
 | M5-03 | second opinion: `mis second-opinion detect`(codex/gemini CLI 탐지), 결과는 판정에 영향 없는 노트로 기록; 실제 외부 모델 호출은 사용자 승인 대상 | TODO | `tests/integration/mis-second.test.mjs`(PATH 가짜 바이너리) | §14 second opinion | | |
 | M5-04 | iOS 실기기 브리지: `templates/ios-debug-bridge/`(SPM, 모든 소스 `#if DEBUG`, 루프백 전용) + `mis ios bridge-scan`; ship은 브리지 코드가 남으면 NOT READY; 실기기 check는 기기 없으면 BLOCKED | TODO | `tests/integration/mis-ios.test.mjs`(템플릿 불변식·스캔·ship 연동), 시뮬레이터 SDK 타입체크는 E2E 기록 | §14 ios(M5) | | |
 | M5-05 | BSP QA 프로파일: Yocto/Buildroot/커널 트리 탐지 → 빌드 check 제안 + 타깃 검증은 BLOCKED("빌드 통과 ≠ 하드웨어 동작") | TODO | `tests/integration/mis-qa.test.mjs` 확장(합성 트리) | §11 M5, PRD 10.2 | | |
@@ -116,6 +116,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.
 
 ## RISKS

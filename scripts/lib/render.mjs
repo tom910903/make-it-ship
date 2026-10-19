@@ -60,6 +60,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
   const checks = evRows.length
     ? ['| ID | check | 명령(argv) | exit | 기록 당시 | 현재 코드 기준 | 종료 시각 |', '|---|---|---|---|---|---|---|', ...evRows].join('\n')
     : '실행된 check가 없다.';
+  const opinions = (s.notes ?? []).filter((n) => n.kind === 'second-opinion').map((n) => `second opinion (다른 모델, 판정에 미반영): ${n.text.trim().split('\n')[0]}`);
   const reviews = (s.reviews ?? []).map((r) => `${r.kind}: blocking ${r.blocking}, major ${r.major} — ${r.treeHash === ctx.treeHash || r.kind === 'plan-critic' ? '현재 코드 기준' : '이전 코드 기준(무효)'} (\`${r.file}\`)`);
   const unverified = [];
   for (const name of ctx.required) {
@@ -88,7 +89,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
     tasks: tasks.length ? tasks.map((t) => `- [${t.status}] ${t.id} ${t.title} — 수용 기준: ${t.acceptance.join('; ')}`).join('\n') : '작업 없음',
     changes: list(changes.map((c) => `${c.status} \`${c.path}\``), '기준 커밋 이후 변경된 파일이 없다.'),
     checks,
-    reviews: list(reviews, '기록된 리뷰가 없다.'),
+    reviews: list([...reviews, ...opinions], '기록된 리뷰가 없다.'),
     unverified: list(unverified, '없음'),
     stale: list(stale, '없음'),
     decisions: list(decisions, '없음'),

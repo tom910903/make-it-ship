@@ -90,6 +90,7 @@ function classifyBash(cmd, ctx, cwd) {
     else if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) r = ask('git clean -f deletes untracked files');
     else if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) r = ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
     else if (isInstall(ws)) r = ask('package install needs your approval (supply chain)');
+    else if (isOtherModel(ws)) r = ask('sends repository content to an external model service (second opinion) — needs your approval');
     else if (ws[0] === 'rm') {
       const flags = ws.slice(1).filter((w) => w.startsWith('-'));
       const recursive = flags.some((f) => f === '--recursive' || /^-[a-zA-Z]*[rR]/.test(f));
@@ -100,6 +101,11 @@ function classifyBash(cmd, ctx, cwd) {
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
   }
   return verdict;
+}
+
+function isOtherModel(ws) {
+  if (ws[0] === 'codex' || ws[0] === 'gemini') return !ws.slice(1).every((w) => ['--version', '-V', '--help', '-h'].includes(w));
+  return ws[0] === 'omc' && ws[1] === 'ask';
 }
 
 const PM_VALUE_FLAGS = ['--prefix', '-C', '--dir', '--filter', '-F', '--cwd', '-w', '--workspace', '--global-folder', '--registry', '--cache'];

@@ -449,7 +449,12 @@ function note([kind, ...rest], cwd) {
     const text = file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
     if (!text.trim()) fail('design note is empty: describe the chosen variant and the design system');
     rec = { kind, text };
-  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->|design <file|->>');
+  } else if (kind === 'second-opinion') {
+    const [file] = rest;
+    const text = !file ? '' : file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
+    if (!text.trim()) fail('usage: mis note second-opinion <file|-> (the other model\'s review, verbatim)');
+    rec = { kind, text };
+  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->|design <file|->|second-opinion <file|->>');
   return mutate(cwd, (run) => {
     if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
     if (rec.task && !run.state.plan?.tasks.some((t) => t.id === rec.task)) fail(`no task ${rec.task} in plan`);
@@ -592,6 +597,20 @@ function learn([sub, arg], cwd) {
   return fail('usage: mis learn <add <json|->|list>');
 }
 
+const OTHER_MODEL_CLIS = ['codex', 'gemini'];
+
+function secondOpinion([sub], cwd) {
+  if (sub !== 'detect') fail('usage: mis second-opinion detect');
+  const available = [];
+  for (const name of OTHER_MODEL_CLIS) {
+    for (const d of (process.env.PATH ?? '').split(':')) {
+      const p = join(d, name);
+      if (d && existsSync(p)) { available.push({ name, path: p }); break; }
+    }
+  }
+  return { available, note: 'Optional. Running another model sends repository content to an external service: the guard asks the user first. Record the result with mis note second-opinion - (it does not change the verdict).' };
+}
+
 function qa([sub], cwd) {
   if (sub !== 'detect') fail('usage: mis qa detect');
   return detectQa(repoRoot(cwd));
@@ -620,5 +639,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, block, cancel };
 export { requiredChecks };
