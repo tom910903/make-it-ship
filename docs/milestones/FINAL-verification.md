@@ -1,6 +1,6 @@
 # Make It Ship — 최종 독립 검증 (FINAL)
 
-FINAL: (작성 중)
+FINAL: DEFECTS FOUND
 
 - 검증 대상: `develop` HEAD `be21dd8` (m5-verified와 동일, 이후 커밋 0)
 - 검증자: 독립 서브에이전트(구현 컨텍스트 비상속). 외부 모델 호출·push·commit·tag·패키지 설치·MCP 쓰기 없음.
@@ -137,4 +137,41 @@ FAIL 행: 없음. NEEDS_HUMAN 부분: #4, #11의 대화형 확인 창.
 | NH-9 | BSP 실제 빌드·타깃 | `M5-e2e.md:20` | **불충분** — 필요 조건만 있고 단계·확인 항목 없음 (D-2) | 없음 |
 
 `grep -rnE "NH-[0-9].{0,60}(PASS|통과|확인 완료|✅)" docs README.md` → 통과 주장 0건(부정문 1건 제외). 9개 모두 미확인으로 정직하게 남아 있다.
+
+## 2차 (마무리) 검증
+
+- 대상: `develop` HEAD `9562a84` (m5-verified 이후 1커밋 "F: concrete step-by-step NEEDS_HUMAN procedures"). 일자 2026-10-20. 독립 서브에이전트, 설치·외부 호출·commit·push·tag 없음.
+- 1차 검증자는 판정 줄을 쓰기 전에 중단됐다. 1차의 기능 검증(§1~§5)은 유효하다. 1차가 남긴 결함 D-1(NH-5), D-2(NH-9)의 수정 여부를 이번에 다시 판정했다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` 1회차 | tests 319 / pass 318 / **fail 1** (180.8s, 평소 15.7s보다 매우 느림) |
+| `npm test` 2·3회차 | 각각 tests 319 / pass 319 / fail 0. 1회차의 실패 테스트 이름은 출력을 잘라 보느라 놓쳤고, 이후 재현되지 않았다 |
+| `claude plugin validate .` | ✔ Validation passed |
+| `git tag` | m1-verified … m5-verified 5개 |
+| 스텁 grep | 8건, 모두 task 상태 문자열 `'TODO'`(1차와 동일). 실제 스텁 0건 |
+| `git diff --stat m5-verified..HEAD` | README.md(+6/-1), docs/PROGRESS.md(+2/-1), FINAL-verification.md(+140), NEEDS_HUMAN.md(+154). 문서만 바뀜, 코드 변경 0 |
+
+### 1차 PASS 주장 표본 재실행 (3건)
+
+| 1차 주장 | 재실행 | 결과 |
+|---|---|---|
+| AC#9 4상태 판정 | `node --test tests/unit/verdict.test.mjs` | 32/32 pass |
+| AC#5·#8 실제 실행, STALE | `node --test tests/integration/mis-check.test.mjs` | 8/8 pass, `ok 4 - STALE: file edit, new file, and config change invalidate evidence` |
+| AC#10 중단 후 재개 | `node --test tests/integration/mis-resume.test.mjs` | 2/2 pass |
+
+### NEEDS_HUMAN.md 판정
+
+- 통과 주장: `grep -rnE "NH-[0-9]" docs README.md`에서 PASS/통과가 들어간 줄은 모두 마일스톤 PASS이거나 "NEEDS_HUMAN"/"통과로 기록하지 않음" 문맥이다. NH 결과표 9행은 모두 비어 있다. 통과로 기록된 NH는 **0건**이다.
+- NH-9 (1차 D-2): 이제 준비물(공개 BSP만 사용), `qa detect`, check 2개 정의, 실행, 확인 (a)(b)(c), 과대 보고 금지 단계가 있다. **해소됨**.
+- NH-1~NH-4, NH-6~NH-8: 단계가 구체적이고 실행할 수 있다. 다만 명시적인 "PASS 조건" 줄은 NH-1에만 있다. 나머지는 "~해야 한다/확인한다" 형태로 기대 결과가 본문에 들어 있어 판정은 가능하다. **LOW**(형식 문제).
+- NH-5 marketplace.json: `name`, `owner.name`, `plugins[].name`, `plugins[].source`(`./plugins/make-it-ship` 상대 경로)를 모두 갖췄다. 공식 형식에 맞다. `marketplace add … --scope project`도 맞다.
+- **D-3 (결함, LOW~MEDIUM)**: NH-5는 "설치 범위는 project로 해서 사용자 전역 설정을 바꾸지 않는다"고 적었다. 그런데 82행 `claude plugin install make-it-ship@mis-local`과 91행 `claude plugin uninstall make-it-ship@mis-local`에는 scope가 없다. `claude plugin install --help`와 `uninstall --help`의 기본값은 모두 `"user"`다. 따라서 절차대로 하면 사용자 전역 설정(`~/.claude/settings.json`)에 플러그인이 설치되고, 문서의 약속과 어긋난다. README.md:24도 같다. 수정안: 두 명령에 `--scope project`를 붙인다(README 포함). `marketplace remove`는 scope를 생략하면 모든 scope에서 제거되므로 그대로 둬도 된다.
+- 1회차 `npm test`의 비결정적 실패 1건(**LOW**): 코드 변경이 없는 상태에서 3회 중 1회 실패했고, 실행 시간이 평소의 11배였다. 호스트 부하에 따른 타이밍 의존 테스트로 추정되지만, 테스트 이름은 확인하지 못했다.
+
+### 결론
+
+기능·판정 로직은 1차 결과와 표본 재실행 기준으로 문제없다. NH-9 절차는 보완됐다. 하지만 NH-5 설치 절차에 문서 의도와 다른 기본 scope(user) 문제가 남아 있어 **DEFECTS FOUND**로 판정한다. `--scope project` 두 곳(NEEDS_HUMAN.md 82·91행)과 README.md:24를 고치면 문서만의 수정이므로 전체 테스트 재실행 없이 재확인할 수 있다.
 

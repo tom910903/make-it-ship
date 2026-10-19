@@ -41,12 +41,16 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
 4. 첫 시도가 실패해 재시도할 때 run이 BLOCKED(retry limit)되는지 본다. 바로 통과되면 테스트를 일부러 한 번 깨서 재현한다.
 5. `/make-it-ship:resume`을 실행하고, 모델이 `mis.mjs approve continue`를 실행할 때 확인 창이 뜨는지 본다. 승인하면 이어서 진행되는지, 거절하면 BLOCKED로 남는지 확인한다.
 
+PASS 조건: 4번에서 BLOCKED가 되고, 5번에서 확인 창이 뜬다. 승인하면 진행되고 거절하면 BLOCKED로 남는다.
+
 ## NH-3 HUD 상태 줄
 
 1. 아무 저장소에서 `node $MIS/scripts/mis.mjs init`을 실행하고, 출력의 `hud.statusLine`을 `~/.claude/settings.json`의 `"statusLine"`에 넣는다.
 2. Claude Code를 재시작하고, run이 있는 저장소(예: NH-1의 `/tmp/nh1`)에서 세션을 연다.
 3. 상태 줄에 `MIS ▸ <state> · T<done>/<total> · <checks> · <verdict>`가 나오는지, 비용 정보가 있으면 ` · $x.xx`가 붙는지 확인한다.
 4. 확인이 끝나면 `statusLine` 설정을 원래대로 되돌린다.
+
+PASS 조건: 3번의 형식으로 상태 줄이 표시되고, 판정 값이 같은 저장소에서 실행한 `mis status`의 "Verdict now"와 일치한다.
 
 ## NH-4 병렬 실행 중 소유 범위 밖 편집 확인 창
 
@@ -58,6 +62,8 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
    - 병합이 중단되고 main이 깨끗한지
    - 충돌 파일이 보고되는지
    - 판정이 PARTIAL에 머무는지
+
+PASS 조건: 4번에서 확인 창이 뜨고, 거절하면 편집되지 않는다. 승인 후 충돌이 나면 5번처럼 병합이 중단·보고되고 판정이 PARTIAL에 머문다.
 
 ## NH-5 실제 플러그인 설치 경로 (마켓플레이스)
 
@@ -79,7 +85,7 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
 3. 설치한다:
    ```sh
    claude plugin marketplace add /tmp/mis-market --scope project
-   claude plugin install make-it-ship@mis-local
+   claude plugin install make-it-ship@mis-local --scope project
    claude plugin list
    ```
    `claude plugin list`에 `make-it-ship`이 활성 상태로 보여야 한다.
@@ -88,10 +94,12 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
    - 보고서까지 진행되는지도 확인한다.
 5. 정리한다:
    ```sh
-   claude plugin uninstall make-it-ship@mis-local
+   claude plugin uninstall make-it-ship@mis-local --scope project
    claude plugin marketplace remove mis-local
    ```
    정리 후 `/tmp/nh5/.claude/` 설정이 원래대로인지 확인한다.
+
+PASS 조건: 3번 `claude plugin list`에 활성 상태로 보이고, 4번에서 스킬과 guard가 동작한다. 5번 뒤에는 `~/.claude/settings.json`이 바뀌지 않았다(설치 전후 diff가 없음).
 
 ## NH-6 iOS 실기기 디버그 브리지
 
@@ -111,6 +119,8 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
    - 바이너리 심볼 검사 `nm -j <app binary> | grep -i debugbridge` → 0건
 7. 다시 run을 VERIFIED까지 진행해 `mis ship`이 READY인지 확인한다.
 
+PASS 조건: 4번 세 엔드포인트가 응답하고, 5번 NOT READY, 6번 세 확인, 7번 READY가 모두 기대대로다.
+
 ## NH-7 second opinion 실제 호출
 
 주의: 저장소 내용이 외부 모델 서비스로 전송된다. **합성 데모 저장소에서만** 실행하고, 회사 데이터 정책을 먼저 확인한다.
@@ -120,6 +130,8 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
 3. `claude --plugin-dir $MIS`(대화형)를 실행하고 다음을 입력한다: `/make-it-ship:run Implement docs/feature-request.md. Use full mode and get a second opinion.`
 4. `mis second-opinion detect`가 CLI를 찾는지, 외부 모델 CLI를 호출할 때 확인 창이 뜨는지 본다.
 5. 승인한 경우 `mis note second-opinion`으로 기록되는지, 보고서 5절에 "판정에 미반영"으로 표시되는지 확인한다.
+
+PASS 조건: 4번에서 확인 창이 뜬다. 거절하면 호출되지 않고, 승인하면 5번처럼 기록·표시된다. 판정 값은 second opinion 전후로 같다.
 
 ## NH-8 Codex 어댑터 실사용
 
@@ -131,6 +143,8 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
    - `mis` 명령으로 start, plan, check, review, verdict 순서가 진행되는지
    - 승인 단계에서 사용자에게 `mis approve plan`을 직접 실행하라고 요청하는지
    - 최종 판정이 `mis verdict` 출력과 일치하는지
+
+PASS 조건: 3번의 세 항목이 모두 확인된다. Codex가 `mis approve plan`을 사용자 확인 없이 직접 실행하면 FAIL이다.
 
 ## NH-9 BSP 실제 빌드와 타깃 검증
 
@@ -152,3 +166,5 @@ PASS 조건: 3·4·5가 모두 기대대로 동작한다.
    - (b) 보드를 분리하면 `qa-bsp`가 FAIL/BLOCKED로 기록되고 보고서 6절에 "타깃 미검증"이 나온다.
    - (c) 보드를 연결하면 `qa-bsp` PASS로 VERIFIED가 된다.
 5. 빌드 통과만으로 "하드웨어 동작 확인"이라고 보고하지 않는지 확인한다.
+
+PASS 조건: 4번 (a)(b)(c)와 5번이 모두 기대대로다.

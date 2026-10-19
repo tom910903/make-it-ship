@@ -21,7 +21,7 @@ claude --plugin-dir ~/make-it-ship          # one session
 Or install it through a marketplace. A local marketplace directory needs a `.claude-plugin/marketplace.json` that lists this repository as a plugin. Then run:
 ```sh
 claude plugin marketplace add <marketplace-dir> --scope project
-claude plugin install make-it-ship@<marketplace-name>
+claude plugin install make-it-ship@<marketplace-name> --scope project
 ```
 Step-by-step instructions are in `docs/milestones/NEEDS_HUMAN.md` (NH-5). This install path has not yet been confirmed by a person.
 
