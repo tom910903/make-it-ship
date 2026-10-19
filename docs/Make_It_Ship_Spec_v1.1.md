@@ -347,7 +347,7 @@ PreToolUse에 적용한다. matcher는 `Bash|Write|Edit|MultiEdit|NotebookEdit|m
 
 | MS | 범위 | 종료 기준 |
 |---|---|---|
-| **M0 — 호스트 실증** ✅ (3c 수동 확인만 남음) | 최소 플러그인으로 아래 항목 실측 | `docs/adr/0001-host-smoke.md` |
+| **M0 — 호스트 실증** ✅ | 최소 플러그인으로 아래 항목 실측 | `docs/adr/0001-host-smoke.md` |
 | **M1 — 핵심 경험** | §4 구조, mis 핵심 명령, guard, run/status 스킬, discover·**interview**·plan·**plan-critique**·implement·verify·review | 데모 A/B 수동 E2E 통과, unit/integration 통과 |
 | **M2 — 신뢰성** | resume, 재시도 상한, 시간 상한, **debug**, **보안 리뷰**, simplify(의존성 경고·shortcut 목록), doctor, 범위 밖 편집 경고, **HUD** | 데모 D 통과, guard 우회 사례 테스트 |
 | **M3 — 선택형 협업** | 독립 task 병렬(worktree), 파일 소유권, product-review·design·**design-explore**(Full 모드, UI 프로젝트). 필요 시 SQLite 재검토 | 충돌 재현 테스트 |

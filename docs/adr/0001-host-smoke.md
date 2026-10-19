@@ -15,7 +15,7 @@
 | 2 | 훅 command의 `${CLAUDE_PLUGIN_ROOT}` | ✅ 인라인 치환됨 + 환경변수로도 전달됨 (절대경로) | 훅 로그 `argv1`, `envRoot` |
 | 3a | PreToolUse `deny` | ✅ default, bypassPermissions **둘 다** 차단됨 | 훅 로그 + 실행 출력 |
 | 3b | PreToolUse `ask` (헤드리스 `-p`) | ✅ default, acceptEdits, bypassPermissions 모두 **실행되지 않음**(사유만 반환) → 무인 루프에서 ask는 사실상 deny로 동작함 | 실행 출력 |
-| 3c | PreToolUse `ask` (**대화형** auto 모드) | ⏳ **NEEDS_HUMAN** — 사용자 확인 창이 뜨는지 직접 확인 필요 | 아래 절차 |
+| 3c | PreToolUse `ask` (**대화형** auto 모드) | ✅ 사용자 확인 창이 뜸 → 훅 `ask`로 승인을 강제하는 설계 유지 (대안 승인 방식 불필요) | 사용자 수동 확인 (2026-10-19) |
 | 4 | 플러그인 agent `disallowedTools` | ✅ Write가 목록에서 빠지고 파일도 생성되지 않음 | 에이전트 보고, 파일 부재 |
 | 5 | 서브에이전트 중첩 | ⚠️ **가능** — 서브에이전트 도구 목록에 `Agent`가 있음. 공식 문서도 중첩 지원을 명시 | 에이전트 보고 |
 | 6 | MCP matcher `mcp__.*` | ✅ `mcp__context7__resolve-library-id` 호출 시 훅 실행됨 | 훅 로그 |
