@@ -66,3 +66,43 @@ test('state forgery outside heredoc data is denied', () => {
     assert.equal(decide(c), 'deny', c);
   }
 });
+
+test('fuzz: the tokenizer and policy never throw and stay fast on arbitrary input', () => {
+  const alphabet = [' ', '\t', '\n', ';', '&', '|', '(', ')', '{', '}', '$', '`', "'", '"', '\\', '<', '>', '<<', '<<-', '$(', 'EOF', '-',
+    'git', 'push', 'sh', '-c', 'eval', 'node', 'mis.mjs', 'approve', 'a', '=', '*', '#', '~', '.git/make-it-ship'];
+  let seed = 42;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const pathological = ['', '"', "'", '`', '$(', '$((', '((', '))', '<<', '<<-', "<<'", 'a<<', 'cat <<EOF', 'cat <<EOF\nx', '\\', '"\\',
+    "'$(", '$(\'', '"$(echo "', 'sh -c', 'bash -c "', 'eval', 'f(){', 'f() {', '}{', '((((((((((', ')))))))))'];
+  const t0 = Date.now();
+  for (const src of pathological) assert.doesNotThrow(() => decide(src), src);
+  for (let i = 0; i < 4000; i++) {
+    let src = '';
+    for (let k = rnd(20); k >= 0; k--) src += alphabet[rnd(alphabet.length)];
+    assert.doesNotThrow(() => decide(src), JSON.stringify(src));
+  }
+  assert.ok(Date.now() - t0 < 10000, `took ${Date.now() - t0}ms`);
+});
+
+test('every command shape the skills and phases tell the model to run is allowed (no false asks)', () => {
+  const M = 'node "/Users/x/.claude/plugins/make-it-ship/scripts/mis.mjs"';
+  const shapes = [
+    `${M} doctor`, `${M} init`, `${M} start --input docs/feature-request.md`, `${M} start --input "add a greet function"`,
+    `${M} plan set - <<'MIS'\n{"goal":"g","tasks":[{"id":"T1","title":"t","acceptance":["a"],"files":["src/a.ts"]}],"plannedFiles":["src/**"],"riskFlags":[],"howToRun":["npm test"],"ui":false}\nMIS`,
+    `${M} mode set standard --reason "new feature, no risk flags"`,
+    `${M} interview add '{"question":"Which locale?","impact":"HIGH","why":"changes output"}'`, `${M} interview resolve Q1 "en-US only"`,
+    `${M} review add plan-critic - <<'MIS'\nVERDICT: ACCEPT\nBLOCKING: 0\nMAJOR: 0\n\nThe plan pushes nothing; git push stays manual.\nMIS`,
+    `${M} review add quality - <<'MIS'\nVERDICT: SHIP\nBLOCKING: 0\nMAJOR: 1\nrm -rf / is never called. Users can approve refunds.\nMIS`,
+    `${M} task T1 start`, `${M} task T1 done`, `${M} task T1 fail`, `${M} task T1 retry`, `${M} check unit`, `${M} verdict`,
+    `${M} status`, `${M} status --json`, `${M} report`, `${M} note dep "zod validates config input"`,
+    `${M} note rootcause T1 - <<'MIS'\nREPRODUCTION: npm test fails\nHYPOTHESIS: floor instead of round\nEVIDENCE: 157.5 → 157\nMIS`,
+    `${M} block "needs a physical device"`, `${M} resume`,
+    'git diff abc123', 'git status --porcelain', 'git diff --stat abc123', 'git log --oneline -5', 'npm test', 'python3 -m unittest discover -s tests -v',
+    'git add src/a.ts test/a.test.ts && git commit -m "T1: add slugify"', 'node --test "test/**/*.test.ts"',
+  ];
+  for (const c of shapes) assert.equal(decide(c), 'allow', c);
+});
+
+test('documented choice: any shell text naming the state dir outside heredoc data is denied, even in a commit message', () => {
+  assert.equal(decide('git commit -m "docs: explain .git/make-it-ship layout"'), 'deny');
+});

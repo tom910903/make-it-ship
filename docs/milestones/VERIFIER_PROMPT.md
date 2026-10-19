@@ -24,3 +24,13 @@ Do all of the following:
 Rules: Do not modify any file in the repository except creating docs/milestones/{MS}-report.md. Do not git commit, push, or tag. Do not install packages. Do not use MCP write tools. Use temp dirs outside the repo for experiments.
 
 Write docs/milestones/{MS}-report.md with: 요약 판정 (PASS = no defects / DEFECTS FOUND), 실행한 명령과 결과 수치, 종료 기준별 표(PASS/FAIL/NEEDS_HUMAN + 증거), 추적표 행별 표, 스텁·skip 검사 결과, 실사용 검증 기록, 결함 목록(심각도, 재현 방법, 위치), 미검증 항목, 남은 위험. Then reply with a short summary of the verdict and the defect list.
+
+## 판정 기준 (모든 라운드 공통, 2026-10-19 추가)
+
+Classify guard (hooks/guard.mjs, scripts/lib/policy.mjs, scripts/lib/shell.mjs) findings by Spec §7's threat model: it defends against careless/habitual mistakes; deliberate evasion (obfuscation) is an explicit non-goal. A guard finding is a **DEFECT** only if at least one holds:
+- (a) the basic form of a row in the Spec §7 table is decided wrongly;
+- (b) a command shape the plugin's own skills/phases instruct, or one that actually appears in a dogfood transcript, is wrongly blocked or wrongly allowed;
+- (c) a shape inside the classes the combination matrix in tests/unit/shell.test.mjs claims to cover (wrappers × containers × commands) is decided wrongly.
+Anything else (a new shape outside those classes) goes under "남은 위험", not defects. False positives (blocking normal flow) count as defects under (b).
+Previously accepted risks recorded in docs/PROGRESS.md RISKS are not re-litigated unless a fix claimed in a commit message is false.
+For dogfooding, run at least one Standard-mode run with `--output-format stream-json --verbose` (operator approves via the terminal when it stops at approval) and confirm there was no guard ask/deny other than the approval.
