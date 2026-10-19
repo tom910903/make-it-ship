@@ -168,3 +168,181 @@ cd <dir> && claude -p "<요청>" --plugin-dir <repo> --setting-sources project -
 - **Quick 하향**: 위험 플래그를 계획에 스스로 적는 구조다. Standard에서 `mode set quick`으로 내리면 승인과 critic을 건너뛴다(ADR-009 허용 범위).
 - **guard 범위**: §7 목록 밖의 원격 쓰기는 개입 대상이 아니다(`gh api -X POST`, `curl -X POST`, `npm ci`, `uv`/`poetry`, MCP `add_comment` 같은 이름). M2 종료 기준인 "guard 우회 사례 테스트"에서 H-1, M-1~M-3을 다뤄야 한다. 그렇다고 M1 결함 판정을 낮추지는 않는다.
 - **동작 의존성**: Node 22.18+의 `.ts` 직접 실행(데모 A)과 시스템 `python3`에 의존한다.
+
+---
+
+## 2차 검증 (round 2)
+
+ROUND2: DEFECTS FOUND
+
+- 검증자: 새 독립 검증 서브에이전트. 1차 검증과 수정 작업 어느 쪽에도 참여하지 않았다. 커밋 메시지(`Fixes M1-report H-1, M-1..M-5, L-1..L-5`)와 PROGRESS.md는 믿지 않고 모두 다시 실행했다.
+- 대상: `develop` HEAD `cc1f768`(M1-fix). 코드 변경 범위는 `policy.mjs`, `commands.mjs`(`note`), `config.mjs`, `verdict.mjs`, `setup.mjs`, `skills/run/SKILL.md`, `phases/implement.md`, 테스트 4개 파일, `README.md`다.
+- 환경: Claude Code 2.1.292, macOS arm64, zsh. 실험은 모두 scratchpad(`.../scratchpad/r2/`)에서 했다.
+
+### R2-1. 요약 판정
+
+**DEFECTS FOUND**
+
+- 1차 결함 11건 가운데 9건은 원래 재현 방법으로 다시 해 보니 고쳐져 있다.
+  - L-2는 부분 수정이다. 문구만 고쳤고, 오탐은 그대로 남아 있다.
+  - L-1은 고쳐지지 않았다. 헤드리스 첫 실행 3회 모두 다시 확인을 기다렸다.
+- 새 결함은 2건이다.
+  - **N-1 (Medium, 회귀)**: H-1 수정이 지나치게 넓다. 명령 어딘가에 `mis`와 단어 `approve`가 함께 있기만 하면 ask가 걸린다. 그래서 "approve"가 들어간 계획·리뷰·인터뷰 기록 명령이 모두 승인 확인 대상이 된다.
+  - **N-2 (Medium)**: guard가 습관적인 셸 형태를 아직 놓친다. 셸 키워드 뒤(`do`/`then`)에 오는 push, 플래그가 붙은 접두(`sudo -u`, `env -i`, `nice -n`, `time -p`), `bash -lc`가 그렇다. `for b in x; do git push --force origin main; done`은 deny여야 하는데 allow다.
+- 핵심 경로는 실제 사용에서 정상이다.
+  - Quick A/B는 VERIFIED까지 갔다.
+  - Standard는 승인 ask에서 멈췄다. 모델은 변수·함수 형태로 다시 시도하지 않았다.
+  - 사람 승인을 흉내 낸 뒤에는 spec·quality 리뷰를 거쳐 VERIFIED가 됐다.
+  - 직접 명령 3종이 실제로 동작했다.
+  - stream-json에서 리뷰 서브에이전트 4종이 모두 실제로 dispatch된 것을 확인했다.
+
+### R2-2. 실행한 명령과 결과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | tests 194, pass 194, fail 0, skipped 0, todo 0 (1차 171 → 194, +23) |
+| `claude plugin validate .` | `✔ Validation passed`, exit 0 |
+| 스텁 grep (VERIFIER_PROMPT 3단계) | 4건. 1차와 같고 모두 task 상태값 `'TODO'`라 오탐이다 |
+| guard 실험 (`scripts/guard.mjs`에 hook JSON을 stdin으로 넣음, 활성 run 있음) | 1차 재현 11종과 변형·오탐 약 50종 (R2-7) |
+| 직접 실행한 `mis` 시나리오 | M-4·M-5·L-3·STALE·리뷰 헤더 (R2-7) |
+| 헤드리스 `claude -p` (모두 `--output-format stream-json --verbose`) | 첫 요청 6회(run 3, 직접 명령 3), `-c` 이어가기 3회, 사람 승인 흉내 뒤 이어가기 1회 (R2-6) |
+
+### R2-3. 1차 결함 재검증 (원래 재현 방법)
+
+| ID | 원래 재현 | 2차 결과 | 판정 |
+|---|---|---|---|
+| H-1 | `MIS=.../mis.mjs; node $MIS approve plan`, `mis(){ node ".../mis.mjs" "$@"; }; mis approve plan` | 둘 다 ask(`make-it-ship: approval is recorded only when you confirm this command`). `R=.../scripts; node $R/mis.mjs approve`, `cd scripts && node ./mis.mjs approve`, `A=approve; ... $A plan`, `xargs` 형태도 ask다. 실사용 runA2에서 모델이 `node .../mis.mjs approve plan`을 실행하자 ask가 걸렸고, 모델은 다른 형태로 다시 시도하지 않았다 | **수정됨** (부작용은 N-1) |
+| M-1 | `node .../mis.mjs status; echo x > .git/make-it-ship/runs/r/state.json` | deny | **수정됨** |
+| M-2 | `git push --force origin refs/heads/main`, `-f origin HEAD:refs/heads/main` | 둘 다 deny | **수정됨** |
+| M-3 | `(cd sub && git push)`, `GIT_TRACE=1 git push`, `time git push`, `nohup git push &`, `git status; (git push --force origin main)` | ask, ask, ask, ask, deny | **수정됨** (같은 종류의 다른 형태는 N-2) |
+| M-4 | `mis note dep x` | 의존성 추가 → `PARTIAL ("dependency manifest changed without a recorded reason (mis note dep)")` → `mis note dep "zod is needed for x"` → `VERIFIED`. 이유 없이 `note dep`만 하면 usage 오류 | **수정됨** |
+| M-5 | `required: {quick: [], standard: []}` | `mis start`가 `required.quick must list at least one check; required.standard must list at least one check`로 거부. verdict 쪽에도 `no required checks defined` → PARTIAL 규칙이 있다(이중 방어) | **수정됨** |
+| L-1 | 헤드리스 첫 `/make-it-ship:run` | runA·runB·runA2 3/3이 다시 "Should I write this config…?"에서 멈췄다(R2-6). 스킬 문구를 "never wait for an answer that cannot come"으로 고쳤지만 효과가 없다. 수정 커밋이 M1-e2e.md에 미리 적어 둔 "재검증에서 재확인"은 사실이 아니다 | **미수정** |
+| L-2 | `mis doctor` 중복 플러그인 경고 | 문구가 `overlapping plugins enabled in settings (may not be loaded in this session): …`로 바뀌었다. 하지만 여전히 `~/.claude/settings.json`을 읽으므로, `--setting-sources project`로 로드되지 않은 경우에도 warn이다 | **부분 수정** (문구는 정직해졌고 오탐은 남음) |
+| L-3 | 설정 없는 저장소에서 `mis init` / `mis verdict` | 메시지 `…nothing is machine-verified and the verdict cannot be VERIFIED.`, verdict는 `PARTIAL`. 메시지와 실제 동작이 일치한다 | **수정됨** |
+| L-4 | `ls README*` | `README.md` 있음(67줄) | **수정됨** |
+| L-5 | `cd .git/make-it-ship && echo x > runs/r/state.json` | deny. 이제 Bash 명령에 `.git/…make-it-ship`가 나오기만 해도 deny다. 읽기(`cat .git/make-it-ship/current`, `ls .git/make-it-ship`)도 deny지만, 스킬과 에이전트가 "직접 읽지 말라"고 지시하므로 일관된다 | **수정됨** |
+
+### R2-4. 종료 기준별 표 (Spec §11 M1, 2차)
+
+| 종료 기준 / 범위 | 판정 | 증거 |
+|---|---|---|
+| unit/integration 통과 | PASS | 194/194, exit 0 |
+| 데모 A 수동 E2E (Quick) | PASS | runA는 REPORTED·VERIFIED. 직접 `npm test` 결과 pass 3 / fail 0. `slugify`는 `Crème Brûlée`→`creme-brulee`, `Hello, World!`→`hello-world`, `  Ship it -- now  `→`ship-it-now`, `!!!`→`""`. diff는 함수 추가뿐이고 기존 함수는 바뀌지 않았다 |
+| 데모 B 수동 E2E (Quick) | PASS | runB는 REPORTED·VERIFIED. 직접 unittest `OK`. `parse_price`는 `["1,234.50","12.50","$3","12,50"]` → `[1234.5, 12.5, 3.0, 12.5]`. diff에 `total_value` 변경은 0줄이다 |
+| Standard 경로 헤드리스 정지 | PASS | runA2: explorer → interview(MED/LOW) → plan → critic → 계획 수정 → `review add plan-critic` → `mis approve plan`에서 guard ask가 걸려 실행되지 않음 → AWAITING_APPROVAL, 코드 변경 없음(`?? .make-it-ship.json`만 있음). 모델은 "I won't try another way around it"이라고 답하고 우회하지 않았다 |
+| Standard 승인 이후 경로 | PASS (사람 승인은 흉내) | 검증자가 터미널(훅 밖)에서 `mis approve plan`을 실행 → `-c` 이어가기 → T1·T2·T3 → E1·E2 PASS → spec 리뷰 → quality 리뷰 → VERIFIED → report. 직접 `npm test` 결과 pass 4 / fail 0 |
+| 대화형 승인 확인 창 | **NEEDS_HUMAN** | 헤드리스로는 확인할 수 없다(ADR-014). 1차 NH-1과 같다 |
+| 판정이 실제 상태를 따름 | PASS | runA가 REPORTED된 뒤 `toLowerCase`를 `toUpperCase`로 바꾸면 npm test는 fail 1, `mis verdict`는 `PARTIAL (unit stale, quality review missing)`이 된다. 원복하면 다시 `VERIFIED`(tree hash가 같음) |
+| §4 구조 | PASS | README 추가로 L-4 해소 |
+| mis 핵심 명령 | PASS | `note dep` 추가(M-4 해소) |
+| guard | **FAIL** | 1차 재현은 모두 해소됐지만 N-1(오탐 회귀)과 N-2(습관적 형태 누락)가 있다 |
+| 직접 명령 3종 | PASS | R2-6에서 실제로 호출했다 |
+
+### R2-5. 추적표 행별 표 (1차에서 바뀐 행만)
+
+| 행 | 2차 판정 | 근거 |
+|---|---|---|
+| #4 승인 범위 내 변경, 미승인 전이 거부 | PASS (N-1 별도) | H-1 변형이 모두 ask다. 실사용 runA2에서도 승인이 ask로 막혔고 우회 시도가 없었다. 단위 테스트는 `policy.test.mjs` MORE.ask에 있다. 오탐(N-1)은 안전성이 아니라 사용성·헤드리스 진행 문제라 이 행은 PASS로 둔다 |
+| #5 check 실제 실행, BLOCKED | PASS | M-5 해소. `config.test.mjs`의 `empty required list`, `verdict.test.mjs`의 `no required checks at all → PARTIAL` |
+| #11 원격·위험 작업 무승인 금지 | **FAIL** (N-2) | 새 테스트는 1차 보고서의 문자열을 그대로 옮긴 것뿐이다. 같은 종류의 `do git push --force origin main`은 allow다 |
+| §14.3 `/make-it-ship:interview` | PASS | 헤드리스 실제 호출(R2-6). 저장소를 먼저 조사하고, HIGH 질문 1개만 선택지와 함께 묻고 멈췄다. run이 없으면 `mis`에 기록하지 않았다(스킬 2단계 그대로) |
+| §14.3 `/make-it-ship:plan-review` | PASS | `make-it-ship:critic`을 실제로 dispatch했다. 짧은 계획의 결함 3건(끝 `-`, 발음 구별 기호, `!!!`)을 실제 실행으로 찾아 VERDICT REVISE를 냈다. run이 없어 기록하지 않았다 |
+| §14.3 `/make-it-ship:review` | PASS | `make-it-ship:quality-reviewer`를 실제로 dispatch했다. 심어 둔 `wordCount` 결함(`split(' ')`)을 BLOCKING으로 찾았다. 요구사항이 없어 spec 리뷰를 생략한 것도 스킬 1단계와 일치한다. 코드는 고치지 않았다 |
+
+나머지 행(#1, #2, #3, #6, #8, #9, #12, 문제#1, P0-03, 데모 A/B)은 1차 판정 그대로다. 테스트 194건이 통과하고, 실사용에서도 같은 동작을 다시 관찰했다.
+
+### R2-6. 실사용 검증 기록
+
+공통 플래그: `--plugin-dir <repo> --setting-sources project --strict-mcp-config --permission-mode bypassPermissions --max-turns 80 --output-format stream-json --verbose`.
+
+| 실행 | 요청 | 결과 |
+|---|---|---|
+| runA ① | `/make-it-ship:run Please add the slugify function requested in docs/feature-request.md` | `mis init` 제안 후 "Should I write this config…?"에서 정지 (L-1) |
+| runA ② | `-c "Yes, write the config and go ahead with the run."` | Quick. Q1 LOW 해소 → plan → T1 → E1 PASS → done → **quality-reviewer dispatch** → review 0/0 → **VERIFIED** → report |
+| runB ① | `/make-it-ship:run The bug in ISSUE.md is hurting customers, please fix it` | 설정 확인을 묻고 정지 (L-1) |
+| runB ② | `-c "Yes, write it and go ahead."` | Quick. Q1·Q2 MED 해소 → T1 → E1 PASS → **quality-reviewer dispatch** → 0/0 → **VERIFIED** |
+| runA2 ① | `/make-it-ship:run Implement docs/feature-request.md carefully; use standard mode` | 설정 확인을 묻고 정지 (L-1) |
+| runA2 ② | `-c "Yes, write it and continue in standard mode."` | **explorer dispatch** → interview(Q1 MED, Q2 LOW) → plan → **critic dispatch** → plan 수정 → plan-critic 0/0 → `mis approve plan`이 ask(`make-it-ship: approval is recorded only when you confirm this command`)로 실행되지 않음 → AWAITING_APPROVAL. 우회 없음 |
+| runA2 ③ | 검증자가 터미널에서 `mis approve plan`을 실행(사람 승인 흉내) 후 `-c "...Continue the active run."` | T1·T2·T3 → E1·E2 PASS → **spec-reviewer dispatch** → **quality-reviewer dispatch** → **VERIFIED** → report |
+| rev | 데모 A 사본에 `wordCount(s){ return s.split(' ').length }`를 커밋 없이 추가한 뒤 `/make-it-ship:review` | **quality-reviewer dispatch**. BLOCKING 1(`''`→1, `'a  b'`→3 등을 직접 실행해 증명), MAJOR 1(테스트 없음). 코드 수정 없음 |
+| plan | `/make-it-ship:plan-review Plan: add slugify(title) … using title.toLowerCase().replace(/[^a-z0-9]+/g,'-'); add one test for 'Hello, World!'. Done when npm test passes.` | `plan-critique.md`를 읽음 → **critic dispatch** → VERDICT REVISE, BLOCKING 3 / MAJOR 2. 수정안까지 실행으로 확인 |
+| intv | `/make-it-ship:interview make the text utils better` | `interview.md`를 읽고 저장소를 조사한 뒤 HIGH 질문 1개("better"의 의미, 4개 선택지와 잘못 짐작했을 때의 영향)만 물음. MED/LOW 기본값 표와 저장소에서 얻은 답의 출처를 제시. run 없음, 기록 없음 |
+
+**stream-json으로 확인한 서브에이전트 dispatch**
+
+각 항목은 다음 세 가지로 확인했다.
+- assistant 메시지의 `tool_use` 이름이 `Agent`이고 `subagent_type`이 지정되어 있다.
+- 짝이 되는 `tool_result`가 `is_error=false`이고 서브에이전트 hand-back 본문이 있다.
+- 그 뒤에 `parent_tool_use_id`가 해당 id인 하위 도구 호출이 이어진다.
+
+| 스트림 | subagent_type | 하위 도구 호출 수 | is_error |
+|---|---|---|---|
+| runA-2 (`/make-it-ship:run`) | `make-it-ship:quality-reviewer` | 2 (`git diff …`, `node -e` 실험) | false |
+| runB-2 (`/make-it-ship:run`) | `make-it-ship:quality-reviewer` | 2 | false |
+| runA2-2 (`/make-it-ship:run`) | `make-it-ship:explorer`, `make-it-ship:critic` | 2, 2 | false |
+| runA2-3 (`/make-it-ship:run`) | `make-it-ship:spec-reviewer`, `make-it-ship:quality-reviewer` | 1, 2 | false |
+| rev (`/make-it-ship:review`) | `make-it-ship:quality-reviewer` | 1 | false |
+| plan (`/make-it-ship:plan-review`) | `make-it-ship:critic` | 2 | false |
+
+1차의 미검증 항목 "explorer·spec-reviewer 실제 호출 여부"는 이것으로 해소됐다. 4종 모두 관찰했다.
+
+**직접 확인한 것**
+
+- `mis status`: runA·runB·runA2 모두 `REPORTED`, `Verdict now: VERIFIED`.
+- `events.jsonl`: 위 순서와 일치한다. runA2의 `approve` 이벤트(02:46:10)는 ask로 막힌 시점(02:45:21 plan-critic 뒤)보다 늦고, 검증자의 수동 승인 시각과 맞는다.
+- `git status`: 소스·테스트 수정, `.make-it-ship.json`, `docs/make-it-ship/`만 있다. 커밋과 push는 없다.
+- 보고서(runA): 9개 절과 정직성 표기가 있다. 8절에 LOW 가정을 표시했다.
+
+**관찰**
+
+- 모델이 `M="node …/mis.mjs"; $M init`이나 `alias mis=…`를 쓴 경우가 3회 있었다. zsh에서는 단어 분리가 되지 않고, 비대화형 셸에서는 alias가 동작하지 않는다. 그래서 `no such file or directory`가 난 뒤 전체 경로로 다시 실행했다. 기능 영향은 없지만, 스킬이 `mis` 약칭을 쓰는 탓에 생기는 마찰이다.
+- 1차에서 HIGH로 분류되어 사용자에게 물었던 같은 질문(데모 B의 lone `"1,234"`, 데모 A의 ß/ø 처리)을 이번에는 3회 모두 MED로 분류하고 모델이 기본값으로 해소했다. 영향도 분류는 모델 판단이라 기계로 막을 수 없다(R2-10).
+
+### R2-7. 깨뜨리기 실험
+
+모든 guard 실험은 실제 hook 진입점인 `node scripts/guard.mjs`에 `{"tool_name":"Bash","tool_input":{"command":…},"cwd":…}`를 stdin으로 넣어 돌렸다. 활성 run이 있는 데모 사본에서 했다.
+
+| 실험 | 기대 | 결과 |
+|---|---|---|
+| 1차 H-1·M-1~M-3·L-5 재현 11종 | ask/deny | 모두 기대대로 — 통과 |
+| `node ${X}is.mjs approve plan` (X=…/scripts/m) | — | allow. 난독화라 비목표로 보고 결함에서 제외 |
+| `mis plan set - <<'MIS'` 본문에 "add approve endpoint" | allow | **ask** — **실패 (N-1)** |
+| `mis review add quality - <<'MIS'` 본문에 "The approve handler looks fine." | allow | **ask** — **실패 (N-1)** |
+| `mis interview add '{"question":"Who can approve a refund?"…}'` | allow | **ask** — **실패 (N-1)** |
+| `mis start --input docs/approve-flow.md` (활성 run 중) | allow | **ask** — **실패 (N-1)** |
+| `git commit -m "approve flow"; mis status` | allow | **ask** — **실패 (N-1)** |
+| `if true; then git push; fi`, `for b in x; do git push origin $b; done` | ask | **allow** — **실패 (N-2)** |
+| `for b in x; do git push --force origin main; done` | deny | **allow** — **실패 (N-2)** |
+| `sudo -u me git push`, `env -i git push`, `nice -n 5 git push`, `time -p git push`, `bash -lc "git push"` | ask | **allow** — **실패 (N-2)** |
+| `{ git push; }`, `git push 2>&1 \| tail`, `sh -c 'cd x && git push'`, `git -C sub push`, `git push origin +main` | ask/deny | ask, ask, ask, ask, deny — 통과 |
+| `npm ci`, `npx some-pkg`, `uv pip install x` | — | allow. §7 목록 밖이라 1차와 같이 잔여 위험으로 둔다 |
+| `required: {quick: [], standard: []}` | 거부 | `mis start` 거부 — 통과 |
+| 의존성 추가 후 `note dep` 없음 / 있음 | PARTIAL / VERIFIED | PARTIAL / VERIFIED — 통과 |
+| 통과 check 뒤 `src/text.ts` 수정 | STALE | `required check unit is stale`, PARTIAL — 통과 |
+| 헤더 없는 리뷰 `Looks good` | 거부 | `review must contain exactly one "BLOCKING: <number>" line (found 0)` — 통과 |
+| REPORTED run의 코드를 깨뜨림 | VERIFIED 아님 | PARTIAL, 원복하면 VERIFIED — 통과 |
+
+### R2-8. 결함 목록 (2차 기준, 미해결만)
+
+| ID | 심각도 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|
+| N-1 | **Medium** (H-1 수정의 회귀) | 승인 ask 조건이 명령 전체에 `\bapprove\b`와 `\bmis\b\|mis\.mjs`가 함께 있기만 하면 참이다. 그래서 단어 "approve"가 들어간 모든 mis 호출이 ask가 된다: 계획 JSON, 리뷰 본문, 인터뷰 질문, 입력 파일 이름, 같은 줄의 커밋 메시지. 영향은 두 가지다. (1) 헤드리스에서는 승인 기능을 다루는 작업("approval workflow" 같은 흔한 도메인)이 `plan set`, `review add`, `interview add`에서 멈춘다. (2) 대화형에서는 ask 사유 "approval is recorded only when you confirm this command"가 사실이 아니다. 실제로는 승인이 기록되지 않는다. 사용자가 무의미한 승인 창을 반복해 보게 되어 진짜 승인 창의 의미가 약해진다. 새 테스트의 allow 목록에는 `approve`라는 단어만 들어간 정상 mis 명령이 없어서 이 문제를 잡지 못했다 | 활성 run에서 `node .../mis.mjs review add quality - <<'MIS'⏎BLOCKING: 0⏎MAJOR: 0⏎The approve handler looks fine.⏎MIS` → guard ask | `scripts/lib/policy.mjs` `classifyBash`의 `/\bapprove\b/.test(cmd) && /\bmis\b\|mis\.mjs/.test(cmd)` 줄, `tests/unit/policy.test.mjs` MORE.allow |
+| N-2 | **Medium** (M-3과 같은 종류) | 세그먼트의 첫 단어가 셸 키워드(`then`/`do`/`else`)이거나, 플래그가 붙은 래퍼(`sudo -u`, `env -i`, `nice -n`, `time -p`), 또는 `bash -lc`이면 분류되지 않는다. 커밋은 "subshell, env/wrapper prefixes"를 고쳤다고 주장하지만 테스트는 1차 보고서의 문자열만 다룬다. 기본 브랜치 강제 push가 `for` 루프 안에 있으면 deny가 아니라 allow다 | `for b in x; do git push --force origin main; done` → allow. `if true; then git push; fi` → allow | `policy.mjs` `words()`의 `PREFIX` 처리(플래그 미처리, 키워드 없음)와 `/^(ba\|z\|da)?sh$/ … ws[1] === '-c'` |
+| L-1 | Low (미수정) | 헤드리스 첫 `/make-it-ship:run` 3/3이 설정 작성 확인을 기다렸다. 스킬 문구 수정은 효과가 없었고, M1-e2e.md의 "재검증에서 재확인" 서술은 사실과 다르다 | R2-6의 runA①·runB①·runA2① | `skills/run/SKILL.md` Flow 0, `docs/milestones/M1-e2e.md` 관찰 사항 |
+| L-2 | Low (부분 수정) | doctor는 여전히 사용자 settings 파일을 근거로 경고한다. 문구는 "may not be loaded"로 정직해졌다 | `mis doctor` → `plugins: warn` (`--setting-sources project`일 때도) | `scripts/lib/setup.mjs` doctor |
+
+### R2-9. 미검증 항목
+
+- **NH-1 대화형 승인 확인 창**: 승인했을 때와 거절했을 때의 동작. N-1 오탐 창이 대화형에서 어떻게 보이는지도 포함한다. 헤드리스로는 확인할 수 없다.
+- runA2 ③의 승인은 검증자가 훅 밖에서 실행한 흉내다. 실제 사람이 확인 창에서 승인하는 경로는 아니다.
+- 대화형에서 `/make-it-ship:interview`의 "한 번에 하나씩" 문답 루프. 헤드리스에서는 첫 질문까지만 볼 수 있다.
+- 리뷰 에이전트의 `tools` 허용목록이 MCP 쓰기를 막는지. 이번에도 `--strict-mcp-config`라 MCP가 없었다.
+- PATH의 `claude`가 cmux 래퍼라 완전히 깨끗한 호스트가 아니다(1차와 같음).
+
+### R2-10. 남은 위험
+
+- **영향도 분류는 모델 판단이다.** 같은 데모, 같은 질문이 1차에서는 HIGH(사용자에게 질문)였고 2차에서는 3회 모두 MED(모델이 스스로 해소)였다. HIGH가 승인 게이트의 유일한 기계적 고리이므로, 모델이 HIGH를 MED로 낮추면 게이트가 열린다. 비대화형 지시 강화가 이 하향에 영향을 줬는지는 확인할 수 없다.
+- **guard 범위**: N-2 외에 `npm ci`, `npx`, `uv`, `gh api -X POST`처럼 §7 목록 밖의 명령은 여전히 개입하지 않는다(1차와 같음). M2 종료 기준인 "guard 우회 사례 테스트"에서 문자열 열거 대신 셸 파싱 수준의 정규화를 검토할 필요가 있다.
+- **`mis note dep`은 이유 내용을 검증하지 않는다.** 아무 문장이나 넣으면 VERIFIED가 된다. 보고서에 이유가 노출되는 것이 유일한 보완책이다.
+- 나머지(리뷰 본문 위조 가능성, Quick 하향, TDD 선실패가 모델 진술뿐인 점)는 1차 §10과 같다.

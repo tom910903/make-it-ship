@@ -98,3 +98,22 @@ const MORE = {
 for (const [want, cmds] of Object.entries(MORE)) {
   for (const c of cmds) test(`bash variant ${want}: ${c}`, () => assert.equal(d(bash(c)), want));
 }
+
+// M1 round-2 defects: N-1 (approve false positives) and N-2 (more habitual shell shapes)
+const ROUND2 = {
+  allow: [
+    `node /p/scripts/mis.mjs plan set - <<'MIS'\n{"goal":"let admins approve refunds","tasks":[{"id":"T1","title":"approve endpoint","acceptance":["approve works"]}]}\nMIS`,
+    `node /p/scripts/mis.mjs review add quality - <<'MIS'\nBLOCKING: 0\nMAJOR: 0\nThe approve flow looks right.\nMIS`,
+    `node /p/scripts/mis.mjs interview add '{"question":"Who can approve?","impact":"HIGH"}'`,
+    `git commit -m "add approve button" && node /p/scripts/mis.mjs check unit`,
+  ],
+  ask: [
+    'if true; then git push origin x; fi', 'for b in x; do git push origin $b; done', 'sudo -u bob git push',
+    'env -i git push', 'nice -n 5 git push', 'time -p git push', 'bash -lc "git push origin x"',
+    'MIS="/p/scripts/mis.mjs"; node "$MIS" approve plan', 'node ${MIS} approve plan',
+  ],
+  deny: ['for b in x; do git push --force origin main; done'],
+};
+for (const [want, cmds] of Object.entries(ROUND2)) {
+  for (const c of cmds) test(`bash round2 ${want}: ${c.split('\n')[0]}`, () => assert.equal(d(bash(c)), want));
+}

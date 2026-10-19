@@ -15,12 +15,17 @@ const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|w
 const CONFIG = '.make-it-ship.json';
 
 const segments = (cmd) => cmd.split(/&&|\|\||[;|&\n]/).map((s) => s.trim()).filter(Boolean);
-const PREFIX = ['time', 'nohup', 'sudo', 'env', 'command', 'exec', 'nice'];
+const PREFIX = ['time', 'nohup', 'sudo', 'env', 'command', 'exec', 'nice', 'then', 'do', 'else', 'if', 'while', 'until', '!'];
+const PREFIX_VALUE_FLAGS = ['-u', '-g', '-n', '-C', '-E', '-S'];
 /** Words of one segment, normalized: strip quotes and subshell/brace chars, drop VAR=val and wrapper prefixes, basename the program. */
 function words(seg) {
   const ws = (seg.match(/"[^"]*"|'[^']*'|\S+/g) ?? [])
     .map((w) => w.replace(/^[({]+|[)}]+$/g, '').replace(/^["']|["']$/g, '')).filter(Boolean);
-  while (ws.length && (PREFIX.includes(ws[0]) || /^[A-Za-z_]\w*=/.test(ws[0]))) ws.shift();
+  while (ws.length && (PREFIX.includes(ws[0]) || /^[A-Za-z_]\w*=/.test(ws[0]))) {
+    const p = ws.shift();
+    if (!PREFIX.includes(p)) continue;
+    while (ws[0]?.startsWith('-')) { const f = ws.shift(); if (PREFIX_VALUE_FLAGS.includes(f)) ws.shift(); }
+  }
   if (ws[0]?.includes('/') && !ws[0].endsWith('.mjs')) ws[0] = ws[0].split('/').pop();
   return ws;
 }
@@ -54,8 +59,6 @@ function dangerousRmTarget(t, cwd, repoRoot) {
 function classifyBash(cmd, ctx, cwd) {
   if (BASH_STATE.test(cmd)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
   if (!ctx.activeRun) return allow;
-  // Any approve through mis — direct, via a variable, or a shell function — needs the user's confirmation.
-  if (/\bapprove\b/.test(cmd) && /\bmis\b|mis\.mjs/.test(cmd)) return ask('approval is recorded only when you confirm this command');
   if (/mis\.mjs["']?\s+init\b.*--write/.test(cmd)) return ask('writing .make-it-ship.json changes verification rules');
   if (cmd.includes(CONFIG) && (new RegExp(`>\\s*\\S*${CONFIG.replace('.', '\\.')}`).test(cmd) || /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(cmd))) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
@@ -67,7 +70,10 @@ function classifyBash(cmd, ctx, cwd) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     const g = gitSub(ws);
     let r = allow;
-    if (/^(ba|z|da)?sh$/.test(ws[0]) && ws[1] === '-c' && ws[2]) r = classifyBash(ws[2], ctx, dir);
+    // `approve` right after a mis invocation: the script path, a shell variable holding it, or a `mis` function.
+    const ai = ws.indexOf('approve');
+    if (ai > 0 && /(^|\/)mis(\.mjs)?$|^\$\{?\w+\}?$/.test(ws[ai - 1])) r = ask('approval is recorded only when you confirm this command');
+    else if (/^(ba|z|da)?sh$/.test(ws[0]) && /^-\w*c$/.test(ws[1] ?? '') && ws[2]) r = classifyBash(ws[2], ctx, dir);
     else if (g?.sub === 'push') r = classifyPush(g.rest, ctx);
     else if (g?.sub === 'reset' && g.rest.includes('--hard')) r = ask('git reset --hard discards local changes');
     else if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) r = ask('git clean -f deletes untracked files');
