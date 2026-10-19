@@ -62,7 +62,11 @@ export function verdict(state, ctx) {
   for (const [id, w] of Object.entries(state.worktrees ?? {})) {
     if (!w.merged) partial.push(`task ${id} worktree not merged${w.conflicts?.length ? ` (conflicts: ${w.conflicts.join(', ')})` : ''}`);
   }
-  if (ctx.configChangedUnapproved) partial.push('.make-it-ship.json changed during the run without approval (ask the user: mis approve config)');
+  if (ctx.configChangedUnapproved) {
+    partial.push(state.state === 'REPORTED'
+      ? '.make-it-ship.json changed after the report: a reported run is final — start a follow-up run (mis start) to verify with the new config'
+      : '.make-it-ship.json changed during the run without approval (ask the user: mis approve config)');
+  }
   if (ctx.dependencyChanged && !(state.notes ?? []).some((n) => n.kind === 'dep')) partial.push('dependency manifest changed without a recorded reason (mis note dep)');
   if (partial.length) return { verdict: 'PARTIAL', reasons: partial, checks };
 

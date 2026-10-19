@@ -62,3 +62,26 @@ test('ship.md "Not verified" does not print "없음" next to real items (M4 D7)'
   assert.doesNotMatch(nv, /- 없음/);
   assert.match(nv, /shortcut/);
 });
+
+test('ship: changelog category ignores incidental "error" in a feature goal; checklist does not ask for a post-report re-check (M4 R2-1, R2-3)', async () => {
+  const { renderShip } = await import('../../scripts/lib/ship.mjs');
+  const base = { root: '/nonexistent', verdict: { verdict: 'VERIFIED', reasons: [] }, ctx: { required: [], treeHash: 'abcdef123456' }, changes: [], debt: [] };
+  const feat = renderShip({ ...base, state: { runId: 'r', plan: { goal: 'Add a settings panel that shows an inline error for invalid input', tasks: [{ title: 'panel' }] }, evidence: [] } }).markdown;
+  assert.match(feat, /### Added/);
+  const fix = renderShip({ ...base, state: { runId: 'r', plan: { goal: 'Fix the bug where seconds are multiplied by 60', tasks: [{ title: 'fix' }] }, evidence: [] } }).markdown;
+  assert.match(fix, /### Fixed/);
+  assert.doesNotMatch(feat, /재실행/);
+});
+
+test('config changed after the report: the reason points to a follow-up run, not to a refused approve (M4 R2-1)', () => {
+  const C1 = { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } };
+  const dir = makeRepo({ '.make-it-ship.json': C1 });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  assert.equal(ok(mis(dir, ['report'])).state, 'REPORTED');
+  write(dir, { '.make-it-ship.json': { ...C1, limits: { maxAttemptsPerTask: 3 } } });
+  const v = ok(mis(dir, ['verdict']));
+  assert.ok(v.reasons.some((r) => /after the report.*follow-up run/.test(r)), v.reasons.join());
+});
