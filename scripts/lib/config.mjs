@@ -23,7 +23,7 @@ export function validateConfig(cfg) {
   if (!isObj(cfg)) return ['config must be an object'];
   unknownKeys(cfg, ['version', 'checks', 'required', 'limits', 'dependencyManifests', 'interview'], '', errs);
   if (cfg.version !== 1) errs.push('version must be 1');
-  if (!isObj(cfg.checks)) errs.push('checks must be an object');
+  if (!isObj(cfg.checks) || !Object.keys(cfg.checks).length) errs.push('checks must define at least one check');
   else for (const [name, c] of Object.entries(cfg.checks)) {
     if (!/^[a-z0-9][a-z0-9_-]*$/i.test(name)) errs.push(`checks.${name}: invalid name`);
     if (!isObj(c)) { errs.push(`checks.${name} must be an object`); continue; }

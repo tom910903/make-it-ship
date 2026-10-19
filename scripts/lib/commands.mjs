@@ -7,6 +7,11 @@ import { loadConfig, requiredChecks } from './config.mjs';
 import { createRun, loadRun, saveState, withLock, transition, TERMINAL } from './state.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
+import { maskSecrets } from './mask.mjs';
+import { verdict as judge } from './verdict.mjs';
+import { changedManifests } from './deps.mjs';
+import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 
 const MODES = ['quick', 'standard', 'full'];
 const REVIEW_KINDS = ['plan-critic', 'product', 'spec', 'quality', 'security', 'design'];
@@ -228,6 +233,63 @@ function task([id, action], cwd) {
   });
 }
 
+function check([name], cwd) {
+  if (!name) fail('usage: mis check <name>');
+  const root = repoRoot(cwd);
+  const cfg = loadConfig(root);
+  if (cfg.errors.length) fail(`.make-it-ship.json invalid: ${cfg.errors.join('; ')}`);
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
+    const def = cfg.config?.checks[name];
+    const id = `E${s.evidence.length + 1}`;
+    const rec = { id, check: name, argv: def?.argv ?? null, exitCode: null, status: 'BLOCKED', reason: null,
+      treeHash: treeHash(root), configHash: cfg.configHash, log: `logs/${id}.log`, startedAt: new Date().toISOString(), endedAt: null };
+    let output = '';
+    if (!def) rec.reason = cfg.exists ? `check "${name}" is not defined in .make-it-ship.json` : 'no .make-it-ship.json (run `mis init`)';
+    else {
+      // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
+      const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
+        killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env } });
+      output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+      if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
+      else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
+      else if (r.error) rec.reason = `could not run: ${r.error.message}`;
+      else { rec.exitCode = r.status; rec.status = r.status === 0 ? 'PASS' : 'FAIL'; }
+    }
+    rec.endedAt = new Date().toISOString();
+    const masked = maskSecrets(`$ ${(def?.argv ?? [name]).join(' ')}\n${output}${rec.reason ? `\n[make-it-ship] BLOCKED: ${rec.reason}\n` : ''}`);
+    writeFileSync(join(run.dir, rec.log), masked);
+    s.evidence.push(rec);
+    const tail = masked.split('\n').slice(-40).join('\n');
+    return { event: { type: 'check', id, check: name, status: rec.status, exitCode: rec.exitCode }, result: { ...rec, tail } };
+  });
+}
+
+/** Current hashes + required checks + dependency change, as verdict context. */
+export function verdictContext(run, cwd) {
+  const root = repoRoot(cwd);
+  const cfg = loadConfig(root);
+  const tree = treeHash(root);
+  const manifests = cfg.config?.dependencyManifests ?? [];
+  const changed = manifests.length ? changedManifests(root, run.state.baseCommit, tree, manifests) : [];
+  return { treeHash: tree, configHash: cfg.configHash, required: cfg.config ? requiredChecks(cfg.config, run.state.mode) : [],
+    dependencyChanged: changed.length > 0, changedManifests: changed, configErrors: cfg.errors, configExists: cfg.exists };
+}
+
+function verdictCmd(args, cwd) {
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const ctx = verdictContext(run, cwd);
+    const v = judge(s, ctx);
+    const cfgProblem = !ctx.configExists ? 'no .make-it-ship.json: no required checks are defined'
+      : ctx.configErrors.length ? `.make-it-ship.json invalid: ${ctx.configErrors.join('; ')}` : null;
+    if (cfgProblem) { v.reasons.push(cfgProblem); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
+    if (s.state === 'EXECUTING') transition(s, 'VERIFYING');
+    return { event: { type: 'verdict', verdict: v.verdict, treeHash: ctx.treeHash }, result: { ...v, treeHash: ctx.treeHash, changedManifests: ctx.changedManifests, state: s.state } };
+  });
+}
+
 function status(args, cwd) {
   const run = requireRun(cwd);
   if (args.includes('--json')) return { state: run.state };
@@ -251,5 +313,5 @@ function cancel(args, cwd) {
   });
 }
 
-export const commands = { start, plan, mode, interview, approve, review, task, status, block, cancel };
+export const commands = { start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, block, cancel };
 export { requiredChecks };
