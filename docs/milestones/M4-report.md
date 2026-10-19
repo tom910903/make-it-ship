@@ -293,3 +293,58 @@ dogfood transcript에 나온 guard 거부(stream-json `permission_denials`)는 �
   - **Quick 표시의 위치**: Quick에서 web 표면이 "미검증"으로 표시되지만 판정은 여전히 VERIFIED이고, 보고서 headline은 "배포 준비 완료 (정의된 검증 범위 안에서)"다. 6절을 읽지 않으면 놓칠 수 있다. 모드 선택은 여전히 모델 판단이다.
   - **보고 뒤 커밋 정리**: 보고 뒤 Part B에서 모델이 로컬 미푸시 브랜치의 커밋을 `commit --amend`나 `reset --soft`로 다시 만들었다(pilot-4, c-cl). ship.md가 금지하는 것은 "shared history" 재작성이므로 규칙 위반은 아니다. 다만 pilot-4의 ship.md "Commits" 절이 amend 전 해시(`5a624b5`)를 담고 있어 실제 HEAD(`db7baff`)와 다르다.
   - **임시 디렉터리 정리 마찰**: guard의 `rm -rf` 임시 디렉터리 ask가 헤드리스 실행에서 계속 마찰을 만든다(1차와 같음).
+
+## 3차 검증 (round 3)
+
+검증 대상: `develop` @ `9696a4b` ("M4-fix2"). 2차 결함 R2-1~R2-3을 임시 저장소에서 `mis`를 직접 실행해 다시 확인했다. 종료 기준은 새 clone 1개와 데모 C 헤드리스 실행으로 다시 확인했다. 커밋 메시지는 참고만 했다.
+
+**ROUND3: PASS**
+
+- R2-1, R2-2, R2-3이 모두 해결됐다.
+- 종료 기준은 계속 PASS다.
+- 새 결함은 없다. 거짓 VERIFIED나 승인 우회도 없다.
+
+### R3.1 실행한 명령과 결과
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` (저장소) | tests 296 / pass 296 / fail 0 / skipped 0 / todo 0 |
+| `claude plugin validate .` | ✔ Validation passed |
+| `git clone -b develop` → `npm test` → validate (scratchpad/r3/clone, 9696a4b) | 296/296, ✔ |
+| 스텁 검사 (VERIFIER_PROMPT 3항 grep) | 8건 모두 task 상태값 `'TODO'` 또는 `next TODO task` 문구(`commands.mjs:148,305,503,541`, 테스트 4건). 스텁·skip·only·미구현 없음 |
+| 데모 C 헤드리스 (clone을 `--plugin-dir`로, stream-json, `--max-turns 120`) | 1차 실행은 승인에서 정지했다 → 운영자가 터미널에서 `mis approve plan` 실행 → `/make-it-ship:resume` → VERIFIED |
+| `mis` 직접 실행 (임시 저장소 5개) | 아래 R3.2 |
+
+### R3.2 2차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R2-1 (a) ship 체크리스트 문구 | **해결** | 임시 저장소 5개와 데모 C에서 `mis report` 뒤에 `mis ship`을 실행했다. 생성된 ship.md 체크리스트는 모두 "CHANGELOG.md 갱신 — ship part A(verify 전)에서 반영. 보고 후라면 follow-up run으로"였다. "재실행"이라는 단어는 0건이다(`grep -c 재실행` = 0). `scripts/lib/ship.mjs:35` |
+| R2-1 (b) 보고 뒤 설정 변경 | **해결** | REPORTED인 run(t-feat1)에서 `.make-it-ship.json`에 `qa-web`을 추가했다.<br>• `mis verdict`: PARTIAL. 사유는 ".make-it-ship.json changed after the report: a reported run is final — start a follow-up run (mis start) to verify with the new config"였다. 거부될 `approve config`는 더 이상 안내하지 않는다.<br>• `mis approve config`와 `mis check unit`은 계속 "run is REPORTED"(exit 1)로 거부된다(Spec §5.3과 일치).<br>• 안내대로 `mis start --input "follow-up: qa-web"`을 실행하자 새 run이 PLANNING으로 시작했다(config "ok"). 판정 사유에 미승인 설정 항목이 없고, `qa-web`은 필요한 check로 잡혔다.<br>• 보고 전 run에서 설정을 바꾸면 기존 문구 "(ask the user: mis approve config)"가 그대로 나온다(t-fix1). 분기가 맞다.<br>• `skills/run/phases/qa.md:10`에 "before the report only — after it, use a follow-up run"이 추가됐다. `verdict.mjs:65-69` |
+| R2-2 README | **해결** | `README.md` "What happens" 6단계가 "Verify and QA"(`qa-*`, `mis qa detect`, CLI·API·web·iOS 표면)로 바뀌었다. 8단계 "Ship"이 추가돼 검증 전 문서·체인지로그, 보고 뒤 `mis ship` 초안, push·PR은 승인 필요를 설명한다 |
+| R2-3 체인지로그 분류 | **해결** | `mis start --input`과 `plan set`의 goal을 바꿔 가며 `mis ship` 초안의 분류를 확인했다.<br>• "Add a settings panel where invalid input shows an inline error"(pilot-4 유형) → `### Added`<br>• "Add error reporting to the export command" → `### Added`<br>• "Fix the crash when the input file is empty" → `### Fixed`<br>• goal "Handle empty input correctly" + 입력 "Users hit a bug: …" → `### Fixed`<br>• 데모 C goal "Build the dependency-free Node CLI…" → `### Added`<br>테스트 `mis-ship.test.mjs`의 새 케이스가 feature·fix 두 경우를 모두 검사한다 |
+
+### R3.3 종료 기준 (새 clone + 데모 C 헤드리스)
+
+| 항목 | 판정 | 증거 |
+|---|---|---|
+| 새 환경 설치 → 소형 프로젝트 완료 (`--plugin-dir` 경로) | **PASS** | 1. 새 clone(9696a4b)에서 296/296, validate 통과.<br>2. 1차 실행(Standard, 모델 선택, 사유 "New small CLI with 3 tasks and a user-facing surface"): plan-critic 1회차 MAJOR 2(`__proto__`·`constructor` 이름 손실, 기본값 테스트 누락) → 계획 수정 → 2회차 0/0. `mis approve plan`이 거부되자 AWAITING_APPROVAL에서 정직하게 정지했다. 다른 형태로 재시도하지 않았다.<br>3. 운영자가 터미널에서 `mis approve plan`을 실행했다(→ EXECUTING).<br>4. resume: T1~T3 완료, unit E6·qa-cli E7 PASS, spec·quality 0/0 → **VERIFIED**, REPORTED. ship은 요청되지 않았고(Standard) 실행되지 않았다. 커밋·push도 없었다(모델이 최종 메시지에서 밝힘) |
+| 결과물 직접 확인 | PASS | 내가 직접 실행한 결과:<br>• `npm test` pass 17 / fail 0, `node qa/cli-smoke.mjs` exit 0.<br>• `TALLY_FILE` 임시 경로에서 `today` → `nothing yet`, `add water`×2 → `water: 1`/`water: 2`, `add run`, `today` → `run 1`/`water 2`, `week water` 7줄(마지막 오늘=2), `add "a b"` → exit 2와 메시지, `reset water` → `reset water`, 인자 없음·`bogus` → 사용법 출력과 exit 2.<br>• 깨진 JSON 데이터 파일 → exit 1, 파일 내용 보존 |
+| 망가뜨리기 | PASS | `src/tally.js`에 한 줄을 추가하자 `mis verdict` PARTIAL(unit·qa-cli STALE, spec·quality 리뷰 없음). 원복하자 VERIFIED로 돌아왔다 |
+| 보고서 | PASS | report.md 6절 "없음"(검증하지 못한 표면 없음, qa-cli PASS). 보고 뒤 내가 `mis ship`을 실행하자 READY, 분류 `### Added`, 체크리스트 문구는 R3.2 (a)와 같았다 |
+| guard (판정 기준: Standard stream-json) | PASS | 1차 실행 `permission_denials`는 `mis approve plan` 1건뿐이다(기대된 승인 정지). resume은 0건이다 |
+| 실제 플러그인 설치(마켓플레이스·`plugin install`) | NEEDS_HUMAN (NH-5 유지) | 사용자 설정을 바꾸므로 실행하지 않았다 |
+
+### R3.4 결함 목록 (round 3)
+
+없음.
+
+### R3.5 검증 프롬프트 6항 질문 (round 3)
+- **통과로 표시됐지만 실행되지 않은 것이 있는가?** 없다.
+- **§2 M4 행 중 테스트가 없는 것이 있는가?** 없다. R2-1·R2-3 수정에는 `mis-ship.test.mjs`의 새 테스트 2개가 있다. R2-2는 문서 변경이다.
+- **스텁·skip·빈 구현이 있는가?** 없다.
+
+### R3.6 미검증 항목·남은 위험
+- **미검증 항목**: 실제 플러그인 설치 경로(NH-5). 대화형 확인 창(NH-1, 승인은 운영자가 터미널에서 대신했다). 이번 라운드는 범위에 따라 데모 C 1건만 헤드리스로 실행했다. 파일럿과 Full 모드는 다시 실행하지 않았다.
+- **체인지로그 분류는 휴리스틱이다**: 키워드 없이 증상만 적은 버그 수정(goal "Make tally reject names with spaces", 입력 "tally throws an error on names with spaces…")은 `### Added`로 분류된다. 초안이고 사람이나 모델이 반영 전에 고치므로 결함으로 세지 않는다.
+- **후속 run 비용**: 보고 뒤 변경에는 새 run(계획·모드·task·check·리뷰)이 필요하다. 이제 안내는 일관되지만 절차는 여전히 무겁다.

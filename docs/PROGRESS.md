@@ -1,5 +1,5 @@
 STATUS: RUNNING
-CURRENT: M4
+CURRENT: M5
 VERIFY: PENDING
 
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -76,6 +76,7 @@ VERIFY: PASSED (2차, `docs/milestones/M3-report.md` ROUND2: PASS) — 태그 `m
 | M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | DONE | `docs/milestones/M3-e2e.md` | §11 M3 | 00f54b2 | p1 VERIFIED, implementer×2 병렬, guard 0건; 충돌은 통합 테스트; NH-4 |
 | M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | DONE | VERIFIER_PROMPT | §11 M3 | (this) | M3-report.md 1~2차, ROUND2: PASS |
 ## M4 — 제품화
+VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m4-verified`. NEEDS_HUMAN: NH-1, NH-5.
 
 종료 기준(Spec §11): 새 환경 설치 → 소형 프로젝트 완료.
 
@@ -88,7 +89,7 @@ VERIFY: PASSED (2차, `docs/milestones/M3-report.md` ROUND2: PASS) — 태그 `m
 | M4-05 | 데모 C(md 요구사항 → 소형 앱) 픽스처 + Full 경로 E2E | DONE | `docs/milestones/M4-e2e.md` | 데모 C | 16a10bd | docs/milestones/M4-e2e.md |
 | M4-06 | 파일럿 과제 8종 픽스처(PRD 13.3) + 헤드리스 실행 기록 | DONE | `docs/milestones/M4-e2e.md` §2 | §11 M4 | 16a10bd | docs/milestones/M4-e2e.md |
 | M4-07 | 새 환경 설치 검증: 새 clone + 외부 플러그인 없는 설정으로 데모 C 완료, 설치 문서 | DONE | `docs/milestones/M4-e2e.md` | §11 M4 종료 기준 | 16a10bd | docs/milestones/M4-e2e.md |
-| M4-08 | 독립 검증 → `M4-report.md`, `m4-verified` | TODO | VERIFIER_PROMPT | §11 M4 | | |
+| M4-08 | 독립 검증 → `M4-report.md`, `m4-verified` | DONE | VERIFIER_PROMPT | §11 M4 | (this) | M4-report.md 1~3차, ROUND3: PASS |
 ## M5 — 확장
 
 종료 기준(Spec §11): "별도 AC". 아래 AC를 M5 종료 기준으로 정의한다(Spec 범위 항목을 그대로 따르며 결정 변경 없음).
