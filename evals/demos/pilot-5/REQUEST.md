@@ -1,0 +1,1 @@
+Amounts are money: switch the whole pipeline to integer cents to avoid float errors. `parse` must accept "12.34" and store 1234 (reject more than two decimals with an error naming the line number), `summarize` keeps cents, and `render` prints "a: 12.34" with exactly two decimals. All three modules change together; existing ordering behavior stays.

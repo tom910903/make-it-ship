@@ -64,3 +64,14 @@ test('demo c: requirements-only project with preset unit + qa-cli checks; qa-cli
   assert.equal(ok(mis(dir, ['check', 'unit'])).status, 'PASS');
   assert.equal(ok(mis(dir, ['check', 'qa-cli'])).status, 'FAIL', 'qa script does not exist yet');
 });
+
+test('pilot fixtures: each sets up, and init detects what exists (pilot-6 has no test command)', () => {
+  for (const n of [1, 2, 3, 4, 5]) {
+    const dir = setup(`pilot-${n}`);
+    assert.ok(existsSync(join(dir, n === 2 ? 'ISSUE.md' : 'REQUEST.md')), `pilot-${n}`);
+    ok(mis(dir, ['init', '--write']));
+    ok(mis(dir, ['start', '--input', 'x']));
+    assert.equal(ok(mis(dir, ['check', 'unit'])).status, 'PASS', `pilot-${n} baseline`);
+  }
+  assert.equal(ok(mis(setup('pilot-6'), ['init'])).config, null);
+});
