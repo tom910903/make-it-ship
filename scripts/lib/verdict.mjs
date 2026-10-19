@@ -13,9 +13,11 @@ const latestBy = (items, key) => {
   return m;
 };
 
-/** Latest review per kind that was made on the current tree. */
+const PLAN_REVIEWS = ['plan-critic', 'product']; // gate plan approval (bound to the plan hash), not the code verdict
+
+/** Latest code review per kind that was made on the current tree. */
 export function currentReviews(state, treeHash) {
-  return latestBy((state.reviews ?? []).filter((r) => r.treeHash === treeHash && r.kind !== 'plan-critic'), 'kind');
+  return latestBy((state.reviews ?? []).filter((r) => r.treeHash === treeHash && !PLAN_REVIEWS.includes(r.kind)), 'kind');
 }
 
 export function requiredReviews(state) {
