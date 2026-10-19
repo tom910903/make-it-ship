@@ -71,7 +71,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14.1 product-review | 875b944 | npm test 244/244, validate ✔ |
 | M3-07 | architect 에이전트 + design phase(ADR 초안) | DONE | `plugin-files.test.mjs` | §14 design | 875b944 | npm test 244/244, validate ✔ |
 | M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14 design-explore | 875b944 | npm test 244/244, validate ✔ |
-| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | TODO | `docs/milestones/M3-e2e.md` | §11 M3 | | |
+| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | DONE | `docs/milestones/M3-e2e.md` | §11 M3 | 00f54b2 | p1 VERIFIED, implementer×2 병렬, guard 0건; 충돌은 통합 테스트; NH-4 |
 | M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
 ## M4
 ## M5
