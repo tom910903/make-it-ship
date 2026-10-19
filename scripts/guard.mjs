@@ -13,7 +13,9 @@ function context(cwd) {
     const run = loadRun(cwd);
     let currentBranch = null;
     try { currentBranch = execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* detached */ }
-    return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch };
+    const plan = run?.state.plan;
+    const plannedFiles = plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
+    return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
   } catch {
     return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo
   }

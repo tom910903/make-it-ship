@@ -35,3 +35,13 @@ test('demo b: the reported bug actually reproduces', () => {
   const r = spawnSync('python3', ['-c', 'from inventory import parse_price; print(parse_price("1,234.50"))'], { cwd: dir, encoding: 'utf8' });
   assert.notEqual(r.stdout.trim(), '1234.5', `bug should reproduce, got ${r.stdout}${r.stderr}`);
 });
+
+test('demo d: fresh repo whose test suite fails at baseline', () => {
+  const dir = setup('d');
+  assert.ok(existsSync(join(dir, 'TASK.md')));
+  ok(mis(dir, ['init', '--write']));
+  ok(mis(dir, ['start', '--input', 'TASK.md']));
+  const r = ok(mis(dir, ['check', 'unit']));
+  assert.equal(r.status, 'FAIL');
+  assert.match(r.tail, /rounds the discount half up/);
+});

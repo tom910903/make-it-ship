@@ -12,10 +12,10 @@ function frontmatter(text) {
   return Object.fromEntries(m[1].split('\n').filter((l) => /^\w[\w-]*:/.test(l)).map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
 }
 
-const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer'];
-const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer'];
-const PHASES = ['discover', 'interview', 'plan', 'plan-critique', 'implement', 'verify', 'review'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review'];
+const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer'];
+const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer'];
+const PHASES = ['discover', 'interview', 'plan', 'plan-critique', 'implement', 'debug', 'verify', 'review', 'simplify'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -59,6 +59,7 @@ test('direct commands use their phase files', () => {
   assert.match(read('skills/interview/SKILL.md'), /phases\/interview\.md/);
   assert.match(read('skills/plan-review/SKILL.md'), /phases\/plan-critique\.md/);
   assert.match(read('skills/review/SKILL.md'), /phases\/review\.md/);
+  assert.match(read('skills/debug/SKILL.md'), /phases\/debug\.md/);
 });
 
 test('every `mis <command>` mentioned in skills and phases exists', () => {
@@ -76,6 +77,7 @@ test('phases name the source features they absorb (Spec §14.2)', () => {
     plan: [/writing-plans/i, /planner/i], 'plan-critique': [/ralplan|critic/i, /autoplan/i],
     implement: [/test-driven-development/i, /executor/i], verify: [/verification-before-completion/i, /verifier/i],
     review: [/requesting-code-review/i, /ponytail-review/i, /cso|security-reviewer/i],
+    debug: [/systematic-debugging/i, /investigate/i, /tracer|trace/i], simplify: [/ponytail-debt/i, /ai-slop-cleaner/i, /code-simplifier/i],
   };
   for (const [p, res] of Object.entries(expect)) {
     const text = read(`skills/run/phases/${p}.md`);
@@ -87,4 +89,16 @@ test('the run skill forbids the model from deciding the verdict and from touchin
   const run = read('skills/run/SKILL.md');
   assert.match(run, /mis verdict/);
   assert.match(run, /\.git\/make-it-ship/);
+});
+
+test('security reviewer covers OWASP, secrets, dependencies and exploit scenarios', () => {
+  const t = read('agents/security-reviewer.md');
+  for (const re of [/OWASP/, /secret/i, /dependenc/i, /exploit/i, /file:line/]) assert.match(t, re);
+});
+
+test('debug phase enforces the root-cause gate through mis', () => {
+  const t = read('skills/run/phases/debug.md');
+  assert.match(t, /mis note rootcause/);
+  assert.match(t, /mis task <id> retry/);
+  assert.match(t, /REPRODUCTION:/);
 });

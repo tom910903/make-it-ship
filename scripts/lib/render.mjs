@@ -1,6 +1,7 @@
 // Human-readable status (Spec §8 status) and report (templates/report.md, PRD 9.3).
 import { readFileSync } from 'node:fs';
 import { evidenceStatus, currentReviews, requiredReviews, verdict } from './verdict.mjs';
+import { renderDebt } from './debt.mjs';
 
 const latestEvidence = (state) => new Map((state.evidence ?? []).map((e) => [e.check, e]));
 
@@ -52,7 +53,7 @@ const list = (items, empty) => (items.length ? items.map((i) => `- ${i}`).join('
 /**
  * @param data {state, ctx, verdict, changes: {status,path}[], generatedAt}
  */
-export function renderReport(templatePath, { state: s, ctx, verdict: v, changes, generatedAt }) {
+export function renderReport(templatePath, { state: s, ctx, verdict: v, changes, debt = [], generatedAt }) {
   const latest = latestEvidence(s);
   const tasks = s.plan?.tasks ?? [];
   const evRows = (s.evidence ?? []).map((e) => `| ${e.id} | ${e.check} | \`${(e.argv ?? []).join(' ')}\` | ${e.exitCode ?? '—'} | ${e.status}${e.reason ? ` (${e.reason})` : ''} | ${evidenceStatus(e, ctx)} | ${e.endedAt ?? ''} |`);
@@ -92,6 +93,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
     stale: list(stale, '없음'),
     decisions: list(decisions, '없음'),
     howto: list(howto, '기록된 실행 방법이 없다.'),
+    shortcuts: renderDebt(debt),
   };
   return readFileSync(templatePath, 'utf8').replace(/\{\{(\w+)\}\}/g, (_, k) => String(fields[k] ?? ''));
 }

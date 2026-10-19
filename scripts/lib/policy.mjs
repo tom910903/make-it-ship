@@ -104,9 +104,22 @@ function isInstall(ws) {
   return false;
 }
 
+/** Minimal glob: `**` any depth, `*` within a segment, `?` one char. */
+export function globToRegExp(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*' && glob[i + 1] === '*') { re += glob[i + 2] === '/' ? '(?:.*/)?' : '.*'; i += glob[i + 2] === '/' ? 2 : 1; }
+    else if (c === '*') re += '[^/]*';
+    else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`);
+}
+
 /**
  * @param input PreToolUse hook input {tool_name, tool_input, cwd}
- * @param ctx {repoRoot, activeRun, currentBranch}
+ * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null}
  * @returns {{decision:'allow'|'ask'|'deny', reason?:string}}
  */
 export function classify(input, ctx) {
@@ -121,6 +134,11 @@ export function classify(input, ctx) {
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
+    const inRepo = (abs + sep).startsWith(ctx.repoRoot + sep);
+    if (inRepo && ctx.plannedFiles?.length) {
+      const rel = abs.slice(ctx.repoRoot.length + 1);
+      if (!ctx.plannedFiles.some((g) => globToRegExp(g).test(rel))) return ask(`${rel} is outside the approved plan's files; editing it widens the scope`);
+    }
     return allow;
   }
   if (tool.startsWith('mcp__')) {

@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig, requiredChecks } from './config.mjs';
-import { createRun, loadRun, saveState, withLock, transition, TERMINAL } from './state.mjs';
+import { createRun, loadRun, saveState, withLock, transition, setCurrent, TERMINAL } from './state.mjs';
+import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
 import { maskSecrets } from './mask.mjs';
@@ -16,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
+import { shortcutDebt } from './debt.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -38,6 +40,7 @@ function mutate(cwd, fn) {
     const fresh = loadRun(cwd, run.state.runId); // re-read under lock
     Object.assign(run, fresh, { reclaimedLock: run.reclaimedLock });
     const { event, result } = fn(run);
+    run.state.lastTree = treeHash(cwd); // for `mis resume`: what changed since the last recorded event
     saveState(run, event);
     return result;
   });
@@ -173,8 +176,21 @@ function interview([sub, ...rest], cwd) {
   return fail('usage: mis interview <add <json>|resolve <id> <answer>>');
 }
 
+/** Block the run because a limit was hit; `mis approve continue` can lift it. */
+function limitBlock(s, reason, taskId = null) {
+  s.blockedFrom = s.state;
+  transition(s, 'BLOCKED');
+  Object.assign(s, { blockedReason: reason, blockKind: 'limit', blockedTask: taskId });
+  return { event: { type: 'block', reason, limit: true }, result: { state: 'BLOCKED', reason } };
+}
+
+const pastDeadline = (s) => s.deadlineAt && Date.now() > Date.parse(s.deadlineAt);
+const deadlineBlock = (s) => limitBlock(s, `runtime limit exceeded (deadline ${s.deadlineAt}); ask the user: mis approve continue`);
+const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttemptsPerTask: 2, maxRuntimeMinutes: 120 };
+
 function approve([what], cwd) {
-  if (what !== 'plan') fail('usage: mis approve plan');
+  if (what === 'continue') return approveContinue(cwd);
+  if (what !== 'plan') fail('usage: mis approve <plan|continue>');
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'approve plan');
@@ -183,6 +199,24 @@ function approve([what], cwd) {
     s.approvals.push({ action: 'plan', ...h, planHash: s.planHash, at: new Date().toISOString() });
     transition(s, 'EXECUTING');
     return { event: { type: 'approve', action: 'plan', ...h }, result: { state: s.state } };
+  });
+}
+
+/** Lift a limit block (runtime or retries) after the user confirms: extends the deadline, grants one more attempt. */
+function approveContinue(cwd) {
+  const lim = limits(cwd);
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    if (s.state !== 'BLOCKED' || s.blockKind !== 'limit') fail('approve continue only lifts a runtime/retry limit block');
+    if (s.blockedTask) {
+      const t = s.plan.tasks.find((x) => x.id === s.blockedTask);
+      t.extraAttempts = (t.extraAttempts ?? 0) + 1;
+    }
+    s.state = s.blockedFrom;
+    s.deadlineAt = new Date(Date.now() + lim.maxRuntimeMinutes * 60000).toISOString();
+    Object.assign(s, { blockedReason: null, blockKind: null, blockedTask: null, blockedFrom: null });
+    s.approvals.push({ action: 'continue', at: new Date().toISOString() });
+    return { event: { type: 'approve', action: 'continue' }, result: { state: s.state, deadlineAt: s.deadlineAt } };
   });
 }
 
@@ -216,25 +250,40 @@ function review([sub, kind, file], cwd) {
 }
 
 function task([id, action], cwd) {
-  if (!id || !['start', 'done', 'fail'].includes(action)) fail('usage: mis task <id> <start|done|fail>');
+  if (!id || !['start', 'done', 'fail', 'retry'].includes(action)) fail('usage: mis task <id> <start|done|fail|retry>');
+  const lim = limits(cwd);
   return mutate(cwd, (run) => {
     const s = run.state;
     const t = s.plan?.tasks.find((x) => x.id === id);
     if (!t) fail(`no task ${id} in plan`);
-    if (action === 'start') {
+    if ((action === 'start' || action === 'retry') && !TERMINAL.includes(s.state) && pastDeadline(s)) return deadlineBlock(s);
+    if (action === 'retry') {
+      if (t.status !== 'FAILED') fail(`task ${id} is ${t.status}; only a FAILED task can be retried`);
+      if (t.attempts >= lim.maxAttemptsPerTask + (t.extraAttempts ?? 0)) {
+        return limitBlock(s, `task ${id} hit the retry limit (${t.attempts} attempts, max ${lim.maxAttemptsPerTask}); ask the user: mis approve continue`, id);
+      }
+      const rc = s.notes.filter((n) => n.kind === 'rootcause' && n.task === id && n.seq > (t.failedSeq ?? 0));
+      if (!rc.length) fail(`no root-cause note since task ${id} failed: investigate, then mis note rootcause ${id} - (REPRODUCTION/HYPOTHESIS/EVIDENCE)`);
+      if (s.state === 'VERIFYING') transition(s, 'EXECUTING');
+      needState(run, ['EXECUTING'], 'task retry');
+      t.status = 'IN_PROGRESS';
+      t.attempts += 1;
+    } else if (action === 'start') {
       if (s.state === 'PLANNING' || s.state === 'AWAITING_APPROVAL') {
         if (needsApproval(s)) fail(`plan approval required before execution (mode ${s.mode ?? 'unset'}${s.riskFlags.length ? ', risk flags' : ''}): mis approve plan`);
         executionGates(s, cwd);
         transition(s, 'EXECUTING');
       } else if (s.state === 'VERIFYING') transition(s, 'EXECUTING');
       needState(run, ['EXECUTING'], 'task start');
-      if (!['TODO', 'FAILED'].includes(t.status)) fail(`task ${id} is ${t.status}`);
+      if (t.status === 'FAILED') fail(`task ${id} failed before; use mis task ${id} retry after recording a root cause`);
+      if (t.status !== 'TODO') fail(`task ${id} is ${t.status}`);
       t.status = 'IN_PROGRESS';
       t.attempts += 1;
     } else {
       needState(run, ['EXECUTING', 'VERIFYING'], `task ${action}`);
       if (t.status !== 'IN_PROGRESS') fail(`task ${id} is ${t.status}, not IN_PROGRESS`);
       t.status = action === 'done' ? 'DONE' : 'FAILED';
+      if (action === 'fail') t.failedSeq = s.seq = (s.seq ?? 0) + 1;
     }
     return { event: { type: 'task', id, action, attempts: t.attempts }, result: { id, status: t.status, attempts: t.attempts, state: s.state } };
   });
@@ -248,6 +297,7 @@ function check([name], cwd) {
   return mutate(cwd, (run) => {
     const s = run.state;
     if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
+    if (pastDeadline(s)) return deadlineBlock(s);
     const def = cfg.config?.checks[name];
     const id = `E${s.evidence.length + 1}`;
     const rec = { id, check: name, argv: def?.argv ?? null, exitCode: null, status: 'BLOCKED', reason: null,
@@ -269,7 +319,13 @@ function check([name], cwd) {
     writeFileSync(join(run.dir, rec.log), masked);
     s.evidence.push(rec);
     const tail = masked.split('\n').slice(-40).join('\n');
-    return { event: { type: 'check', id, check: name, status: rec.status, exitCode: rec.exitCode }, result: { ...rec, tail } };
+    const warnings = [];
+    const manifests = cfg.config?.dependencyManifests ?? [];
+    const changed = manifests.length ? changedManifests(root, s.baseCommit, rec.treeHash, manifests) : [];
+    if (changed.length && !s.notes.some((n) => n.kind === 'dep')) {
+      warnings.push(`dependency manifest changed (${changed.join(', ')}) without a recorded reason: remove the dependency or run mis note dep "<why>"; the verdict stays PARTIAL until then`);
+    }
+    return { event: { type: 'check', id, check: name, status: rec.status, exitCode: rec.exitCode }, result: { ...rec, warnings, tail } };
   });
 }
 
@@ -322,7 +378,7 @@ function report(args, cwd) {
     if (s.state === 'VERIFYING') transition(s, 'REPORTED');
     const rel = `${REPORT_DIR}/${s.runId}/report.md`;
     mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
-    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), generatedAt: new Date().toISOString() }));
+    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root), generatedAt: new Date().toISOString() }));
     s.lastReport = { path: rel, verdict: v.verdict, treeHash: ctx.treeHash };
     return { event: { type: 'report', verdict: v.verdict, path: rel }, result: { path: rel, verdict: v.verdict, reasons: v.reasons, state: s.state } };
   });
@@ -338,14 +394,55 @@ function block(args, cwd) {
   });
 }
 
+const ROOTCAUSE_PARTS = ['REPRODUCTION', 'HYPOTHESIS', 'EVIDENCE'];
+
 function note([kind, ...rest], cwd) {
-  const text = rest.join(' ').trim();
-  if (kind !== 'dep' || !text) fail('usage: mis note dep <reason the dependency is needed>');
+  let rec;
+  if (kind === 'dep') {
+    const text = rest.join(' ').trim();
+    if (!text) fail('usage: mis note dep <reason the dependency is needed>');
+    rec = { kind, text };
+  } else if (kind === 'rootcause') {
+    const [taskId, file] = rest;
+    if (!taskId || !file) fail('usage: mis note rootcause <task> <md-file|->');
+    const text = file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
+    const missing = ROOTCAUSE_PARTS.filter((p) => !new RegExp(`^${p}:\\s*\\S`, 'mi').test(text));
+    if (missing.length) fail(`root-cause note needs non-empty ${missing.map((p) => `${p}:`).join(', ')} lines`);
+    rec = { kind, task: taskId, text };
+  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->>');
   return mutate(cwd, (run) => {
     if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
-    const rec = { kind, text, at: new Date().toISOString() };
+    if (rec.task && !run.state.plan?.tasks.some((t) => t.id === rec.task)) fail(`no task ${rec.task} in plan`);
+    if (rec.kind === 'rootcause') rec.seq = run.state.seq = (run.state.seq ?? 0) + 1;
+    rec.at = new Date().toISOString();
     run.state.notes.push(rec);
     return { event: { type: 'note', kind }, result: rec };
+  });
+}
+
+function resume([runId], cwd) {
+  const run = loadRun(cwd, runId);
+  if (!run) fail(runId ? `no run ${runId}` : 'no run to resume');
+  setCurrent(run);
+  return mutate(cwd, (r) => {
+    const s = r.state;
+    const ctx = verdictContext(r, cwd);
+    const changed = s.lastTree ? changedFiles(repoRoot(cwd), s.lastTree, ctx.treeHash) : [];
+    const staleEvidence = s.evidence.filter((e) => e.status !== 'BLOCKED' && evidenceStatus(e, ctx) === 'STALE').map((e) => ({ id: e.id, check: e.check, was: e.status }));
+    const inProgressTasks = (s.plan?.tasks ?? []).filter((t) => t.status === 'IN_PROGRESS').map((t) => t.id);
+    const openQuestions = s.interview.filter((q) => !q.answer).map((q) => `${q.id} (${q.impact}) ${q.question}`);
+    const next = [];
+    if (r.reclaimedLock) next.push(`a previous mis process (pid ${r.reclaimedLock.pid}) died mid-command; its result was not recorded — re-run it`);
+    if (s.state === 'BLOCKED') next.push(`blocked: ${s.blockedReason}${s.blockKind === 'limit' ? ' (user can lift with mis approve continue)' : ''}`);
+    if (s.state === 'AWAITING_APPROVAL') next.push('plan approval: mis approve plan');
+    if (changed.length) next.push(`review ${changed.length} file(s) changed since the last recorded step before continuing`);
+    if (staleEvidence.length) next.push(`re-run stale checks: ${[...new Set(staleEvidence.map((e) => e.check))].join(', ')}`);
+    for (const t of inProgressTasks) next.push(`task ${t} was in progress: verify its state, then continue or mark it`);
+    if (!next.length) next.push(TERMINAL.includes(s.state) ? `run is ${s.state}; nothing to resume` : 'continue with the next TODO task');
+    return {
+      event: { type: 'resume', reclaimedLock: r.reclaimedLock ?? null, changed: changed.length },
+      result: { runId: s.runId, state: s.state, reclaimedLock: r.reclaimedLock ?? null, changedSinceLastEvent: changed, staleEvidence, inProgressTasks, openQuestions, next },
+    };
   });
 }
 
@@ -359,6 +456,10 @@ function cancel(args, cwd) {
 function init(args, cwd) {
   const root = repoRoot(cwd);
   const r = detectConfig(root);
+  r.hud = {
+    statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
+    how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
+  };
   if (args.includes('--write')) {
     if (!r.config) fail(r.message);
     return { written: writeConfig(root, r.config), config: r.config };
@@ -368,5 +469,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, block, cancel };
 export { requiredChecks };

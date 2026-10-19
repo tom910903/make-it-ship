@@ -117,3 +117,30 @@ const ROUND2 = {
 for (const [want, cmds] of Object.entries(ROUND2)) {
   for (const c of cmds) test(`bash round2 ${want}: ${c.split('\n')[0]}`, () => assert.equal(d(bash(c)), want));
 }
+test('edits outside the plan\'s planned files ask (scope change, PRD 8.2)', () => {
+  const c = { ...ctx, plannedFiles: ['src/**', 'test/*.test.ts', 'README.md'] };
+  const w = (file_path) => d({ tool_name: 'Write', tool_input: { file_path }, cwd: REPO }, c);
+  assert.equal(w(`${REPO}/src/a/b.ts`), 'allow');
+  assert.equal(w('src/x.ts'), 'allow');
+  assert.equal(w(`${REPO}/test/x.test.ts`), 'allow');
+  assert.equal(w(`${REPO}/README.md`), 'allow');
+  assert.equal(w(`${REPO}/test/deep/x.test.ts`), 'ask');
+  assert.equal(w(`${REPO}/package.json`), 'ask');
+  assert.equal(w('/tmp/scratch.txt'), 'allow', 'outside the repo is not a scope question');
+  const r = classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/lib/z.js` }, cwd: REPO }, c);
+  assert.equal(r.decision, 'ask');
+  assert.match(r.reason, /outside the approved plan/);
+  assert.equal(d({ tool_name: 'Write', tool_input: { file_path: `${REPO}/anything.js` }, cwd: REPO }, { ...ctx, plannedFiles: null }), 'allow', 'no plan scope → no check');
+});
+
+test('glob matcher', async () => {
+  const { globToRegExp } = await import('../../scripts/lib/policy.mjs');
+  const m = (g, p) => globToRegExp(g).test(p);
+  assert.ok(m('src/**', 'src/a/b/c.ts'));
+  assert.ok(m('**/*.py', 'a/b/c.py'));
+  assert.ok(m('**/*.py', 'c.py'));
+  assert.ok(!m('src/*.ts', 'src/a/b.ts'));
+  assert.ok(m('src/*.ts', 'src/b.ts'));
+  assert.ok(m('a?.md', 'ab.md'));
+  assert.ok(!m('a.md', 'aXmd'));
+});

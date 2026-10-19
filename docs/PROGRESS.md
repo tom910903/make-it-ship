@@ -45,22 +45,40 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M2-01 | `mis resume`: lock 회수, STALE 재계산, 마지막 이벤트 이후 변경 파일 목록 + resume 스킬 | TODO | `tests/integration/mis-resume.test.mjs` (check 도중 SIGKILL → resume) | AC#10 | | |
-| M2-02 | 재시도 상한 + rootcause 게이트: `task retry`, `note rootcause`, 상한 초과 BLOCKED | TODO | `tests/integration/mis-retry.test.mjs` | PRD 5.4, 8.3 | | |
-| M2-03 | 실행 시간 상한: deadline 초과 시 실행 명령 BLOCKED | TODO | `tests/integration/mis-retry.test.mjs` | PRD 8.3, §3-4 | | |
-| M2-04 | debug phase + `/make-it-ship:debug` | TODO | `plugin-files.test.mjs` 확장 | §14 debug | | |
-| M2-05 | security-reviewer 에이전트 + review phase 보안 리뷰 | TODO | `plugin-files.test.mjs`, verdict 표(이미 있음) | PRD 8.1 | | |
-| M2-06 | simplify: `mis check` 의존성 변경 경고·`note dep`, 보고서 shortcut 목록, simplify phase | TODO | `tests/integration/mis-simplify.test.mjs` | AC#7, §14 simplify | | |
-| M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | TODO | `policy.test.mjs` 확장 | §7, AC#11 | | |
-| M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | TODO | `tests/unit/statusline.test.mjs` | §14 hud | | |
-| M2-09 | doctor (M1-10에서 구현됨) 재확인 | TODO | 기존 테스트 | AC#12 | | |
-| M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | TODO | `docs/milestones/M2-e2e.md` | 데모 D | | |
+| M2-01 | `mis resume`: lock 회수, STALE 재계산, 마지막 이벤트 이후 변경 파일 목록 + resume 스킬 | DONE | `tests/integration/mis-resume.test.mjs` (check 도중 SIGKILL → resume) | AC#10 | d4578b0 | npm test 201/201, validate ✔ |
+| M2-02 | 재시도 상한 + rootcause 게이트: `task retry`, `note rootcause`, 상한 초과 BLOCKED | DONE | `tests/integration/mis-retry.test.mjs` | PRD 5.4, 8.3 | 7590ca0 | npm test 198/198 |
+| M2-03 | 실행 시간 상한: deadline 초과 시 실행 명령 BLOCKED | DONE | `tests/integration/mis-retry.test.mjs` | PRD 8.3, §3-4 | 7590ca0 | npm test 198/198 |
+| M2-04 | debug phase + `/make-it-ship:debug` | DONE | `plugin-files.test.mjs` 확장 | §14 debug | 8e1c752 | npm test 208/208, validate ✔ |
+| M2-05 | security-reviewer 에이전트 + review phase 보안 리뷰 | DONE | `plugin-files.test.mjs`, verdict 표(이미 있음) | PRD 8.1 | 8e1c752 | npm test 208/208, validate ✔ |
+| M2-06 | simplify: `mis check` 의존성 변경 경고·`note dep`, 보고서 shortcut 목록, simplify phase | DONE | `tests/integration/mis-simplify.test.mjs` | AC#7, §14 simplify | 8e1c752 | npm test 208/208, validate ✔ |
+| M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | DONE | `policy.test.mjs` 확장 | §7, AC#11 | 1739049 | npm test 211/211 (우회 변형 26건 포함) |
+| M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | DONE | `tests/unit/statusline.test.mjs` | §14 hud | 8c48f4e | npm test 214/214 |
+| M2-09 | doctor (M1-10에서 구현됨) 재확인 | DONE | 기존 테스트 | AC#12 | 07f7a97 (M1-10), cc1f768 | mis-init-doctor.test.mjs 통과; 경고 문구 'enabled in settings' 정정 |
+| M2-07b | guard 매트릭스 밖 형태(M1 4차 R-1~R-6) 처리 + 조합 테스트 확장 | TODO | `shell.test.mjs` | §7, M2 종료 기준 | | |
+| M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | DONE | `docs/milestones/M2-e2e.md` | 데모 D | d4cb653 | d1/d2 강제 종료→resume→VERIFIED; NH-2, NH-3 |
 | M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | TODO | VERIFIER_PROMPT | §11 M2 | | |
-## M3
+## M3 — 선택형 협업
+
+종료 기준(Spec §11): 충돌 재현 테스트.
+
+| ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
+|---|---|---|---|---|---|---|
+| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | TODO | `docs/adr/0002-parallel-state.md` | ADR-004 | | |
+| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | TODO | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | | |
+| M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | TODO | `tests/unit/parallel.test.mjs` | §14 parallel | | |
+| M3-04 | `mis worktree add|merge <task>`: 격리 worktree, 소유 파일 범위 guard, 충돌 시 안전 중단 | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | §11 M3 종료 기준 | | |
+| M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | TODO | `plugin-files.test.mjs` | §14 parallel | | |
+| M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14.1 product-review | | |
+| M3-07 | architect 에이전트 + design phase(ADR 초안) | TODO | `plugin-files.test.mjs` | §14 design | | |
+| M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14 design-explore | | |
+| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | TODO | `docs/milestones/M3-e2e.md` | §11 M3 | | |
+| M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
 ## M4
 ## M5
 
 ## NEEDS_HUMAN
+- **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
+- **NH-3 (M2)**: HUD statusLine 실제 표시. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-1 (M1)**: 대화형 승인 확인 창 → 승인/거절 동작. 절차: `docs/milestones/M1-e2e.md` "NEEDS_HUMAN" 절. 상태: 미확인(통과로 기록하지 않음)
 
 ## BLOCKED
@@ -75,4 +93,5 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 - (M1 검증 L-2) `mis doctor`는 설정 파일의 `enabledPlugins`를 읽으므로, 이번 세션에 실제로 로드되지 않은 플러그인도 경고할 수 있다. 플러그인이 로드 목록을 얻을 방법이 없어 "enabled in settings" 문구로 수용.
 - (M1 2차 검증) 모호성 영향도(HIGH/MED/LOW)는 모델이 분류한다. 모델이 HIGH를 MED로 낮추면 승인 게이트가 열린다. 기계로 막을 수 없는 모델 판단 영역이며, 보고서 8절에 해소된 가정을 모두 노출해 사용자가 볼 수 있게 했다.
 - guard는 습관적 셸 형태(변수·함수·서브셸·접두어·제어문·`bash -c`)까지 다루지만, 의도적 난독화(eval, base64 등)는 Spec §7 위협 모델 밖이다.
+- (M2 E2E d2) rootcause 노트 순서는 `task fail` → `retry` 경로에서만 강제된다. 같은 task 안에서 바로 고치면 노트가 수정 뒤에 올 수 있다(모델 판단 영역).
 - (M1 4차 R-1~R-6) guard의 매트릭스 밖 형태: `node --flag mis.mjs approve`, 셸 주석 `#`, `bash -o pipefail -c`, main에서 `git push --force origin HEAD`, `npm --prefix x install`, `bash <<EOF` 본문. M2 guard 우회 사례 작업(M2-07b)에서 처리.

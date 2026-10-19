@@ -17,7 +17,7 @@ You turn the user's request into verified code. Two promises are non-negotiable:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <args>
 ```
 
-Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`.
+Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis note rootcause <task> -`, `mis task <id> retry`, `mis resume`, `mis approve continue`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`.
 
 Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never write plans, reviews, or scratch files into the repository: any file there changes the code hash and pollutes the change list.
 
@@ -39,8 +39,11 @@ Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never 
 | plan-critique | — | yes | yes |
 | approval | skipped if no risk flags | `mis approve plan` | `mis approve plan` |
 | implement (TDD) | yes | yes | yes |
+| debug | on FAIL | on FAIL | on FAIL |
+| simplify | yes | yes | yes |
 | verify | yes | yes | yes |
 | review | quality | spec + quality | spec + quality |
+| review security | if risk flags | if risk flags | if risk flags |
 
 Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, hardware, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
 
@@ -48,13 +51,14 @@ Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix 
 
 Read each phase file **when you reach it** (not all up front):
 
-0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. Only if the user's request explicitly says to proceed without questions does that count as their confirmation: then write the detected proposal and state it in your final message. Otherwise ask and wait (Spec §9 step 1); a non-interactive session simply stops there. Then `mis start --input <file or the request text>`. If a run is already active, show `mis status` and ask whether to continue it or `mis cancel`.
+0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. Only if the user's request explicitly says to proceed without questions does that count as their confirmation: then write the detected proposal and state it in your final message. Otherwise ask and wait (Spec §9 step 1); a non-interactive session simply stops there. The `mis init` output also contains an optional HUD `statusLine`; offer it once, and only with the user's OK add it to `~/.claude/settings.json` (skip in non-interactive runs). Then `mis start --input <file or the request text>`. If a run is already active, show `mis status` and ask whether to continue it (`/make-it-ship:resume`) or `mis cancel`.
 1. **discover** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/discover.md`
 2. **interview** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/interview.md`
 3. **plan** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan.md` (includes `mis plan set` and `mis mode set`)
 4. **plan-critique** (Standard/Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan-critique.md`
 5. **approval**: show the plan (goal, tasks with acceptance criteria, mode and reason, required checks) and run `mis approve plan`. The guard shows the user a confirmation; their confirmation is the approval. `mis` refuses if a HIGH ambiguity is open or the critic review is missing/blocking. Quick without risk flags skips this step.
-6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`
+6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`; when a check or task fails, **debug** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/debug.md`
+6b. **simplify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/simplify.md`
 7. **verify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/verify.md`
 8. **review** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/review.md`
 9. **report**: `mis verdict`, then `mis report`. Tell the user, briefly:
