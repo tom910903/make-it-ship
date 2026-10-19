@@ -124,3 +124,11 @@ test('ship phase never pushes on its own and the qa phase reports BLOCKED instea
   assert.match(read('skills/run/phases/qa.md'), /mis qa detect/);
   assert.match(read('skills/run/phases/qa.md'), /BLOCKED/);
 });
+
+test('Codex adapter: mis-based flow, honest about missing guard hooks, only real mis commands', () => {
+  const t = read('adapters/codex/AGENTS.md');
+  assert.match(t, /no PreToolUse|guard hooks? (do|does) not run|not enforced/i);
+  assert.match(t, /mis approve plan/);
+  for (const m of t.matchAll(/`mis ([a-z-]+)/g)) assert.ok(commands[m[1]], `unknown mis command ${m[1]}`);
+  for (const m of t.matchAll(/skills\/run\/phases\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `skills/run/phases/${m[1]}.md`)), m[0]);
+});

@@ -74,5 +74,6 @@ export function doctor(cwd) {
   if (existsSync(join(home, '.claude', 'skills', 'gstack'))) found.add('gstack (~/.claude/skills/gstack)');
   checks.push({ name: 'plugins', status: found.size ? 'warn' : 'ok',
     detail: found.size ? `overlapping plugins enabled in settings (may not be loaded in this session): ${[...found].join(', ')}. Make It Ship works without them; their hooks may add duplicate prompts or reviews.` : 'no overlapping plugins' });
+  checks.push({ name: 'token-budget', status: 'warn', detail: 'token/cost budgets are not supported: a plugin cannot read or cap token usage. Runtime and retry limits are enforced instead; the HUD shows session cost when Claude Code provides it.' });
   return { ok: !checks.some((c) => c.status === 'error'), checks };
 }
