@@ -124,3 +124,108 @@ HIGH·MEDIUM 결함은 없다. guard에서는 판정 기준 (a), (b), (c)에 해
 - **R-5 시간 상한 검사 시점**: 상한은 `check`, `task start`, `task retry`에서만 검사한다. 리뷰, verdict, report는 상한이 지나도 진행된다.
 - **R-6 의존성 사유의 범위**: `note dep`이 하나라도 있으면 이후 다른 manifest 변경에도 경고와 PARTIAL이 모두 해제된다.
 - **R-7 모델 판단의 정확도**: d5에서 모델이 제안한 회귀 테스트 예시 중 "1007@15% = 151.05 → just above half"는 설명이 틀렸다. 플러그인이 아니라 모델 판단의 영역이다.
+
+## 2차 검증 (round 2)
+
+**ROUND2: PASS**
+
+- 검증 일자: 2026-10-19
+- 대상: `develop` HEAD `d6ceac1`
+  - 1차 이후 커밋은 `bd789b9`(PROGRESS)와 `d6ceac1`(M2-fix) 두 개다.
+  - `d6ceac1`이 바꾼 파일: `skills/resume/SKILL.md`, `skills/run/phases/debug.md`, `scripts/guard.mjs`, `tests/integration/guard.test.mjs`, `docs/PROGRESS.md`
+- 검증자: 새 독립 검증자. 1차 결과와 커밋 메시지를 믿지 않고 모두 다시 실행했다.
+- 수정한 파일: 이 파일 끝에 이 절만 추가했다. 1차 본문은 바꾸지 않았다.
+- 실험 위치: 저장소 밖 scratchpad(`…/scratchpad/r2/{k1,nf,bl,dbg,std}`). 다른 worktree와 브랜치는 사용하지 않았다.
+
+### R2-1. 실행한 명령과 결과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | tests 254 / pass 254 / fail 0 / skipped 0 / todo 0. 1차보다 1개 늘었는데, guard 통합 테스트 1건이 추가됐다 |
+| `claude plugin validate .` | ✔ Validation passed |
+| `node --test tests/unit/shell.test.mjs tests/unit/policy.test.mjs` | tests 126 / pass 126 / fail 0 |
+| `node --test tests/integration/guard.test.mjs` | tests 8 / pass 8 / fail 0 |
+| 스텁 검색 `grep -rnE "TODO\|FIXME\|\.skip\|\.only\|not implemented\|todo\("` | 6건, 1차와 같다. 모두 task 상태 리터럴 `'TODO'`이고 스텁이나 skip은 없다 |
+| 헤드리스 실사용 | 7회: k1 실행·재개, nf, bl, dbg, std 1차·재개. 모두 `--output-format stream-json --verbose`로 실행했다 |
+
+새 테스트 `guard: plan scope only applies while executing…`가 시험하는 내용:
+- 실제 `mis`로 run을 진행하면서 같은 범위 밖 Write를 판정한다. EXECUTING에서는 ask, `report` 뒤에는 allow로 바뀐다.
+- REPORTED에서 `git push`는 여전히 ask다.
+
+판정이 실제로 바뀌는지를 시험하므로 동어반복이 아니다.
+
+### R2-2. 1차 결함 재검증
+
+| ID | 원래 재현 | 2차 결과 | 판정 |
+|---|---|---|---|
+| D-1 | run을 만들고 task를 start한 상태에서 FAIL 증거 없이 `/make-it-ship:resume` 실행 | **nf**: CLI로 같은 상태(T1 IN_PROGRESS, check 없음)를 만들고 헤드리스 resume을 실행했다. 이벤트 순서는 resume → E1 FAIL(03:39:54) → rootcause(03:40:08) → E2 PASS → done → quality → VERIFIED. 모델 출력 "No failing check recorded yet — reproduce first." `npm test` pass 3 / fail 0. **bl**에서도 모델이 수정보다 먼저 `mis check`를 실행했다(D-2 참고). 한 가지 실수가 있었다: nf에서 첫 `$M note rootcause`가 zsh에서 실패했는데 수정은 그대로 적용됐다. 모델이 스스로 알아차려 수정을 되돌리고(`git checkout`), 노트를 기록한 뒤 다시 수정했다. 최종 이벤트 순서는 올바르다(R2-5 참고) | **해결** |
+| D-2 | 재개 중 시간 상한 BLOCKED에서 오래된 verdict를 인용 | **bl**: run을 만든 뒤 `deadlineAt`을 1시간 전으로 바꾸고 헤드리스 resume을 실행했다. 모델은 재현하려고 `mis check unit`을 실행했고 BLOCKED로 거부됐다. 이어서 **`mis verdict`를 다시 실행**하고 "`mis verdict` says **BLOCKED**"라고 인용했다. 실제 `mis verdict`도 BLOCKED. `approve continue`는 시도하지 않고 사용자에게 넘겼다. permission_denials 0, 코드 변경 0 | **해결** |
+| D-3 | 활성 run에서 T1 FAILED 상태로 `/make-it-ship:debug` 실행. 모델이 `tail .git/make-it-ship/runs/…/E1.log`를 시도해 guard에 deny됨 | **dbg**: 같은 상태(E1 FAIL, T1 FAILED)에서 실행했다. 모델은 `npm test`로 직접 재현했고 상태 디렉터리 경로는 한 번도 시도하지 않았다. permission_denials 0. 이벤트는 rootcause → `task T1 retry`. 코드 변경은 없었다. `skills/run/phases/debug.md:7`이 "check tail 또는 프로젝트 러너로 재실행"으로 바뀌었고, `skills`·`agents` 어디에도 로그 파일을 직접 읽으라는 지시가 남아 있지 않다(grep 확인) | **해결** |
+
+참고 (결함 아님):
+- debug.md:7의 "the guard blocks that path"는 엄밀히 Bash 명령과 Write/Edit에만 맞는 말이다. guard matcher에 Read 도구가 없기 때문이다. 다만 직접 읽지 말라는 지시 자체는 `run/SKILL.md` Hard rule과 일치한다.
+- dbg에서 모델은 `task T1 retry`를 스스로 실행해 마지막 시도 횟수를 쓴 뒤에 수정 여부를 물었다(1차 d7은 retry 전에 물었다). `skills/debug/SKILL.md` 2번과 `debug.md` 7번이 이 순서를 허용하므로 행동 관찰로만 기록한다.
+
+### R2-3. 종료 기준 재확인
+
+| 종료 기준 | 판정 | 증거 |
+|---|---|---|
+| 데모 D 통과 (kill 후 resume) | **PASS** | **k1**: `/make-it-ship:run …quick mode` 실행 중 `task start` 이벤트가 나오자마자 claude 프로세스와 그 자식을 SIGKILL했다(29초 시점). E1 FAIL 이벤트도 그 직후(1초 뒤) 기록됐다. 이미 실행 중이던 `mis check`가 끝까지 기록한 것이다. 이때 코드 변경은 없었다. 새 프로세스에서 `/make-it-ship:resume`을 실행한 흐름: resume(changed 0) → `node --test`로 재현 → rootcause → Edit(`Math.floor→Math.round`) → E2 PASS → done → quality 리뷰 → **VERIFIED** → report. denials 0. 직접 대조: `npm test` pass 3 / fail 0. 수정을 stash하면 `mis verdict`가 PARTIAL("unit is stale", "quality review missing")로 바뀌고, 되돌리면 VERIFIED. `reclaimedLock`은 이번에도 null이었다 |
+| guard 우회 사례 테스트 | **PASS** | `shell.test.mjs`·`policy.test.mjs` 126/126. 1차 이후 `scripts/lib/shell.mjs`·`policy.mjs`는 바뀌지 않았다(`git show --stat d6ceac1`). 이번 커밋에서 guard 쪽 변경은 `scripts/guard.mjs`의 plannedFiles 적용 조건뿐이다 |
+
+**Standard 실사용 (판정 기준 필수 항목)**:
+- **std 1차**: `/make-it-ship:run … Use standard mode. Proceed without asking…`
+  - 흐름: init → interview(Q1 MED, Q2 LOW, 기본값으로 해소) → plan → mode standard(payment 플래그) → plan-critic(major 1) → plan 수정 → plan-critic(0/0) → `approve plan`에서 guard ask로 정지.
+  - **permission_denials는 1건뿐이었고, `… review add plan-critic … ; mis approve plan` 명령에 대한 것이었다.** 거부 사유는 "approval is recorded only when you confirm this command".
+  - 상태는 AWAITING_APPROVAL. 최종 메시지는 `mis report`의 PARTIAL을 인용했고 실제 상태와 일치했다.
+- **운영자 승인**: 검증자가 터미널에서 `mis approve plan`을 실행했다 → EXECUTING.
+- **std 재개**: resume → task start → E1 FAIL → rootcause → E2 PASS → done → spec·quality·security 리뷰(모두 0/0) → **VERIFIED** → report. **denials 0.** 오류는 모델의 `$M` zsh 실패 1건뿐이었다.
+- 직접 대조: `npm test` pass 3. 모델이 작성한 plan의 `plannedFiles`는 `["src/cart.js"]`이고, 수정도 이 파일뿐이다.
+- 결론: 승인 외의 guard ask나 deny는 없었다. 판정 기준 (b)에 해당하는 오탐도 없다.
+
+### R2-4. SPEC_CHANGES 해석 검토 (REPORTED 이후 guard 적용 범위)
+
+기록된 해석(`docs/PROGRESS.md` SPEC_CHANGES):
+- 취소되지 않은 현재 run이 있으면 원격 쓰기·설치는 계속 ask다.
+- plannedFiles 범위 검사는 PLANNING~VERIFYING에서만 적용한다.
+
+실제 판정을 `scripts/guard.mjs`에 직접 넣어 확인했다(`probe.mjs`):
+
+| 상태 (run) | 범위 밖 Write `README.md` | `src/cart.js` Write | `.make-it-ship.json` | `git push` | `npm install` | main `push --force` | `approve` | 상태 경로 Bash |
+|---|---|---|---|---|---|---|---|---|
+| EXECUTING (dbg) | ask | allow | ask | ask | ask | deny | ask | deny |
+| BLOCKED·limit (bl) | **allow** | allow | ask | ask | ask | deny | ask | deny |
+| REPORTED (k1, std) | allow | allow | ask | ask | ask | deny | ask | deny |
+
+- **정직성**: SPEC_CHANGES 문구("PLANNING~VERIFYING에서만")는 코드의 상태 목록과 정확히 일치한다. Spec 본문을 몰래 바꾸지 않았고, "(해석)"으로 표시했다. 다만 커밋 메시지와 코드 주석의 표현("only before the report", "after the report, edits are new work")은 실제 동작보다 좁다. limit BLOCKED도 "보고 전" 상태인데 범위 검사가 꺼지기 때문이다. 표현이 부정확한 것이지, 수정 주장이 거짓인 것은 아니다.
+- **Spec 일관성**:
+  - REPORTED 뒤에도 원격 쓰기·설치를 ask로 유지하는 것은 §7의 "진행 중인 실행이 있을 때만"이라는 문구보다 엄격하다.
+  - 하지만 §5.3은 `SHIPPED` 상태를 두지 않고 "push/PR은 사용자 승인으로 수행"한다고 하고, §14의 ship 단계도 "push/PR/배포는 ask"를 요구한다. 그래서 REPORTED에서 ask를 유지해야 ship 단계의 승인 규칙이 성립한다. 문서화된 해석으로서 Spec과 정합한다.
+  - 범위 검사를 REPORTED에서 끄는 것은 1차 R-2(종료된 run 뒤 불필요한 확인 창)를 해소한다.
+- **BLOCKED에서 범위 검사가 꺼지는 문제**: `approveContinue`(`commands.mjs:215`)는 `s.state = s.blockedFrom`으로 BLOCKED 이전 상태(예: EXECUTING)로 되돌린다. 따라서 limit BLOCKED는 계획 실행 중의 일시 정지 상태다. 이 상태에서 범위 밖 Write를 해도 ask가 뜨지 않고, 그 편집을 안은 채 run이 이어질 수 있다. 결함으로 분류하지 않은 이유:
+  - (a)가 아니다. limit BLOCKED가 §7의 "진행 중"에 해당하는지는 해석의 문제이고, 기록된 해석이 이 경우를 명시적으로 다룬다(상태 목록).
+  - (b)가 아니다. resume 스킬은 limit BLOCKED에서 멈추라고 지시하고, bl과 1차 d6 transcript 모두 BLOCKED 중에 편집하지 않았다.
+  - (c)가 아니다. 셸 매트릭스와 무관하다.
+  
+  그래서 남은 위험(R2-R1)으로 기록한다.
+
+### R2-5. 남은 위험 (2차 추가분)
+
+- **R2-R1 limit BLOCKED 중 범위 검사 해제**: R2-4 참고. 보완하려면 `executing` 조건에 `state === 'BLOCKED' && blockKind === 'limit'`을 포함하면 된다. 아니면 SPEC_CHANGES와 코드 주석에 BLOCKED를 명시해야 한다.
+- **R2-R2 모델의 `M="node …"; $M` 습관**: zsh는 변수를 단어 단위로 나누지 않으므로 이 형태는 실패한다. 이번 실사용에서 k1, nf, bl, dbg, std에서 반복해서 관찰됐다.
+  - nf에서는 이 때문에 rootcause 노트보다 수정이 먼저 적용됐다가, 모델이 스스로 되돌렸다. 이미 수용된 RISKS(rootcause 순서는 모델 판단)의 한 사례다.
+  - 스킬은 `mis` = `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"`라고만 정의하므로 이 형태는 지시된 것이 아니다.
+  - `mis`가 실패하면 retry 게이트가 거부하므로 거짓 완료로 이어지지는 않는다.
+- **lock 회수 실사용 미발생**: k1에서도 `reclaimedLock`이 null이었다. 여전히 통합 테스트(`mis-resume.test.mjs`)로만 확인된다.
+- 1차 R-1, R-3~R-7은 그대로 남아 있다. R-1과 R-3은 PROGRESS RISKS에 수용돼 있다. 1차 R-2는 범위 검사 부분이 해소됐고, 원격 쓰기 ask가 유지되는 부분은 위 해석으로 정리됐다.
+
+### R2-6. 미검증 항목
+
+NH-1, NH-2, NH-3(대화형 확인 창, HUD 상태 줄)은 1차와 같이 NEEDS_HUMAN이다. 헤드리스에서는 ask가 거부로 처리되는 것까지만 확인했다.
+
+### R2-7. 결론
+
+- 1차 결함 D-1, D-2, D-3은 원래 재현 절차로 다시 시험했고 모두 해결됐다.
+- 새 결함은 없다. 판정 기준 (a), (b), (c)에 해당하는 guard 결함도 없다.
+- 종료 기준 두 가지(데모 D kill/resume, guard 우회 사례 테스트)는 계속 충족된다.
+- Standard 실사용에서 승인 외의 guard 개입은 없었다.
