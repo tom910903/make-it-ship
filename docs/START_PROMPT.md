@@ -1,73 +1,100 @@
-continuous mode. 이 세션의 역할은 Make It Ship 개발 루프의 **감독자**다. 질문은 아래 "사용자에게 묻는 경우"에만 한다.
+# 시작 프롬프트
 
-## 목표
-`docs/Make_It_Ship_Spec_v1.1.md`의 M1~M5를 모두 구현하고 검증한다.
-- 각 마일스톤은 `docs/milestones/M<n>-report.md`와 git 태그 `m<n>-verified`로 완료를 증명한다.
-- 최종 산출물은 `claude --plugin-dir .`로 설치해 `/make-it-ship:run`이 동작하는 플러그인이다.
-- 실제로 실행하지 않은 검증은 통과로 기록하지 않는다.
+새 Claude Code 세션을 저장소 루트에서 열고, Shift+Tab으로 **auto 모드**를 켠 뒤 아래 두 개를 순서대로 붙여넣는다.
 
-## 준비 (한 번만)
-1. 저장소 루트(`make-it-ship`)에서 `git status --short --branch`를 실행한다.
-   - 현재 브랜치가 `develop`인지 확인한다. 아니면 `develop`으로 전환하거나 새로 만든다.
-   - 작업트리가 깨끗한지 확인한다.
-2. 다음 파일을 읽는다: `docs/LOOP_PROMPT.md`, `docs/PROGRESS.md`, `docs/adr/0001-host-smoke.md`.
+## ① 골 설정
 
-## 실행
-1. `scripts/dev-loop.sh 150`을 Bash `run_in_background`로 실행한다.
-   - 이 스크립트는 반복마다 새 `claude -p` 세션을 띄워 `docs/LOOP_PROMPT.md`를 수행한다.
-2. 루프가 도는 동안 이 세션은 코드를 직접 고치지 않는다. 짧은 간격으로 폴링하지 않고, 완료 알림을 기다린다.
-3. 기다리는 동안 마일스톤 태그(`git tag -l 'm*-verified'`)가 새로 생기면 해당 보고서를 읽고 한 줄 요약을 남긴다.
+```
+/goal docs/PROGRESS.md 첫 줄이 "STATUS: DONE"이고, git 태그 m1-verified~m5-verified가 모두 존재하고, docs/milestones/FINAL-report.md가 커밋되어 있고, 마지막 커밋에서 npm test와 claude plugin validate . 가 통과한 상태
+```
 
-## 루프가 끝났을 때 (`head -1 docs/PROGRESS.md`로 판단)
+## ② 작업 프롬프트
 
-### `STATUS: DONE`
-1. 최종 검증을 **직접 다시** 실행한다.
-   - `npm test` 전체
-   - `claude plugin validate .`
-   - `evals/`의 데모 저장소 하나를 임시 디렉터리에 복사한 뒤 아래 명령을 실행하고, 판정과 보고서가 생성되는지 확인한다.
-     ```
-     claude -p "<데모 요청>" --plugin-dir <repo> --permission-mode acceptEdits --max-turns 60
-     ```
-2. M1~M5 보고서와 태그가 모두 있는지 확인한다.
-3. `docs/milestones/FINAL-report.md`를 작성한다. 포함할 것:
-   - 마일스톤별 결과
-   - 추적표(Spec §2) 행별 구현·테스트 상태
-   - NEEDS_HUMAN 목록과 각 항목의 확인 절차
-   - 남은 위험
-   - 설치 방법과 사용법
-4. 커밋한 뒤 결과를 보고한다.
+```
+continuous mode. 목표는 위 /goal이다. Make It Ship 플러그인을 M1부터 M5까지 끝까지 구현하고 검증한다. 사용자 질문은 아래 "멈추고 묻는 경우"에만 한다.
 
-### `STATUS: HALT — <사유>`
-1. 사유와 마지막 반복 로그(`.dev-loop/` 최신 파일 2~3개의 끝부분)를 읽고 원인을 분석한다.
-2. Spec이나 ADR의 결정을 바꾸지 않고 해결할 수 있는 문제라면 다음 순서로 처리한 뒤 루프를 다시 실행한다.
-   - 대상 예: 루프 스크립트·환경·권한 목록 문제, 잘못 쪼갠 작업
-   - 최소 수정을 한다
-   - `PROGRESS.md`의 `RISKS`에 기록한다
-   - 첫 줄을 `STATUS: RUNNING`으로 되돌린다
-   - 커밋한다
-3. Spec 결정이 필요하면 아래 "사용자에게 묻는 경우"를 따른다.
+## 기준 문서 (충돌 시 위가 우선)
+1. docs/Make_It_Ship_Spec_v1.1.md — 구현 기준 (§2 추적표, §11 마일스톤, §14 기능 매핑)
+2. docs/adr/*.md — 실측으로 확정된 사실
+3. docs/Make_It_Ship_Product_Plan_v1.0.md — 제품 의도
+4. docs/PROGRESS.md — 진행 상태의 유일한 기록. 컨텍스트가 압축되거나 세션이 재시작되면 항상 이 파일과 git log부터 다시 읽는다.
 
-### 여전히 `STATUS: RUNNING`인데 루프가 끝남 (반복 상한 도달 또는 비정상 종료)
-1. 최근 로그를 확인한다.
-2. 진전이 있었다면(커밋이 늘었다면) 루프를 다시 실행한다.
-3. 같은 작업에서 진전 없이 재시작이 3번째라면 HALT와 같이 처리한다.
+## 시작할 때
+1. `git status --short --branch`를 확인한다. `develop` 브랜치에서 작업하고, 작업트리가 더러우면 내용을 보고 정리한다.
+2. 기준 문서 1~4를 읽는다.
 
-## 사용자에게 묻는 경우 (이때만 멈춘다)
-- Spec이나 ADR의 결정을 바꿔야 할 때
-- 같은 원인으로 루프를 3번 재시작해도 진전이 없을 때
-- 비용이나 시간이 예상보다 크게 늘어 계속할지 판단이 필요할 때
+## 작업 사이클 (PROGRESS.md의 CURRENT 마일스톤에 대해 반복)
 
-질문할 때는 선택지 2~4개를 제시하고 권장안을 표시한다.
+**A. 계획**: 마일스톤에 작업 목록이 없을 때
+- Spec의 해당 범위·종료 기준·추적표 행을 읽는다.
+- 흡수할 원본 기능이 있으면 원본 SKILL.md를 읽고 핵심 동작을 파악한다. 위치는 `~/.claude/plugins/cache/*/`, `~/.claude/skills/gstack/`이다.
+- 30분~2시간 단위 작업으로 나눠 PROGRESS.md 표에 TODO로 적는다. 작업마다 완료 조건, 검증 테스트, 추적 ID를 적는다.
+- 마일스톤 종료 기준을 확인하는 작업(데모, E2E)을 반드시 포함한다.
+- 커밋한다.
+
+**B. 구현**: TODO 작업을 하나씩 처리한다
+1. 실패하는 테스트를 먼저 작성하고, 실패하는 것을 확인한다.
+2. 최소 구현 → `npm test` 전체 통과
+3. 플러그인 구성요소(skills, agents, hooks)를 바꿨다면 `claude plugin validate .`도 실행한다.
+4. 실패하면 재현 → 가설 → 실험 순서로 원인을 찾고, 원인을 PROGRESS.md 작업 메모에 적은 뒤 수정한다. 같은 작업이 3번 실패하면 BLOCKED(사유 포함)로 두고 다음 작업으로 간다.
+5. 커밋한다. 형식: `M<n>-<id>: <요약>`
+6. PROGRESS.md에 상태 DONE, 실행 명령, 결과 수치, 커밋 해시를 기록한다.
+
+**C. 독립 검증**: 마일스톤의 작업이 모두 DONE, BLOCKED, NEEDS_HUMAN 중 하나가 되면
+- 검증은 직접 하지 말고, **새 서브에이전트(검증자)** 에게 맡긴다. 구현 내용을 모르는 회의적인 검증자 역할을 준다.
+- 검증자에게 시킬 일:
+  - `npm test`와 `claude plugin validate .`를 재실행한다.
+  - Spec §11 종료 기준을 항목별로 확인한다.
+  - 추적표 행마다 테스트가 있는지 확인한다.
+  - TODO, skip, 스텁이 남아 있는지 grep으로 확인한다.
+  - evals/ 데모 저장소를 임시 디렉터리에 복사해 다음 명령으로 실제 사용 검증을 한다. 헤드리스에서는 ask 승인 단계에서 멈추는 것이 정상이다(ADR-014).
+    ```
+    claude -p "<데모 요청>" --plugin-dir <repo> --permission-mode acceptEdits --max-turns 60
+    ```
+- 검증 결과는 `docs/milestones/M<n>-report.md`에 쓴다. 기준별 PASS/FAIL/NEEDS_HUMAN과 증거, 미검증 항목, 남은 위험을 포함한다.
+- 결함이 있으면 수정 작업을 TODO로 추가하고 B로 돌아간다. 결함이 없으면 `git tag m<n>-verified`를 붙이고 CURRENT를 다음 마일스톤으로 바꾼다.
+- 마일스톤 하나가 끝날 때마다 사용자에게 한 줄로 알린다. 형식: `M<n> 완료: 테스트 x/y, NEEDS_HUMAN k건`
+
+**D. 마무리**: M5가 검증되면
+- 최종 검증 서브에이전트를 한 번 더 실행한다.
+- `docs/milestones/FINAL-report.md`를 작성한다. 포함할 것:
+  - 마일스톤별 결과
+  - 추적표 행별 상태
+  - NEEDS_HUMAN 목록과 각 항목의 확인 절차
+  - 남은 위험
+  - 설치와 사용법
+- PROGRESS.md 첫 줄을 `STATUS: DONE`으로 바꾸고 커밋한다.
+
+## 사람이 필요한 것은 기록하고 계속 진행
+실기기(iOS), 대화형 확인 창, 외부 계정·로그인·유료 자원이 필요한 검증은 다음과 같이 처리하고 다음 작업으로 넘어간다.
+- 실행 절차를 문서로 작성한다.
+- PROGRESS.md의 NEEDS_HUMAN에 기록한다.
+- 절대 PASS로 기록하지 않는다.
+
+## 멈추고 묻는 경우 (이때만)
+- Spec이나 ADR의 결정을 바꿔야만 진행할 수 있을 때
+- 한 마일스톤에서 BLOCKED 작업이 3개 이상일 때
+
+질문할 때는 선택지 2~4개와 권장안을 제시한다. 그 외에는 묻지 않고 계속 진행한다.
 
 ## 금지
-- `git push`, PR 생성, 외부 서비스 쓰기 (최종 보고 후 사용자가 별도로 결정)
-- 감독 세션이 기능 코드를 직접 구현하는 것 (루프 인프라 수정만 허용)
-- 테스트 약화나 skip, NEEDS_HUMAN 항목을 통과로 기록하는 것
-- `docs/Make_It_Ship_Product_Plan_v1.0.md`, `docs/adr/0001-host-smoke.md` 수정
+- git push, PR 생성, 외부 서비스·MCP 쓰기. guard 확인 창이 뜨는 작업은 하지 않는다.
+- 테스트 삭제·약화·skip, 실행하지 않은 검증을 통과로 기록
+- Spec에 없는 기능 추가 → PROGRESS.md PROPOSALS에만 기록
+- 런타임·개발 의존성 추가 (ADR-003, node:test 사용)
+- Product Plan과 ADR-0001 수정. Spec은 명백한 오류 정정만 허용하며 SPEC_CHANGES에 기록한다.
+- 사내 코드나 데이터를 평가셋에 사용
 
-## 최종 보고 형식
-- 완료한 것: 마일스톤과 태그
-- 확인한 증거: 명령과 결과 수치
-- 실행하지 못한 검증과 그 이유
-- 사용자가 해야 할 일: NEEDS_HUMAN 목록, push 여부 결정
-- 남은 위험
+## 컨텍스트 관리
+- 큰 파일 탐색과 원본 스킬 분석은 서브에이전트에 맡기고 결론만 받는다.
+- 커밋할 때마다 PROGRESS.md를 갱신해, 언제 끊겨도 이어갈 수 있게 한다.
+```
+
+## 진행 중 확인·중지
+
+- 진행 확인: `head -3 docs/PROGRESS.md`, `git log --oneline | head`, `git tag -l 'm*'`
+- 중지: Esc로 중단한다. goal 해제 명령은 `/help`에서 `/goal` 항목을 확인한다. 재개할 때는 같은 두 블록을 다시 붙여넣으면 PROGRESS.md부터 이어서 진행한다.
+
+## 대안: 무인 백그라운드 루프
+
+세션을 열어두기 어려우면 `nohup scripts/dev-loop.sh 150 > .dev-loop/run.log 2>&1 &`로 실행한다. 이 방식은 반복마다 새 세션으로 `docs/LOOP_PROMPT.md`를 수행한다.
