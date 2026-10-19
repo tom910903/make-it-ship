@@ -1,6 +1,6 @@
-STATUS: RUNNING
+STATUS: DONE
 CURRENT: FINAL
-VERIFY: PENDING
+VERIFY: PASSED
 
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
 > 작업 방식: 작업마다 실패 테스트 → 최소 구현 → `npm test` 전체 통과 → 커밋 `M<n>-<id>: 요약`.
@@ -107,7 +107,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | DONE | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | 7056685 | plugin-files.test.mjs; Codex 실행은 NEEDS_HUMAN |
 | M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | DONE | `docs/milestones/M5-e2e.md` | §11 M5 | c1821cf | docs/milestones/M5-e2e.md; NH-6~9 |
 | M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | DONE | VERIFIER_PROMPT | §11 M5 | (this) | M5-report.md 1~3차, ROUND3: PASS |
-| F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
+| F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
 ## NEEDS_HUMAN
 전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 미확인이며 통과로 기록하지 않았다.

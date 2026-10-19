@@ -1,6 +1,6 @@
 # Make It Ship — 최종 독립 검증 (FINAL)
 
-FINAL: DEFECTS FOUND
+FINAL: PASS
 
 - 검증 대상: `develop` HEAD `be21dd8` (m5-verified와 동일, 이후 커밋 0)
 - 검증자: 독립 서브에이전트(구현 컨텍스트 비상속). 외부 모델 호출·push·commit·tag·패키지 설치·MCP 쓰기 없음.
@@ -175,3 +175,39 @@ FAIL 행: 없음. NEEDS_HUMAN 부분: #4, #11의 대화형 확인 창.
 
 기능·판정 로직은 1차 결과와 표본 재실행 기준으로 문제없다. NH-9 절차는 보완됐다. 하지만 NH-5 설치 절차에 문서 의도와 다른 기본 scope(user) 문제가 남아 있어 **DEFECTS FOUND**로 판정한다. `--scope project` 두 곳(NEEDS_HUMAN.md 82·91행)과 README.md:24를 고치면 문서만의 수정이므로 전체 테스트 재실행 없이 재확인할 수 있다.
 
+
+## 3차 (마무리) 검증
+
+- 검증 대상: `develop` HEAD `027d09f` (m5-verified 이후 커밋 3개: `9562a84`, `555e4ef`, `027d09f`)
+- 범위: 2차 결함(D-3 NH-5 scope, PASS 조건 형식, 비결정적 테스트)의 수정 확인만 한다.
+
+| 확인 | 명령 | 결과 |
+|---|---|---|
+| 전체 테스트 1회차 | `npm test` | 319/319 pass, fail 0 |
+| 전체 테스트 2회차 | `npm test` | 319/319 pass, fail 0 (실패한 테스트 없음) |
+| 매니페스트 | `claude plugin validate .` | `✔ Validation passed` |
+| 태그 | `git tag` | `m1-verified`~`m5-verified` 5개. 새 태그 없음 |
+| 변경 범위 | `git diff m5-verified..HEAD --stat` | `README.md`, `docs/PROGRESS.md`, `docs/milestones/FINAL-verification.md`, `docs/milestones/NEEDS_HUMAN.md`, `tests/integration/mis-concurrency.test.mjs`만 바뀜 (5 files, +366/-7). 문서와 해당 테스트뿐 |
+
+### D-3 (NH-5 scope) 재확인 — 해소됨
+
+- flag 이름: `claude plugin install --help`와 `uninstall --help` 모두 `-s, --scope <scope>` (user, project, local). `marketplace add --help`는 `--scope <scope>` (기본 user).
+- `grep -n "claude plugin" docs/milestones/NEEDS_HUMAN.md README.md` 결과:
+  - NEEDS_HUMAN.md:87 `marketplace add /tmp/mis-market --scope project`, :88 `install make-it-ship@mis-local --scope project`, :97 `uninstall make-it-ship@mis-local --scope project`
+  - README.md:23 `marketplace add <marketplace-dir> --scope project`, :24 `install make-it-ship@<marketplace-name> --scope project`
+- NEEDS_HUMAN.md:98 `marketplace remove mis-local`만 scope가 없다. `marketplace remove --help`는 "Omit to remove it from every scope"이므로 전역 설정에 새로 쓰지 않는다. 결함 아님(2차 판단과 같음).
+
+### PASS 조건 형식 — 해소됨
+
+- `grep -n "PASS 조건" docs/milestones/NEEDS_HUMAN.md`: 9건. NH-1(34행), NH-2(44), NH-3(53), NH-4(66), NH-5(102), NH-6(122), NH-7(134), NH-8(147), NH-9(170). 섹션마다 하나씩 있다.
+- 결과표(14~24행) NH-1~NH-9 9행의 결과·날짜·메모 칸은 모두 비어 있다. 통과로 기록된 NH는 **0건**이다.
+
+### 동시성 테스트 변경 — 해소됨, 약해지지 않음
+
+- `slow` check는 이제 `./release` 파일이 생길 때까지 끝나지 않는다. 테스트는 `runs/<runId>/running/`에 마커가 생길 때까지 기다린 뒤(`commands.mjs:339-341`에서 생성, 종료 시 `rmSync`) `mis check unit`을 실행하고, 끝난 직후 마커가 아직 남아 있는지 단언한다. 그다음에야 `release`를 만든다.
+- 확인하는 성질은 같다: slow check가 실행 중인 동안 다른 `mis check`가 끝난다. 이전 테스트보다 강하다. 실행 락을 잡고 있으면 unit은 slow가 끝날 때까지 끝나지 않는데, slow는 `release` 없이는 끝나지 않으므로 테스트가 실패하거나 멈춘다. 시간 기준(2.5초)은 없어졌지만 "slow가 아직 실행 중"을 마커로 직접 확인하므로 부하에 상관없이 같은 결과가 나온다.
+- 마커가 30초 안에 생기지 않으면 대기 루프만 끝나고, 뒤의 `readdirSync(running)` 단언에서 실패한다. 조용히 통과하는 경로는 없다.
+
+### 결론
+
+2차 결함 3건(D-3 NH-5 scope, PASS 조건 형식, 비결정적 테스트)이 모두 해소됐다. 테스트 2회 모두 319/319이고 validate도 통과했다. 변경은 문서와 동시성 테스트에만 있다. NEEDS_HUMAN 9건은 여전히 사람이 확인해야 하며, 통과로 기록된 것은 없다. **FINAL: PASS**.
