@@ -1,0 +1,14 @@
+MIS run 20261019-1230-3be6 · REPORTED · mode quick (Single small flag on a 20-line CLI, no risk flags)
+Goal: Add a --lines flag to wc.py that prints the line count instead of the word count, keeping default behavior unchanged.
+Tasks (1/1 done):
+  [DONE] T1 Add count_lines and --lines flag with tests
+Required checks:
+  unit  PASS  E1
+Reviews on current code:
+  quality  0 blocking / 0 major
+Verdict now: VERIFIED
+
+ M tests/test_wc.py
+ M wc.py
+?? .make-it-ship.json
+?? docs/

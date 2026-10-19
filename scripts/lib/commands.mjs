@@ -208,7 +208,8 @@ const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttempt
 
 function approve([what], cwd) {
   if (what === 'continue') return approveContinue(cwd);
-  if (what !== 'plan') fail('usage: mis approve <plan|continue>');
+  if (what === 'config') return approveConfig(cwd);
+  if (what !== 'plan') fail('usage: mis approve <plan|continue|config>');
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'approve plan');
@@ -217,6 +218,17 @@ function approve([what], cwd) {
     s.approvals.push({ action: 'plan', ...h, planHash: s.planHash, at: new Date().toISOString() });
     transition(s, 'EXECUTING');
     return { event: { type: 'approve', action: 'plan', ...h }, result: { state: s.state } };
+  });
+}
+
+/** The user accepts the current .make-it-ship.json after it changed during the run. */
+function approveConfig(cwd) {
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
+    const { configHash } = loadConfig(repoRoot(cwd));
+    s.approvals.push({ action: 'config', configHash, at: new Date().toISOString() });
+    return { event: { type: 'approve', action: 'config', configHash }, result: { configHash } };
   });
 }
 
@@ -367,7 +379,9 @@ export function verdictContext(run, cwd) {
   if (cfg.config && run.state.mode && run.state.mode !== 'quick') {
     for (const p of detectQa(root, { surfacesOnly: true }).profiles) if (!required.includes(`qa-${p.profile}`)) required.push(`qa-${p.profile}`);
   }
-  return { treeHash: tree, configHash: cfg.configHash, required,
+  const s = run.state;
+  const configChangedUnapproved = s.configHash !== cfg.configHash && !(s.approvals ?? []).some((a) => a.action === 'config' && a.configHash === cfg.configHash);
+  return { treeHash: tree, configHash: cfg.configHash, required, configChangedUnapproved,
     dependencyChanged: changed.length > 0, changedManifests: changed, configErrors: cfg.errors, configExists: cfg.exists };
 }
 

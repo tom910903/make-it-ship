@@ -1,0 +1,13 @@
+MIS run 20261019-1237-bb30 · REPORTED · mode quick (One-line bug fix in a single function, existing failing test covers it, no risk flags)
+Goal: Make cartTotal round the percentage discount half up to the nearest cent so the failing test passes.
+Tasks (1/1 done):
+  [DONE] T1 Round discount half up in cartTotal
+Required checks:
+  unit  PASS  E3
+Reviews on current code:
+  quality  0 blocking / 0 major
+Verdict now: VERIFIED
+
+ M src/cart.js
+?? .make-it-ship.json
+?? docs/

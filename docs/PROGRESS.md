@@ -106,6 +106,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
 
 ## NEEDS_HUMAN
+- **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: README 설치 절. 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-3 (M2)**: HUD statusLine 실제 표시. 절차: `docs/milestones/M2-e2e.md`. 미확인
@@ -116,6 +117,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
 - (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.
 
 ## RISKS

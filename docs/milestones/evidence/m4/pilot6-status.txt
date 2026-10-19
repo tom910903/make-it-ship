@@ -1,0 +1,16 @@
+MIS run 20261019-1237-3a0a · REPORTED · mode quick (Single small shell script, one option, no risk flags)
+Goal: Add a `--keep N` option to bin/backup.sh that, after creating the new tarball, deletes the oldest tarballs of the same directory so at most N remain.
+Tasks (2/2 done):
+  [DONE] T1 Shell test script for backup.sh including --keep cases
+  [DONE] T2 Implement --keep N in bin/backup.sh and document it in README
+Required checks:
+  (none defined — run `mis init`)
+Reviews on current code:
+  quality  0 blocking / 0 major
+Verdict now: PARTIAL
+  - no required checks defined: nothing was machine-verified
+
+ M README.md
+ M bin/backup.sh
+?? docs/
+?? tests/
