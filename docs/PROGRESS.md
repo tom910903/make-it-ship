@@ -67,7 +67,7 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 | M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | DONE | `docs/adr/0002-parallel-state.md` | ADR-004 | cc8f5f7 | ADR-0002 |
 | M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | DONE | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | cc8f5f7 | npm test 231/231 (동시 8 writer 무손실) |
 | M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | DONE | `tests/unit/parallel.test.mjs` | §14 parallel | aba7d4b | parallel.test.mjs |
-| M3-04 | `mis worktree add| DONE | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | aba7d4b | npm test 238/238, 충돌 재현 mis-worktree.test.mjs | |
+| M3-04 | `mis worktree add/merge <task>`: 격리 worktree, 소유 파일 범위 guard, 충돌 시 안전 중단 | DONE | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | §11 M3 종료 기준 | aba7d4b | npm test 238/238, 충돌 재현 mis-worktree.test.mjs |
 | M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | DONE | `plugin-files.test.mjs` | §14 parallel | 875b944 | npm test 244/244, validate ✔ |
 | M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14.1 product-review | 875b944 | npm test 244/244, validate ✔ |
 | M3-07 | architect 에이전트 + design phase(ADR 초안) | DONE | `plugin-files.test.mjs` | §14 design | 875b944 | npm test 244/244, validate ✔ |
