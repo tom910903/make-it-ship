@@ -1,0 +1,22 @@
+MIS run 20261019-1237-2bff · REPORTED · mode standard (Coordinated change across all three pipeline modules (parse/summarize/render) plus changed output format; small code but cross-module contract change. No auth/payment-processing/pii/migration risk: this is report formatting of amounts.)
+Goal: Switch the parse -> summarize -> render pipeline to integer cents so money totals have no float error and print with exactly two decimals.
+Tasks (3/3 done):
+  [DONE] T1 parse converts amounts to integer cents from the digit string and rejects invalid amounts with line numbers
+  [DONE] T2 summarize sums integer cents (logic already integer-safe; update doc comment to say cents, add tests)
+  [DONE] T3 render prints cents as amounts with exactly two decimals, ordering unchanged; update pipeline test
+Required checks:
+  unit  PASS  E1
+Reviews on current code:
+  spec  0 blocking / 0 major
+  quality  0 blocking / 0 major
+Verdict now: VERIFIED
+
+ M src/parse.js
+ M src/render.js
+ M src/summarize.js
+ M test/pipeline.test.js
+?? .make-it-ship.json
+?? docs/
+?? test/parse.test.js
+?? test/render.test.js
+?? test/summarize.test.js
