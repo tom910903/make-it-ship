@@ -45,3 +45,14 @@ test('demo d: fresh repo whose test suite fails at baseline', () => {
   assert.equal(r.status, 'FAIL');
   assert.match(r.tail, /rounds the discount half up/);
 });
+
+test('demo p: two independent modules plan into one parallel wave', () => {
+  const dir = setup('p');
+  ok(mis(dir, ['init', '--write']));
+  ok(mis(dir, ['start', '--input', 'REQUEST.md']));
+  assert.equal(ok(mis(dir, ['check', 'unit'])).status, 'PASS');
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [
+    { id: 'T1', title: 'kebab', acceptance: ['a'], files: ['src/text.js', 'test/text.test.js'] },
+    { id: 'T2', title: 'mean', acceptance: ['b'], files: ['src/math.js', 'test/math.test.js'] }] }) }));
+  assert.deepEqual(ok(mis(dir, ['parallel', 'plan'])).waves, [['T1', 'T2']]);
+});
