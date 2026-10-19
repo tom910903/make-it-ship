@@ -32,7 +32,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M1-10 | mis: init(설정 탐지), doctor(중복 플러그인 경고) | DONE | `tests/integration/mis-init-doctor.test.mjs` | AC#12 | 07f7a97 | npm test 150/150 |
 | M1-11 | 에이전트 4종 + run/status 스킬 + phases 7종 + 직접 명령 3종 | DONE | `tests/unit/plugin-files.test.mjs`(frontmatter·tools 허용목록·참조 경로), `claude plugin validate .` | §14 discover·interview·plan·plan-critique·implement·verify·review | 85c6253 | npm test 168/168, validate ✔ |
 | M1-12 | evals: 데모 A(TS)·B(Python) 생성 스크립트 | DONE | `tests/integration/evals.test.mjs` (생성 후 기본 테스트 실행 결과 확인) | 데모 A/B | 9c2a860 | npm test 171/171 |
-| M1-13 | E2E: 깨끗한 환경 헤드리스로 데모 A(기능 추가)·B(버그 수정) Quick 경로 → REPORTED, Standard 경로 → 승인 대기에서 정지 | TODO | `docs/milestones/M1-e2e.md` 로그. 승인 이후 대화형 구간은 NEEDS_HUMAN 절차서 | 데모 A/B, AC#12 | | |
+| M1-13 | E2E: 깨끗한 환경 헤드리스로 데모 A(기능 추가)·B(버그 수정) Quick 경로 → REPORTED, Standard 경로 → 승인 대기에서 정지 | DONE | `docs/milestones/M1-e2e.md` 로그. 승인 이후 대화형 구간은 NEEDS_HUMAN 절차서 | 데모 A/B, AC#12 | b535061 | a1/b1 VERIFIED, a2 정지@승인, a2b VERIFIED; NH-1 대화형 확인 창 |
 | M1-14 | 독립 검증 → `docs/milestones/M1-report.md`, `m1-verified` 태그 | TODO | 새 서브에이전트(컨텍스트 비상속) | §11 M1 | | |
 
 ### 원본 흡수 근거 (§14)
