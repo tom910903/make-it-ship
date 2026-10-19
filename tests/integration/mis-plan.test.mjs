@@ -147,3 +147,21 @@ test('standard mode does not require product review or design choice', () => {
   ok(mis(dir, ['review', 'add', 'plan-critic', 'critic-ok.md']));
   assert.equal(ok(mis(dir, ['approve', 'plan'])).state, 'EXECUTING');
 });
+
+test('full mode: product review and design choice are bound to the current plan (a plan change needs both again)', () => {
+  const dir = setup({ ...PLAN, ui: true });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', 'plan.json']));
+  ok(mis(dir, ['mode', 'set', 'full', '--reason', 'new app']));
+  ok(mis(dir, ['review', 'add', 'plan-critic', 'critic-ok.md']));
+  ok(mis(dir, ['review', 'add', 'product', 'critic-ok.md']));
+  ok(mis(dir, ['note', 'design', '-'], { input: 'variant B' }));
+  write(dir, { 'plan3.json': { ...PLAN, ui: true, goal: 'Add greet with a settings screen' } });
+  ok(mis(dir, ['plan', 'set', 'plan3.json']));
+  ok(mis(dir, ['review', 'add', 'plan-critic', 'critic-ok.md']));
+  no(mis(dir, ['approve', 'plan']), /product review/);
+  ok(mis(dir, ['review', 'add', 'product', 'critic-ok.md']));
+  no(mis(dir, ['approve', 'plan']), /design/);
+  ok(mis(dir, ['note', 'design', '-'], { input: 'variant B, adjusted for settings' }));
+  assert.equal(ok(mis(dir, ['approve', 'plan'])).state, 'EXECUTING');
+});

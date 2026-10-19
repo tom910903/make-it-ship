@@ -102,7 +102,7 @@ function executionGates(s, cwd) {
     const product = s.reviews.filter((r) => r.kind === 'product' && r.planHash === s.planHash).at(-1);
     if (!product) fail('full mode: product review of the current plan is missing (mis review add product -)');
     if (product.blocking > 0) fail(`product review has ${product.blocking} blocking issue(s); revise the plan`);
-    if (s.plan.ui && !s.notes.some((n) => n.kind === 'design')) fail('full mode UI project: record the chosen design first (design-explore, then mis note design -)');
+    if (s.plan.ui && !s.notes.some((n) => n.kind === 'design' && n.planHash === s.planHash)) fail('full mode UI project: record the chosen design for the current plan first (design-explore, then mis note design -)');
   }
   const open = openAmbiguities(s, cwd);
   if (open.length) fail(`unresolved ambiguity: ${open.map((q) => `${q.id} (${q.impact}) ${q.question}`).join('; ')}`);
@@ -465,6 +465,7 @@ function note([kind, ...rest], cwd) {
     if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
     if (rec.task && !run.state.plan?.tasks.some((t) => t.id === rec.task)) fail(`no task ${rec.task} in plan`);
     if (rec.kind === 'rootcause') rec.seq = run.state.seq = (run.state.seq ?? 0) + 1;
+    if (rec.kind === 'design') rec.planHash = run.state.planHash;
     rec.at = new Date().toISOString();
     run.state.notes.push(rec);
     return { event: { type: 'note', kind }, result: rec };
