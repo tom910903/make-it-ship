@@ -51,3 +51,17 @@ test('hooks.json wires PreToolUse to guard with the Spec matcher', () => {
   assert.equal(entry.matcher, 'Bash|Write|Edit|MultiEdit|NotebookEdit|mcp__.*');
   assert.match(entry.hooks[0].command, /\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/guard\.mjs/);
 });
+
+test('guard: plan scope comes from the active run (plannedFiles + task files)', () => {
+  const dir = makeRepo();
+  createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const r0 = run({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: `${dir}/zzz.js` }, cwd: dir });
+  assert.equal(r0.out, null, 'no plan yet → no scope check');
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const misRun = (args, input) => spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, ...args], { cwd: dir, input, encoding: 'utf8', env });
+  assert.equal(misRun(['plan', 'set', '-'], JSON.stringify({ goal: 'g', plannedFiles: ['src/**'], tasks: [{ id: 'T1', title: 't', acceptance: ['a'], files: ['test/a.test.js'] }] })).status, 0);
+  const w = (p) => run({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: `${dir}/${p}` }, cwd: dir }).out?.permissionDecision ?? 'allow';
+  assert.equal(w('src/x.js'), 'allow');
+  assert.equal(w('test/a.test.js'), 'allow');
+  assert.equal(w('other.js'), 'ask');
+});
