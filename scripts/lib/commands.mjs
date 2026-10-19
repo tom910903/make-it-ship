@@ -22,6 +22,7 @@ import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
 import { renderShip } from './ship.mjs';
 import { loadRuns, retroMetrics, renderRetro } from './retro.mjs';
+import { addLearning, listLearnings } from './learn.mjs';
 import { stateRoot } from './state.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
@@ -584,6 +585,13 @@ function retro(args, cwd) {
   return { path: rel, metrics };
 }
 
+function learn([sub, arg], cwd) {
+  const root = repoRoot(cwd);
+  if (sub === 'list') return { entries: listLearnings(root) };
+  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, arg)) };
+  return fail('usage: mis learn <add <json|->|list>');
+}
+
 function qa([sub], cwd) {
   if (sub !== 'detect') fail('usage: mis qa detect');
   return detectQa(repoRoot(cwd));
@@ -612,5 +620,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, block, cancel };
 export { requiredChecks };
