@@ -34,8 +34,10 @@ What happens:
 3. **Plan and choose a mode.** The mode is Quick, Standard, or Full, and the plugin gives a reason for its choice. Risk flags (auth, payment, PII, migration, hardware, security) force Standard or higher.
 4. **Plan critique and your approval.** These happen in Standard and Full. A Quick change with no risk flags skips approval.
 5. **Implement.** Work is test-first and uses the smallest complete change.
-6. **Verify.** `mis check` runs the checks, and read-only reviewer agents (spec and quality) review the change.
+6. **Verify and QA.** `mis check` runs the checks, including real-use QA checks (`qa-*`) for a CLI, API, web UI, or iOS simulator surface that `mis qa detect` finds. Read-only reviewer agents (spec and quality, plus security for risky changes) review the change.
 7. **Report.** The report goes to `docs/make-it-ship/<run>/report.md`. It covers the goal, task status, changed files, real check results, what could not be verified and why, invalidated evidence, decisions left to you, and how to run the result.
+
+8. **Ship (on request, or Full).** Doc and changelog edits happen before verify. After the report, `mis ship` writes a PR draft, a changelog draft and a release checklist (`NOT READY` unless VERIFIED). Push or PR happens only after your approval.
 
 Run state lives in `.git/make-it-ship/`, so it is never committed and never affects the code hash.
 

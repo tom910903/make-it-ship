@@ -222,3 +222,74 @@ dogfood transcript에 나온 guard 거부(stream-json `permission_denials`)는 �
 - **`mis init --write`는 run 시작 전에 실행되므로 guard 범위 밖이다**(§7 "진행 중인 실행이 있을 때만"). 헤드리스에서 "Proceed without asking"을 붙이면 모델이 탐지된 설정을 확인 없이 쓴다. Spec §9-1 해석과 일치하며, 모델이 최종 메시지에서 이를 알렸다.
 - **guard가 임시 디렉터리 정리 `rm -rf $w`(mktemp)를 ask한다.** 헤드리스에서는 거부되고 모델이 우회한다. Spec 행 그대로이지만 정상 흐름에서 마찰이 생긴다.
 - **qa 스크립트의 품질은 모델 몫이다.** 데모 C의 1차 스모크(36개)는 reset 범위, 기본 경로, 시간대 같은 요구사항 일부를 확인하지 않았다. `/make-it-ship:qa` 재실행에서 73개로 보강됐다. 첫 run의 VERIFIED는 그만큼 좁은 범위의 증거였다.
+
+## 2차 검증 (round 2)
+
+검증 대상: `develop` @ `39e65e5` ("M4-fix"). 1차 결함 D1~D7을 원래 재현 방법으로 다시 확인했고, 새 clone으로 종료 기준도 다시 확인했다. 커밋 메시지와 M4-e2e 추가 기록은 참고만 했다. 모든 결과는 직접 실행해서 얻었다.
+
+**ROUND2: DEFECTS FOUND**
+
+- **주요 결함은 모두 고쳐졌다.** D2·D3·D4는 실측으로 해결을 확인했다. D1도 핵심 흐름은 해결됐다. 문서·체인지로그 수정이 검증 전에 일어나고, 보고 뒤에는 초안 작성과 커밋만 한다.
+- **종료 기준은 계속 PASS다.**
+- **남은 결함은 LOW 3건이다.** R2-1, R2-2, R2-3(아래). 거짓 VERIFIED나 승인 우회는 없다.
+
+### R2.1 실행한 명령과 결과
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` (저장소) | tests 294 / pass 294 / fail 0 / skipped 0 / todo 0 |
+| `claude plugin validate .` | ✔ Validation passed |
+| `git clone -b develop` → `npm test` → validate (scratchpad/r2/clone, 39e65e5) | 294/294, ✔ |
+| 스텁 검사 (VERIFIER_PROMPT 3항 grep) | 8건 모두 task 상태값 `'TODO'` 또는 `next TODO task` 문구(`commands.mjs:503`). 스텁·skip·only·미구현 없음 |
+| 헤드리스 실행 (모두 새 clone을 `--plugin-dir`로, stream-json, `--max-turns 120`) | 데모 C(Standard) 2회(승인 정지 → 운영자 승인 → resume), 데모 C 변형(CHANGELOG·README 보유, Full) 2회, pilot-4(Quick) + `/make-it-ship:ship`, pilot-6 |
+| 합성 SwiftPM iOS 패키지에서 `mis qa detect` → `mis check qa-ios` | 아래 D4 |
+
+### R2.2 1차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| D1 ship 순서 | **해결 (핵심 흐름)**. 잔여분은 R2-1 | 수정 내용: `skills/run/SKILL.md` 6c "ship, part A"가 verify 앞에 있고, part B는 보고 뒤에 "no file edits"로 제한된다. `phases/ship.md`는 Part A/B로 나뉘고, 보고 뒤 변경은 follow-up run으로 안내한다. 실측 결과는 다음과 같다.<br>• **데모 C (Standard, "prepare it for shipping")**: 이벤트 순서가 T6(Docs: README·CHANGELOG) done 07:08:51 → `check unit` E5 / `qa-cli` E6 PASS → spec·quality 0/0 → VERIFIED → report → ship(ready:true)였다. transcript에서 `mis report` 호출(인덱스 24) 이후의 main 도구 호출 4개는 `mis ship`과 `git switch -c`/`git add`/`git commit`뿐이다. Write·Edit·리다이렉트는 없다.<br>• **데모 C 변형 (Full, 기존 CHANGELOG)**: T5(Docs) done → quality MAJOR 1 수정 → E7/E8 PASS → VERIFIED → report → ship. 보고 이후 호출 6개도 mis와 git(브랜치·커밋, 미푸시 로컬 브랜치에서 `reset --soft` 후 재커밋)뿐이다. `CHANGELOG.md`의 `[Unreleased]`에 `### Added` 항목이 기존 형식대로 추가됐다.<br>• 두 경우 모두 `mis verdict`의 treeHash가 마지막 VERIFIED 이벤트와 같다(c: `b97308…`, c-cl: `5b9d60…`). bare 원격 ref도 그대로다(`5183e16`, `a3465bc`).<br>• 1차의 "Full에서 ship ○ 미입증"(NEEDS_HUMAN)도 해소됐다. c-cl Full 실행에 `ship` 이벤트가 있다 |
+| D2 6절 사유 누락 | **해결** | `render.mjs:73`이 `required check `로 시작하는 사유만 거른다. pilot-6을 요청 그대로 다시 실행했다(quick, 설정 없음, PARTIAL). report.md 6절은 "no required checks defined: nothing was machine-verified"와 "no .make-it-ship.json: no required checks are defined"이고, 8절 "6절의 항목을 먼저 해결"과 모순이 없다. 테스트 `mis-report.test.mjs` "section 6 keeps non-check-specific reasons"는 실제 6절 본문을 검사한다 |
+| D3 Quick에서 web 표면 미표시 | **해결** | pilot-4를 "Use quick mode"로 실행했다. 판정은 VERIFIED(§14.1 Quick qa "—"이므로 정당)이고, report.md 6절은 "web 표면(browser UI): 실사용 QA(qa-web) 미실행 — Quick 모드라 판정에는 필수가 아님"이다. 이어서 `/make-it-ship:ship`을 실행했다(8턴, 거부 0). ship.md "Not verified / risks"는 "web 표면: 실사용 QA 미실행 (Quick 모드에서는 필수 아님)"이었고, 모델의 최종 메시지도 이를 밝혔다. 모델은 run이 REPORTED임을 인식하고 Part B만 수행했다("I didn't edit any files") |
+| D4 SwiftPM iOS | **해결** | 합성 패키지(`platforms: [.iOS(.v16)]`, XCTest 1개, `.xcodeproj` 없음)에서 Xcode 26.0.1로 실행했다. `mis qa detect`는 `xcodebuild test -scheme Pkg -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`를 제안했다. 이를 `qa-ios`로 등록하고 `mis check qa-ios`를 실행했다.<br>• E1 **FAIL**(exit 65): 테스트 코드의 `add`가 `XCTestCase.add`와 충돌했다. mis가 그대로 FAIL로 기록했다.<br>• 테스트 코드를 고친 뒤 E2 **PASS**(exit 0): "Executed 1 test, with 0 failures", "** TEST SUCCEEDED **".<br>단위 테스트 `schemesFromList`는 project·workspace 두 형태를 모두 검사한다 |
+| D5 README | **부분 해결** → R2-2 | 직접 호출 명령 목록과 `mis` CLI 목록은 갱신됐다. "What happens" 1~7단계에는 여전히 qa와 ship 단계가 없다(`README.md:31-38`) |
+| D6 기록 | **해결** | PROGRESS M4-06이 `docs/milestones/M4-e2e.md` §2를 가리키고, 그 절이 존재한다(`M4-e2e.md:30`). M4-e2e에는 "파일럿 4 VERIFIED는 approve config 도입 전 결과"와 "c1 Full 실행은 ship 미실행"이 명시됐다. iOS 실측 기록은 이번 D4 재현과 일치한다(같은 이름 충돌 FAIL → PASS) |
+| D7 ship.md | **해결 ("없음" 병기)**. headline 절반은 설계로 수용 | c-cl ship.md "Not verified / risks"는 "- shortcut 표식 1개 (보고서 10절)"만 출력하고 "없음"이 함께 나오지 않는다. c는 "- 없음"만 출력한다. 1차 D7의 다른 절반(미커밋·main 브랜치여도 headline READY)은 바뀌지 않았다(`ship.mjs` `ready = verdict === 'VERIFIED'`). headline이 "아래 체크리스트의 수동 항목과 사용자 승인 후"라고 조건을 달고, 체크리스트가 `[ ] 작업 트리 커밋됨`·`[ ] 기본 브랜치가 아님 (main)`을 정확히 표시하므로 설계로 수용한다. 결함으로 세지 않는다 |
+
+### R2.3 종료 기준 (새 clone + 데모 C 헤드리스)
+
+| 항목 | 판정 | 증거 |
+|---|---|---|
+| 새 환경 설치 → 소형 프로젝트 완료 (`--plugin-dir` 경로) | **PASS** | 1. 새 clone(39e65e5)에서 npm test 294/294, validate 통과.<br>2. 데모 C 1차 실행(Standard, 모델 선택, 사유 "user-facing surface; ship prep requested"): plan-critic 3회 → 0/0. `mis approve plan`이 거부되자 AWAITING_APPROVAL에서 정직하게 정지했다.<br>3. 운영자가 터미널에서 `mis approve plan`을 실행했다(→ EXECUTING).<br>4. resume: T1~T6 완료, unit E5·qa-cli E6 PASS, spec·quality 0/0 → **VERIFIED**, ship READY. 모델은 `feat/tally-cli` 로컬 브랜치에 커밋했고 push하지 않았다. 브랜치 마무리 4지선다를 제시하고 정지했다 |
+| 결과물 직접 확인 | PASS | 내가 직접 실행한 결과:<br>• `npm test` pass 15 / fail 0, `node qa/cli-smoke.mjs` exit 0.<br>• `today` → `nothing yet`, `add water`×2 → `water: 1`/`water: 2`, `week water` 7줄(마지막 오늘=2), `add "a b"` → exit 2와 메시지, `reset water` → `reset water`, 인자 없음 → 사용법 출력과 exit 2.<br>• README.md·CHANGELOG.md가 생성됐다 |
+| 망가뜨리기 | PASS | `src/*.js`에 한 줄을 추가하자 `mis verdict` PARTIAL(unit·qa-cli STALE, 리뷰 없음), `mis ship` `"ready": false`. 원복하자 VERIFIED, ready true로 돌아왔다 |
+| guard (판정 기준: Standard stream-json) | PASS | 데모 C 1차·resume의 `permission_denials`는 `mis approve plan` 1건뿐이다(기대된 승인 정지). c-cl(Full) 1차는 같은 `approve plan` 2건, resume 0건. pilot-4 run·ship 0건. pilot-6은 `rm -rf "$d"`(mktemp 임시 디렉터리 정리) 2건이 ask→거부됐다. §7 "저장소 밖 rm -rf → ask" 행 그대로이고, 1차 남은 위험에 이미 기록된 사례라 결함이 아니다 |
+| 실제 플러그인 설치(마켓플레이스·`plugin install`) | NEEDS_HUMAN (NH-5 유지) | 사용자 설정을 바꾸므로 실행하지 않았다 |
+
+### R2.4 결함 목록 (round 2)
+
+| ID | 심각도 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|
+| R2-1 | LOW | **D1의 잔여분**: 보고 뒤 안내 문구가 실행할 수 없는 동작을 지시한다.<br>(a) `mis ship`이 생성하는 ship.md 체크리스트(Part B, 보고 뒤에 읽힘)가 여전히 "CHANGELOG.md 갱신 (위 초안 반영 후 check·판정 재실행)"이라고 적는다. 보고 뒤 `mis check`는 거부되고, 새 `phases/ship.md`의 "no more file edits; follow-up run" 규칙과도 모순된다. 데모 C와 c-cl ship.md 모두에 출력됐다.<br>(b) 1차 D1의 `approve config` 절반은 그대로다. 보고 뒤 설정을 바꾸면 `mis verdict` 사유가 "(ask the user: mis approve config)"를 안내하지만, `mis approve config`는 "run is REPORTED"로 거부되고(exit 1) `mis check`도 거부된다. 이 경로(qa-web 등록 등)에서 follow-up run을 안내하는 문구는 `skills/run/phases/ship.md`와 `skills/ship/SKILL.md`에만 있고, `phases/qa.md`나 verdict 사유에는 없다. 거짓 VERIFIED는 없다(PARTIAL로 남음) | (a) 데모 C 실행 후 `docs/make-it-ship/*/ship.md` 릴리스 체크리스트. (b) REPORTED인 pilot-4 사본에서 `.make-it-ship.json`에 `qa-web`을 추가 → `mis approve config` → "mis approve: run is REPORTED" → `mis verdict` 사유에 "ask the user: mis approve config" | (a) `scripts/lib/ship.mjs:35`. (b) `scripts/lib/commands.mjs` (configChangedUnapproved 사유 문구, REPORTED 거부), `skills/run/phases/qa.md:10` |
+| R2-2 | LOW | **D5의 잔여분**: README "What happens"가 1 Setup ~ 7 Report만 설명한다. M4에서 추가된 qa 단계(실사용 검증, Standard/Full에서 `qa-*` 필수)와 ship 단계(검증 전 문서·체인지로그, 보고 뒤 초안·커밋, push/PR은 승인 필요)가 없다. 1차 D5가 명시한 항목인데 수정 diff는 명령 목록 두 줄만 바꿨다 | `README.md:31-38` 열람 | `README.md` |
+| R2-3 | LOW (신규) | ship.md의 CHANGELOG 초안이 기능 추가를 "Fixed"로 분류한다. `isFix` 정규식이 goal에 `error`라는 단어만 있어도 참이 된다. pilot-4의 goal("…invalid input shows an inline error…")은 새 설정 패널 추가인데, 초안이 `### Fixed`로 나왔다. 모델이 최종 메시지에서 "should be under Added"라고 직접 지적했다. 이 경로에는 테스트가 없다 | pilot-4 (Quick) → `/make-it-ship:ship` → `awk '/## CHANGELOG/,/## 릴리스/' docs/make-it-ship/*/ship.md` | `scripts/lib/ship.mjs:14` (`/\b(fix\|bug\|regression\|broken\|error)\b/`) |
+
+### R2.5 검증 프롬프트 6항 질문 (round 2)
+- **통과로 표시됐지만 실행되지 않은 것이 있는가?** 없다.
+  - M4-e2e의 iOS 기록은 이번 재현과 일치한다.
+  - 파일럿 4의 "approve config 도입 전" 결과는 이제 그렇게 명시돼 있다.
+- **§2 M4 행 중 테스트가 없는 것이 있는가?** 없다. 데모 C는 수동 E2E 로그와 `evals.test.mjs`를 함께 갖는다.
+  - 새 수정 각각에도 테스트가 있다: D1 `plugin-files.test.mjs`, D2·D3 `mis-report.test.mjs`, D4 `mis-qa.test.mjs`, D7 `mis-ship.test.mjs`.
+  - D1 테스트는 지시문의 순서만 검사한다. 실제 동작은 이번 dogfood로 확인했다.
+- **스텁·skip·빈 구현이 있는가?** 없다.
+
+### R2.6 미검증 항목·남은 위험
+- **미검증 항목**
+  - 실제 플러그인 설치 경로(NH-5).
+  - 대화형 확인 창(NH-1). 승인은 운영자가 터미널에서 대신했다.
+  - `.xcodeproj` 기반 iOS 앱의 시뮬레이터 실행(이번에는 SwiftPM 패키지만 실행).
+  - 파일럿 1·2·3·5·7·8은 다시 실행하지 않았다.
+- **남은 위험**
+  - **Quick 표시의 위치**: Quick에서 web 표면이 "미검증"으로 표시되지만 판정은 여전히 VERIFIED이고, 보고서 headline은 "배포 준비 완료 (정의된 검증 범위 안에서)"다. 6절을 읽지 않으면 놓칠 수 있다. 모드 선택은 여전히 모델 판단이다.
+  - **보고 뒤 커밋 정리**: 보고 뒤 Part B에서 모델이 로컬 미푸시 브랜치의 커밋을 `commit --amend`나 `reset --soft`로 다시 만들었다(pilot-4, c-cl). ship.md가 금지하는 것은 "shared history" 재작성이므로 규칙 위반은 아니다. 다만 pilot-4의 ship.md "Commits" 절이 amend 전 해시(`5a624b5`)를 담고 있어 실제 HEAD(`db7baff`)와 다르다.
+  - **임시 디렉터리 정리 마찰**: guard의 `rm -rf` 임시 디렉터리 ask가 헤드리스 실행에서 계속 마찰을 만든다(1차와 같음).

@@ -11,7 +11,7 @@ export function renderShip({ root, state: s, verdict: v, ctx, changes, debt }) {
   const changelogTouched = changes.some((c) => /(^|\/)CHANGELOG\.md$/i.test(c.path));
   const ready = v.verdict === 'VERIFIED';
   const tasks = s.plan?.tasks ?? [];
-  const isFix = /\b(fix|bug|regression|broken|error)\b/i.test(`${s.plan?.goal ?? ''} ${s.input?.text ?? s.input?.ref ?? ''}`);
+  const isFix = /^\s*(fix|resolve|repair)\b|\b(bug|regression)\b/i.test(`${s.plan?.goal ?? ''} ${s.input?.text ?? ''}`);
   const latest = new Map((s.evidence ?? []).map((e) => [e.check, e]));
   const checks = ctx.required.map((n) => latest.get(n)).filter(Boolean).map((e) => `- \`${(e.argv ?? []).join(' ')}\` → ${e.status} (${e.id})`);
   const box = (ok, text) => `- [${ok ? 'x' : ' '}] ${text}`;
@@ -32,7 +32,7 @@ export function renderShip({ root, state: s, verdict: v, ctx, changes, debt }) {
     box(ready, `판정 VERIFIED (현재: ${v.verdict})`),
     box(!dirty, '작업 트리 커밋됨'),
     box(branch && !['main', 'master'].includes(branch), `기본 브랜치가 아님 (${branch || 'detached'})`),
-    box(changelogTouched, 'CHANGELOG.md 갱신 (위 초안 반영 후 check·판정 재실행)'),
+    box(changelogTouched, 'CHANGELOG.md 갱신 — ship part A(verify 전)에서 반영. 보고 후라면 follow-up run으로'),
     box(false, '사용자 대상 문서(README 등)가 바뀐 동작과 일치 — 수동 확인'),
     box(false, '원격 push·PR 생성 — 사용자 승인 필요 (guard가 확인 창을 띄움): `git push -u origin <branch>`, `gh pr create`'),
     '');
