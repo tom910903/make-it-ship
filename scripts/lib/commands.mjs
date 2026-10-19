@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig, requiredChecks } from './config.mjs';
-import { createRun, loadRun, saveState, withLock, transition, TERMINAL } from './state.mjs';
+import { createRun, loadRun, saveState, withLock, transition, setCurrent, TERMINAL } from './state.mjs';
+import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
 import { maskSecrets } from './mask.mjs';
@@ -38,6 +39,7 @@ function mutate(cwd, fn) {
     const fresh = loadRun(cwd, run.state.runId); // re-read under lock
     Object.assign(run, fresh, { reclaimedLock: run.reclaimedLock });
     const { event, result } = fn(run);
+    run.state.lastTree = treeHash(cwd); // for `mis resume`: what changed since the last recorded event
     saveState(run, event);
     return result;
   });
@@ -411,6 +413,32 @@ function note([kind, ...rest], cwd) {
   });
 }
 
+function resume([runId], cwd) {
+  const run = loadRun(cwd, runId);
+  if (!run) fail(runId ? `no run ${runId}` : 'no run to resume');
+  setCurrent(run);
+  return mutate(cwd, (r) => {
+    const s = r.state;
+    const ctx = verdictContext(r, cwd);
+    const changed = s.lastTree ? changedFiles(repoRoot(cwd), s.lastTree, ctx.treeHash) : [];
+    const staleEvidence = s.evidence.filter((e) => e.status !== 'BLOCKED' && evidenceStatus(e, ctx) === 'STALE').map((e) => ({ id: e.id, check: e.check, was: e.status }));
+    const inProgressTasks = (s.plan?.tasks ?? []).filter((t) => t.status === 'IN_PROGRESS').map((t) => t.id);
+    const openQuestions = s.interview.filter((q) => !q.answer).map((q) => `${q.id} (${q.impact}) ${q.question}`);
+    const next = [];
+    if (r.reclaimedLock) next.push(`a previous mis process (pid ${r.reclaimedLock.pid}) died mid-command; its result was not recorded — re-run it`);
+    if (s.state === 'BLOCKED') next.push(`blocked: ${s.blockedReason}${s.blockKind === 'limit' ? ' (user can lift with mis approve continue)' : ''}`);
+    if (s.state === 'AWAITING_APPROVAL') next.push('plan approval: mis approve plan');
+    if (changed.length) next.push(`review ${changed.length} file(s) changed since the last recorded step before continuing`);
+    if (staleEvidence.length) next.push(`re-run stale checks: ${[...new Set(staleEvidence.map((e) => e.check))].join(', ')}`);
+    for (const t of inProgressTasks) next.push(`task ${t} was in progress: verify its state, then continue or mark it`);
+    if (!next.length) next.push(TERMINAL.includes(s.state) ? `run is ${s.state}; nothing to resume` : 'continue with the next TODO task');
+    return {
+      event: { type: 'resume', reclaimedLock: r.reclaimedLock ?? null, changed: changed.length },
+      result: { runId: s.runId, state: s.state, reclaimedLock: r.reclaimedLock ?? null, changedSinceLastEvent: changed, staleEvidence, inProgressTasks, openQuestions, next },
+    };
+  });
+}
+
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
@@ -430,5 +458,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, block, cancel };
 export { requiredChecks };

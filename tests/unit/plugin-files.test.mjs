@@ -15,7 +15,7 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer'];
 const PHASES = ['discover', 'interview', 'plan', 'plan-critique', 'implement', 'verify', 'review'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
