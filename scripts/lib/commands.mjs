@@ -611,6 +611,36 @@ function secondOpinion([sub], cwd) {
   return { available, note: 'Optional. Running another model sends repository content to an external service: the guard asks the user first. Record the result with mis note second-opinion - (it does not change the verdict).' };
 }
 
+/** mis bench <check> [--runs N]: wall-clock median of N runs, compared with the run's first measurement of that check. */
+function bench(args, cwd) {
+  const runs = Number(flag(args, '--runs') ?? 5);
+  const [name] = args;
+  if (!name || !Number.isInteger(runs) || runs < 1 || runs > 50) fail('usage: mis bench <check> [--runs 1-50]');
+  const root = repoRoot(cwd);
+  const def = loadConfig(root).config?.checks[name];
+  if (!def) fail(`check "${name}" is not defined in .make-it-ship.json`);
+  const times = [];
+  let failed = null;
+  for (let i = 0; i < runs; i++) {
+    const t0 = process.hrtime.bigint();
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env } });
+    times.push(Number(process.hrtime.bigint() - t0) / 1e6);
+    if (r.status !== 0) { failed = r.error?.message ?? `exit ${r.status ?? r.signal}`; break; }
+  }
+  times.sort((a, b) => a - b);
+  const medianMs = Math.round(times[Math.floor(times.length / 2)]);
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const base = s.notes.find((n) => n.kind === 'bench' && n.check === name && n.status !== 'FAILED');
+    const deltaPct = base && !failed ? Math.round(((medianMs - base.medianMs) / base.medianMs) * 100) : null;
+    const status = failed ? 'FAILED' : !base ? 'BASELINE' : deltaPct > 50 ? 'REGRESSION' : deltaPct > 20 ? 'WARN' : 'OK';
+    const rec = { kind: 'bench', check: name, runs: times.length, medianMs, minMs: Math.round(times[0]), maxMs: Math.round(times.at(-1)),
+      baselineMs: base?.medianMs ?? null, deltaPct, status, error: failed, treeHash: treeHash(root), at: new Date().toISOString() };
+    s.notes.push(rec);
+    return { event: { type: 'bench', check: name, medianMs, status }, result: rec };
+  });
+}
+
 function qa([sub], cwd) {
   if (sub !== 'detect') fail('usage: mis qa detect');
   return detectQa(repoRoot(cwd));
@@ -639,5 +669,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, block, cancel };
 export { requiredChecks };
