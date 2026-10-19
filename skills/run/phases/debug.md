@@ -4,7 +4,7 @@ Absorbs: Superpowers systematic-debugging · OMC debugger, tracer, trace, debug 
 
 Runs when a check FAILs or a task fails. Iron law: **no fix without a root cause.** `mis` enforces it: a FAILED task can only restart with `mis task <id> retry`, which is refused until a root-cause note is recorded after the failure, and blocks the run when the retry limit is reached.
 
-1. **Read** the whole failure: the `tail` from `mis check`, the full log if needed, the stack trace. Note the exact error.
+1. **Read** the failure: the `tail` printed by `mis check` (stored logs under `.git/make-it-ship/` are not readable directly — the guard blocks that path). If you need more output, re-run the single failing test with the project's own runner (e.g. `node --test test/x.test.js`, `python3 -m unittest tests.test_x -v`) — that is also your reproduction. Note the exact error.
 2. **Reproduce** reliably with the smallest command (a single test, one input). If you cannot reproduce it, gather more data — do not guess.
 3. **Look at recent change**: `git diff` against the run's base commit. A regression usually lives in the diff.
 4. **Compare** with similar code that works; list the differences. Trace the bad value backward to where it is first wrong.

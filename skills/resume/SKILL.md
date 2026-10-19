@@ -12,9 +12,11 @@ Absorbs: gstack context-restore/context-save · OMC cancel, notepad, state.
 3. Before continuing:
    - files changed since the last step: read the diff (`git diff`) and decide whether it is your unfinished work, the user's edits, or something unexpected. Ask the user if unexpected.
    - a task left IN_PROGRESS: check its acceptance criteria against the code; then continue it, or `mis task <id> done` / `fail`.
+   - a bug fix or failing-test task with **no recorded failing check yet**: reproduce first (`mis check <name>` before changing code, then the debug phase with `mis note rootcause`), exactly as a fresh run would. Resuming never skips the reproduction step.
    - a check whose process died: re-run it with `mis check <name>`.
    - BLOCKED by a limit (runtime or retries): explain it in one sentence; only the user can lift it (`mis approve continue`, which asks them). Any other BLOCKED reason needs the cause fixed first.
    - AWAITING_APPROVAL: present the plan again and run `mis approve plan`.
-4. Then continue the normal flow from the right phase of `/make-it-ship:run` (read `${CLAUDE_PLUGIN_ROOT}/skills/run/SKILL.md`). Stale evidence must be re-run before any verdict.
+4. Whenever you stop (finished, blocked by a limit, or waiting for approval), run `mis verdict` (or `mis status`) **at that moment** and quote that verdict — never one you saw earlier in the session.
+5. Then continue the normal flow from the right phase of `/make-it-ship:run` (read `${CLAUDE_PLUGIN_ROOT}/skills/run/SKILL.md`). Stale evidence must be re-run before any verdict.
 
 Never edit `.git/make-it-ship/` directly. Never claim a step finished unless `mis status` shows it.
