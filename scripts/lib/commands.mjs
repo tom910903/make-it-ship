@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
+import { shortcutDebt } from './debt.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -318,7 +319,13 @@ function check([name], cwd) {
     writeFileSync(join(run.dir, rec.log), masked);
     s.evidence.push(rec);
     const tail = masked.split('\n').slice(-40).join('\n');
-    return { event: { type: 'check', id, check: name, status: rec.status, exitCode: rec.exitCode }, result: { ...rec, tail } };
+    const warnings = [];
+    const manifests = cfg.config?.dependencyManifests ?? [];
+    const changed = manifests.length ? changedManifests(root, s.baseCommit, rec.treeHash, manifests) : [];
+    if (changed.length && !s.notes.some((n) => n.kind === 'dep')) {
+      warnings.push(`dependency manifest changed (${changed.join(', ')}) without a recorded reason: remove the dependency or run mis note dep "<why>"; the verdict stays PARTIAL until then`);
+    }
+    return { event: { type: 'check', id, check: name, status: rec.status, exitCode: rec.exitCode }, result: { ...rec, warnings, tail } };
   });
 }
 
@@ -371,7 +378,7 @@ function report(args, cwd) {
     if (s.state === 'VERIFYING') transition(s, 'REPORTED');
     const rel = `${REPORT_DIR}/${s.runId}/report.md`;
     mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
-    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), generatedAt: new Date().toISOString() }));
+    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root), generatedAt: new Date().toISOString() }));
     s.lastReport = { path: rel, verdict: v.verdict, treeHash: ctx.treeHash };
     return { event: { type: 'report', verdict: v.verdict, path: rel }, result: { path: rel, verdict: v.verdict, reasons: v.reasons, state: s.state } };
   });

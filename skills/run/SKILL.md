@@ -39,8 +39,11 @@ Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never 
 | plan-critique | — | yes | yes |
 | approval | skipped if no risk flags | `mis approve plan` | `mis approve plan` |
 | implement (TDD) | yes | yes | yes |
+| debug | on FAIL | on FAIL | on FAIL |
+| simplify | yes | yes | yes |
 | verify | yes | yes | yes |
 | review | quality | spec + quality | spec + quality |
+| review security | if risk flags | if risk flags | if risk flags |
 
 Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, hardware, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
 
@@ -54,7 +57,8 @@ Read each phase file **when you reach it** (not all up front):
 3. **plan** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan.md` (includes `mis plan set` and `mis mode set`)
 4. **plan-critique** (Standard/Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan-critique.md`
 5. **approval**: show the plan (goal, tasks with acceptance criteria, mode and reason, required checks) and run `mis approve plan`. The guard shows the user a confirmation; their confirmation is the approval. `mis` refuses if a HIGH ambiguity is open or the critic review is missing/blocking. Quick without risk flags skips this step.
-6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`
+6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`; when a check or task fails, **debug** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/debug.md`
+6b. **simplify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/simplify.md`
 7. **verify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/verify.md`
 8. **review** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/review.md`
 9. **report**: `mis verdict`, then `mis report`. Tell the user, briefly:

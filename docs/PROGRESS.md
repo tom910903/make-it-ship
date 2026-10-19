@@ -44,7 +44,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M2-01 | `mis resume`: lock 회수, STALE 재계산, 마지막 이벤트 이후 변경 파일 목록 + resume 스킬 | TODO | `tests/integration/mis-resume.test.mjs` (check 도중 SIGKILL → resume) | AC#10 | | |
+| M2-01 | `mis resume`: lock 회수, STALE 재계산, 마지막 이벤트 이후 변경 파일 목록 + resume 스킬 | DONE | `tests/integration/mis-resume.test.mjs` (check 도중 SIGKILL → resume) | AC#10 | d4578b0 | npm test 201/201, validate ✔ |
 | M2-02 | 재시도 상한 + rootcause 게이트: `task retry`, `note rootcause`, 상한 초과 BLOCKED | DONE | `tests/integration/mis-retry.test.mjs` | PRD 5.4, 8.3 | 7590ca0 | npm test 198/198 |
 | M2-03 | 실행 시간 상한: deadline 초과 시 실행 명령 BLOCKED | DONE | `tests/integration/mis-retry.test.mjs` | PRD 8.3, §3-4 | 7590ca0 | npm test 198/198 |
 | M2-04 | debug phase + `/make-it-ship:debug` | TODO | `plugin-files.test.mjs` 확장 | §14 debug | | |
