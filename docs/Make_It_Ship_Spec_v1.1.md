@@ -25,7 +25,9 @@
 | ADR-006 | MVP는 단일 실행 에이전트(메인 세션) + 읽기 전용 리뷰 서브에이전트들. 병렬 분업은 M3 | PRD 6.1 "첫 시연은 단일 에이전트로" | 동일 |
 | ADR-010 | OMC·Superpowers·gstack·Ponytail의 **개발 관련 기능을 전부 흡수**한다. 동일 구현이 아니라 단일 책임 단계로 재구성하며 §14 기능 매핑표가 기준 | 사용자 결정 (2026-10-19) | 신규 |
 | ADR-011 | 단계 절차는 `skills/run/phases/*.md`에 두고 필요한 단계만 읽는다 | 전 기능을 담아도 컨텍스트를 필요한 만큼만 사용 | 신규 |
-| ADR-012 | 사용자에게 질문해야 하는 단계(인터뷰·승인)는 메인 세션에서 수행 | 서브에이전트는 사용자에게 직접 질문 불가(M0 실증) | 신규 |
+| ADR-012 | 흐름 제어와 사용자 질문(인터뷰·승인)은 메인 세션이 수행. 서브에이전트 중첩은 가능하지만(ADR-0001 #5) 리뷰 에이전트에는 Agent 도구를 주지 않음 | 단일 책임, 재귀 위임 방지 | 신규 |
+| ADR-013 | 리뷰 에이전트 권한은 `tools` 허용목록(`Read, Grep, Glob, Bash`)으로 지정 | 서브에이전트가 사용자 MCP 쓰기 도구를 상속함(ADR-0001) → 금지목록 방식으로는 차단 불가 | 신규 |
+| ADR-014 | 헤드리스(`claude -p`) 실행에서 guard의 `ask`는 실행 불가로 동작 → 무인 루프는 외부 쓰기를 자동으로 할 수 없음 | ADR-0001 #3b | 신규 |
 | ADR-007 | 검증 유효성은 **작업트리 해시** 기준(커밋 여부 무관) | 커밋 전 상태도 판정해야 함 | commit_sha → tree hash |
 | ADR-008 | 외부 쓰기·승인은 PreToolUse 훅의 `ask`/`deny`로 강제 | 스킬 지시문은 무시될 수 있음. 훅만 결정적 | 구체화 |
 | ADR-009 | 모드(Quick/Standard/Full)는 모델이 사유와 함께 제안 → 상태에 기록 → 사용자가 변경 가능. 위험 신호가 있으면 하향 불가 | LLM 판단은 "규칙 버전으로 재현"이 불가능 | 변경 |
@@ -86,7 +88,7 @@ make-it-ship/
 │   │       └── ship.md      retro.md      learn.md
 │   ├── status/SKILL.md  resume/SKILL.md
 │   └── <단계명>/SKILL.md      # 선택 직접 호출 명령 (§14.3), phases/*.md 를 참조
-├── agents/                   # 전부 읽기 전용 (disallowedTools: Write, Edit, MultiEdit, NotebookEdit)
+├── agents/                   # 전부 읽기 전용 (tools: Read, Grep, Glob, Bash — ADR-013)
 │   ├── explorer.md           # 코드베이스 조사
 │   ├── architect.md          # 설계·대안 비교·ADR 초안
 │   ├── critic.md             # 계획/설계 반론 검토
@@ -345,7 +347,7 @@ PreToolUse에 적용한다. matcher는 `Bash|Write|Edit|MultiEdit|NotebookEdit|m
 
 | MS | 범위 | 종료 기준 |
 |---|---|---|
-| **M0 — 호스트 실증** (반나절) | 최소 플러그인으로 아래 항목 실측 | 각 항목 결과를 `docs/adr/0001-host-smoke.md`에 기록 |
+| **M0 — 호스트 실증** ✅ (3c 수동 확인만 남음) | 최소 플러그인으로 아래 항목 실측 | `docs/adr/0001-host-smoke.md` |
 | **M1 — 핵심 경험** | §4 구조, mis 핵심 명령, guard, run/status 스킬, discover·**interview**·plan·**plan-critique**·implement·verify·review | 데모 A/B 수동 E2E 통과, unit/integration 통과 |
 | **M2 — 신뢰성** | resume, 재시도 상한, 시간 상한, **debug**, **보안 리뷰**, simplify(의존성 경고·shortcut 목록), doctor, 범위 밖 편집 경고, **HUD** | 데모 D 통과, guard 우회 사례 테스트 |
 | **M3 — 선택형 협업** | 독립 task 병렬(worktree), 파일 소유권, product-review·design·**design-explore**(Full 모드, UI 프로젝트). 필요 시 SQLite 재검토 | 충돌 재현 테스트 |
@@ -436,7 +438,7 @@ PreToolUse에 적용한다. matcher는 `Bash|Write|Edit|MultiEdit|NotebookEdit|m
 | **parallel (M3)** | OMC team·ultrawork·omc-teams·project-session-manager, Superpowers dispatching-parallel-agents·using-git-worktrees | 독립 task만 worktree로 격리해 병렬 실행 |
 | **resume / cancel** | gstack context-save·context-restore, OMC notepad·state·cancel | run 상태 + `mis resume` / `mis cancel` |
 | **guard** | gstack careful·guard·freeze·unfreeze | `guard.mjs` (§7) |
-| **hud (M2)** | OMC hud | `scripts/statusline.mjs`가 현재 run의 단계·task 진행·필수 check 상태·판정을 한 줄로 출력. 예: `MIS ▸ EXECUTING · T3/7 · unit✓ typecheck✗ · PARTIAL`. 사용자 `statusLine` 설정 등록은 `mis init`이 제안하고 사용자가 승인 |
+| **hud (M2)** | OMC hud | `scripts/statusline.mjs`가 현재 run의 단계·task 진행·필수 check 상태·판정을 한 줄로 출력. 예: `MIS ▸ EXECUTING · T3/7 · unit✓ typecheck✗ · PARTIAL`. 플러그인은 statusLine을 직접 등록할 수 없으므로(ADR-0001 #8), `mis init`이 사용자 설정 `statusLine` 등록을 제안하고 사용자가 승인 |
 | **design-explore (M3)** | gstack design-consultation·design-shotgun·design-html·design-review, OMC designer | UI 프로젝트(Web·iOS)의 Full 모드에서 실행. ① 디자인 시스템 제안(`DESIGN.md`: 색·글꼴·간격 토큰) ② 시안 2~3개를 정적 HTML(iOS는 SwiftUI Preview)로 생성해 비교 ③ 사용자가 선택하면 `mis note design`으로 기록. 이 기록이 없으면 계획 승인 불가. 구현 후 디자인 일관성 검토는 qa 단계에서 수행 |
 | **ios (M4 시뮬레이터 / M5 실기기)** | gstack ios-qa·ios-design-review·ios-fix·ios-clean·ios-sync | M4: `xcodebuild build/test` + `simctl` 시뮬레이터 실행을 iOS QA 프로파일 check로 제공. M5: DEBUG 빌드 한정 실기기 디버그 브리지(SPM 패키지 + `#if DEBUG`)로 실기기 상태 조회·스크린샷. **ship 단계는 브리지 코드가 남아 있으면 PARTIAL**(ios-clean 대응). 실기기가 없으면 BLOCKED |
 | **second opinion (M5)** | OMC ccg·ask, gstack codex·benchmark-models | 다른 모델 CLI가 설치돼 있으면 리뷰를 한 번 더 받는 선택 기능 |
