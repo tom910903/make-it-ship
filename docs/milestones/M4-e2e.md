@@ -46,6 +46,19 @@
 - 수정: `mis`가 run 시작 시점의 configHash와 현재 값을 비교한다. 다르고 `mis approve config`(guard가 확인 창을 띄움) 기록이 없으면 판정을 **PARTIAL**로 고정한다. 파일을 어떤 도구로 바꿨든 같다.
 - 테스트: `tests/integration/mis-check.test.mjs` "config changed during the run".
 
+**M4 독립 검증 재실행 결과 (M4-report D3·D6 반영)**
+- 위 파일럿 4의 VERIFIED는 `mis approve config` 도입 **전** 코드의 결과다.
+- 검증자 재실행에서 같은 요청은 모델이 Quick을 선택해, 브라우저 QA 없이 VERIFIED가 됐다. Quick은 qa가 필수가 아니다(§14.1).
+- 이 경우 보고서 6절과 ship의 "Not verified"에 "web 표면: 실사용 QA 미실행"이 나와야 하는데 빠져 있었다. D3로 수정했다.
+- Standard로 지정하면 BLOCKED로 정직하게 끝났다.
+
+**데모 C의 ship 단계**: 위 c1 실행은 Full 모드였다. 다만 요청이 "through ... report"여서 ship 단계를 실행하지 않았다. ship은 검증자가 별도 run에서 `/make-it-ship:ship`으로 확인했다(READY / NOT READY 모두).
+
+**iOS 시뮬레이터 QA (M4 D4 수정 후 실측)**
+- 합성 SwiftPM iOS 패키지에서 `mis qa detect`가 `xcodebuild test -scheme Pkg -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`를 제안했다.
+- 이를 `qa-ios` check로 실행해 PASS를 얻었다(1 test, 0 failures).
+- 첫 실행은 예제 테스트 코드의 오류(이름 충돌)로 FAIL이었고, mis가 그대로 FAIL로 기록했다.
+
 **파일럿 6**: 탐지할 수 있는 check가 없는 셸 프로젝트다. 모델이 테스트 스크립트를 작성했지만, 설정에 넣으려면 승인이 필요해 실행할 수 없었다(BLOCKED). 판정은 PARTIAL이고, 사용자 결정 항목으로 보고했다. "검증하지 않은 것을 완료라 하지 않는다"가 지켜졌다.
 
 ## NEEDS_HUMAN

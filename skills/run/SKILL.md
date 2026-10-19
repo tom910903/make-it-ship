@@ -68,6 +68,7 @@ Read each phase file **when you reach it** (not all up front):
 5b. **parallel** (optional, independent tasks) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/parallel.md`
 6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`; when a check or task fails, **debug** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/debug.md`
 6b. **simplify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/simplify.md`
+6c. **ship, part A** (Full, or when the user wants to ship) — docs and changelog edits from `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` steps 1-2, **before** verify, so the final verdict covers them.
 7. **verify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/verify.md`
 7b. **qa** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/qa.md`
 8. **review** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/review.md`
@@ -82,6 +83,6 @@ Read each phase file **when you reach it** (not all up front):
    - the report path (`docs/make-it-ship/<run>/report.md`).
    If the verdict is FAILED or PARTIAL and the cause is fixable within the approved plan, fix it (back to step 6) before reporting; otherwise report honestly.
 
-**ship** (on request, or Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` (`mis ship`), after the report.
+**ship, part B** (on request, or Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/ship.md` steps 3-5 (`mis ship`, commits, finish the branch), after the report; no file edits then.
 
 If something outside your control stops progress (missing tool, hardware, credentials), run `mis block "<one-sentence reason>"`, then `mis report`, and tell the user what they need to do.

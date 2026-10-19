@@ -22,8 +22,10 @@ export function renderShip({ root, state: s, verdict: v, ctx, changes, debt }) {
   L.push('## PR 초안', '', `**제목**: ${s.plan?.goal ?? s.runId}`, '', '**본문**:', '', '### Summary', ...(tasks.map((t) => `- ${t.title} (${t.status})`)), '');
   L.push('### Changes', ...(changes.length ? changes.map((c) => `- ${c.status} \`${c.path}\``) : ['- (없음)']), '');
   L.push('### Verification (machine-checked by `mis check`)', ...(checks.length ? checks : ['- (필수 check 없음)']), `- Verdict: **${v.verdict}** (tree \`${ctx.treeHash.slice(0, 12)}\`)`, '');
-  L.push('### Not verified / risks', ...(v.reasons.length ? v.reasons.map((r) => `- ${r}`) : ['- 없음']),
-    ...(debt.length ? [`- shortcut 표식 ${debt.length}개 (보고서 10절)`] : []), '');
+  const notVerified = [...v.reasons, ...(ctx.surfaces ?? []).filter((p) => !ctx.required.includes(`qa-${p.profile}`)
+    && !(s.evidence ?? []).some((e) => e.check === `qa-${p.profile}` && e.status === 'PASS' && e.treeHash === ctx.treeHash))
+    .map((p) => `${p.profile} 표면: 실사용 QA 미실행 (Quick 모드에서는 필수 아님)`), ...(debt.length ? [`shortcut 표식 ${debt.length}개 (보고서 10절)`] : [])];
+  L.push('### Not verified / risks', ...(notVerified.length ? notVerified.map((r) => `- ${r}`) : ['- 없음']), '');
   if (commits) L.push('### Commits', '```', commits, '```', '');
   L.push('## CHANGELOG 항목 초안', '', `## [Unreleased] - ${new Date().toISOString().slice(0, 10)}`, `### ${isFix ? 'Fixed' : 'Added'}`, ...tasks.map((t) => `- ${t.title}`), '');
   L.push('## 릴리스 체크리스트', '',

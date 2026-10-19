@@ -50,3 +50,12 @@ test('standard/full: a detected user-facing surface makes its qa-* check require
   assert.equal(v.checks['qa-cli'], 'MISSING');
   assert.ok(v.reasons.some((r) => /qa-cli/.test(r)), v.reasons.join());
 });
+
+test('iOS scheme discovery reads project or workspace listings (SwiftPM has no .xcodeproj) (M4 D4)', async () => {
+  const { schemesFromList } = await import('../../scripts/lib/qa.mjs');
+  assert.deepEqual(schemesFromList({ project: { schemes: ['App'] } }), ['App']);
+  assert.deepEqual(schemesFromList({ workspace: { schemes: ['Pkg', 'Pkg-Package'] } }), ['Pkg', 'Pkg-Package']);
+  assert.deepEqual(schemesFromList(null), []);
+  const r = by(detectQa(makeRepo({ 'Package.swift': '// swift-tools-version:5.9\nlet p = Package(name: "Pkg", platforms: [.iOS(.v16)])\n' }), { xcodebuild: true, scheme: 'Pkg', simulator: 'iPhone 16' }));
+  assert.deepEqual(r.ios.check.argv, ['xcodebuild', 'test', '-scheme', 'Pkg', '-destination', 'platform=iOS Simulator,name=iPhone 16']);
+});

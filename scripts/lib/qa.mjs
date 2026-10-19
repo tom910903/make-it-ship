@@ -6,10 +6,13 @@ import { spawnSync } from 'node:child_process';
 
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
+/** Schemes from `xcodebuild -list -json`: a .xcodeproj lists under project, a SwiftPM package under workspace. */
+export const schemesFromList = (j) => j?.project?.schemes ?? j?.workspace?.schemes ?? [];
+
 function probeIos(root, project) {
   if (spawnSync('xcodebuild', ['-version'], { encoding: 'utf8' }).status !== 0) return { xcodebuild: false };
-  const list = spawnSync('xcodebuild', ['-list', '-json', '-project', project], { cwd: root, encoding: 'utf8', timeout: 60000 });
-  const scheme = readJsonText(list.stdout)?.project?.schemes?.[0] ?? null;
+  const list = spawnSync('xcodebuild', ['-list', '-json', ...(project ? ['-project', project] : [])], { cwd: root, encoding: 'utf8', timeout: 120000 });
+  const scheme = schemesFromList(readJsonText(list.stdout))[0] ?? null;
   const sims = readJsonText(spawnSync('xcrun', ['simctl', 'list', 'devices', 'available', '-j'], { encoding: 'utf8' }).stdout);
   const simulator = Object.values(sims?.devices ?? {}).flat().find((d) => /^iPhone/.test(d.name))?.name ?? null;
   return { xcodebuild: true, scheme, simulator };

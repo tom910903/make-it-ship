@@ -70,7 +70,12 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
     if (!e) unverified.push(`필수 check \`${name}\`: 실행하지 않음`);
     else if (e.status === 'BLOCKED') unverified.push(`필수 check \`${name}\`: 실행 불가 — ${e.reason}`);
   }
-  for (const r of v.reasons) if (!/check/.test(r)) unverified.push(r);
+  for (const r of v.reasons) if (!r.startsWith('required check ')) unverified.push(r);
+  for (const p of ctx.surfaces ?? []) {
+    const e = latest.get(`qa-${p.profile}`);
+    if (ctx.required.includes(`qa-${p.profile}`)) continue; // already listed above as a required check
+    if (!e || evidenceStatus(e, ctx) !== 'PASS') unverified.push(`${p.profile} 표면(${p.surface}): 실사용 QA(qa-${p.profile}) ${e ? `결과 ${evidenceStatus(e, ctx)}` : '미실행'}${s.mode === 'quick' ? ' — Quick 모드라 판정에는 필수가 아님' : ''}`);
+  }
   const stale = (s.evidence ?? []).filter((e) => e.status !== 'BLOCKED' && evidenceStatus(e, ctx) === 'STALE')
     .map((e) => `${e.id} \`${e.check}\` (${e.status}) — 이후 코드 또는 설정이 바뀌어 무효`);
   const decisions = [];

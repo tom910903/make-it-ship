@@ -53,3 +53,12 @@ test('ship refuses readiness when not VERIFIED and warns on the default branch',
   const m = verifiedRun({ branch: 'main' });
   assert.match(readFileSync(join(m, ok(mis(m, ['ship'])).path), 'utf8'), /- \[ \] 기본 브랜치가 아님 \(main\)/);
 });
+
+test('ship.md "Not verified" does not print "없음" next to real items (M4 D7)', async () => {
+  const { renderShip } = await import('../../scripts/lib/ship.mjs');
+  const out = renderShip({ root: '/nonexistent', state: { runId: 'r', plan: { goal: 'g', tasks: [] }, evidence: [], baseCommit: null },
+    verdict: { verdict: 'VERIFIED', reasons: [] }, ctx: { required: [], treeHash: 'abcdef123456' }, changes: [], debt: [{ file: 'a.js', line: 1, text: 'x', trigger: false }] }).markdown;
+  const nv = out.split('### Not verified / risks')[1].split('\n\n')[0];
+  assert.doesNotMatch(nv, /- 없음/);
+  assert.match(nv, /shortcut/);
+});

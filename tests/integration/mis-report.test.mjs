@@ -100,3 +100,26 @@ test('report labels plan reviews by plan, not by code (M3 R2-3)', () => {
   assert.match(md, /product: blocking 0, major 0 — 이전 계획 기준\(무효\)/);
   assert.match(md, /plan-critic: blocking 0, major 0 — 현재 계획 기준/);
 });
+
+test('report section 6 keeps non-check-specific reasons such as "no required checks defined" (M4 D2)', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['start', '--input', 'x']));
+  const md = readFileSync(join(dir, ok(mis(dir, ['report'])).path), 'utf8');
+  const s6 = md.split('## 6. ')[1].split('## 7. ')[0];
+  assert.match(s6, /no required checks defined/);
+});
+
+test('quick mode: a detected user-facing surface without real-use QA is listed as not verified, verdict unchanged (M4 D3)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG, 'index.html': '<html></html>', 'lib.mjs': 'export const x = 1;\n',
+    'test.mjs': "import {test} from 'node:test'; test('x', () => {});\n" });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  const r = ok(mis(dir, ['report']));
+  assert.equal(r.verdict, 'VERIFIED', 'quick does not require qa (Spec §14.1)');
+  const s6 = readFileSync(join(dir, r.path), 'utf8').split('## 6. ')[1].split('## 7. ')[0];
+  assert.match(s6, /web.*실사용 QA.*qa-web/);
+});

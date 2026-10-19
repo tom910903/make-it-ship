@@ -122,3 +122,10 @@ test('ship phase never pushes on its own and the qa phase reports BLOCKED instea
   assert.match(read('skills/run/phases/qa.md'), /mis qa detect/);
   assert.match(read('skills/run/phases/qa.md'), /BLOCKED/);
 });
+
+test('ship file edits happen before verify; after the report only drafts and branch finishing (M4 D1)', () => {
+  const run = read('skills/run/SKILL.md');
+  assert.ok(run.indexOf('ship, part A') < run.indexOf('**verify**'), 'part A is listed before verify');
+  assert.match(read('skills/run/phases/ship.md'), /Part B — after the report.*no more file edits/s);
+  assert.match(read('skills/run/phases/ship.md'), /follow-up run/);
+});
