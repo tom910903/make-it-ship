@@ -208,3 +208,79 @@ guard는 `scripts/guard.mjs`에 PreToolUse JSON을 직접 넣어 확인했다(�
 | L-5 | 부분 해소 — 자리표시는 고쳤다. 짝수 개 run의 중앙값은 위쪽 값으로 남아 있다(**L-5b, LOW**, 재현: 2분·10분 → 10, 위치 `scripts/lib/retro.mjs:43`). 커밋은 이를 고쳤다고 주장한다 |
 
 ROUND2: DEFECTS FOUND
+
+## 3차 검증 (round 3)
+
+범위는 좁다. 대상은 `M5-fix2`(36151c6)로 고쳤다고 한 L-5b와 상태 루트 삭제 위험이다. M5 AC 테스트 파일도 다시 실행했다. headless `claude -p`는 이번 라운드에서 실행하지 않았다. 실험은 모두 세션 scratchpad의 임시 저장소에서 했다.
+
+### R3-1. 기본 명령
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | 319/319 pass, fail 0, skipped 0, todo 0 (2차 317 → +2: retro 중앙값 테스트, shell 상태 루트 테스트) |
+| `claude plugin validate .` | ✔ Validation passed |
+| 스텁 grep(1차와 같은 패턴) | 8건. 모두 task 상태 문자열 `'TODO'`다(`commands.mjs:152,309,512,550`, 테스트 4곳). `.skip`, `.only`, FIXME, not implemented는 0건이다 |
+
+### R3-2. L-5b 재검증 (짝수 개 run의 중앙값) — **해소**
+
+1차·2차와 같은 재현을 사용자 경로로 다시 실행했다.
+- 임시 저장소에서 `mis start` → `mis report` → `mis cancel`을 두 번 실행해 끝난 run 2개를 만들었다.
+- 임시 복사본의 `events.jsonl`에서 각 run의 마지막 이벤트 `at`만 `startedAt`+2분, +10분으로 바꿨다.
+- `mis retro` 결과는 `metrics.runs = 2`, `medianMinutes = 6`이다. `retro-2026-10-19.md`에는 "| run 소요 시간 중앙값(분) | 6 |"로 적혔다.
+- 수정 위치는 `scripts/lib/retro.mjs:17`이다(`median`: 홀수는 가운데 값, 짝수는 가운데 두 값의 평균). 회귀 테스트 `mis-retro.test.mjs`의 세 번째 테스트가 [2,10] → 6, [2,10,4] → 4를 단언한다. 정렬 뒤 계산하므로 동어반복이 아니다.
+
+### R3-3. guard: 상태 루트 삭제·이동 — **해소**, 오탐 없음
+
+`scripts/guard.mjs`에 PreToolUse JSON(`tool_name: Bash`, `cwd` = 활성 run(PLANNING)이 있는 임시 저장소)을 넣었다.
+
+| 명령 | 결정 |
+|---|---|
+| `rm -rf .git/make-it-ship` | deny |
+| `mv .git/make-it-ship /tmp/x` | deny |
+| `rm -rf ./.git/make-it-ship/` | deny |
+| `rm -rf .git/make-it-ship/runs` | deny |
+| `sudo rm -rf .git/make-it-ship` | deny |
+| `bash -c 'rm -rf .git/make-it-ship'` | deny |
+| `cd .git && rm -rf make-it-ship` | deny |
+| `rm -rf "$PWD/.git/make-it-ship"` | deny |
+| `rm -rf <절대경로>/.git/make-it-ship` | deny |
+| `git ls-files \| grep -v '^\.git/make-it-ship'` | **allow** |
+| `node <repo>/scripts/mis.mjs status` | **allow** |
+| `ls .git/make-it-ship` | allow (읽기) |
+| `git status`, `rm -rf node_modules`, `grep -rn make-it-ship README.md` | allow |
+
+- 2차에서 allow였던 `rm -rf`/`mv` 형태가 이제 deny다. 수정 위치는 `scripts/lib/policy.mjs:71`(rm/mv/cp/rsync/ln 인자가 `.git/…/make-it-ship` 루트나 그 하위를 가리키면 deny)이다. 회귀 테스트는 `shell.test.mjs`의 마지막 테스트다.
+- 정상 읽기 명령(2차 L-7 대상)은 계속 allow다. 따라서 판정 기준 (b)의 오탐은 없다.
+
+### R3-4. M5 AC(PROGRESS.md M5-01..M5-09) 테스트 파일 재실행
+
+| AC | 이름 붙은 테스트 | 결과 |
+|---|---|---|
+| M5-01 retro | `tests/integration/mis-retro.test.mjs` | 3/3 pass |
+| M5-02 learn | `tests/integration/mis-learn.test.mjs` | 2/2 pass |
+| M5-03 second opinion | `tests/integration/mis-second.test.mjs` | 3/3 pass (실제 외부 모델 호출은 NEEDS_HUMAN 유지) |
+| M5-04 iOS 브리지 | `tests/integration/mis-ios.test.mjs` | 4/4 pass (실기기는 NEEDS_HUMAN 유지) |
+| M5-05 BSP | `tests/integration/mis-qa.test.mjs` | 8/8 pass (BSP 테스트 `:54` 포함) |
+| M5-06 bench | `tests/integration/mis-bench.test.mjs` | 2/2 pass |
+| M5-07 토큰 예산 HUD | `tests/unit/statusline.test.mjs` | 5/5 pass |
+| M5-08 Codex 어댑터 | `tests/unit/plugin-files.test.mjs` | 35/35 pass (Codex 실행은 NEEDS_HUMAN 유지) |
+| M5-09 E2E/NH 기록 | `docs/milestones/M5-e2e.md` | 파일이 있다. NH-6~NH-9 항목이 있다 |
+
+참고: `skills/qa/SKILL.md`의 description은 이제 "iOS (simulator; device via the debug bridge) and BSP surfaces"다. 2차의 남은 위험 항목은 해소됐다.
+
+### R3-5. 미검증·남은 위험
+
+- headless/Standard 도그푸딩은 이번 라운드에서 다시 실행하지 않았다(호출자 지시). guard 변경은 직접 probe로만 확인했다.
+- `cd .git && rm -rf make-it-ship`처럼 경로를 나눈 형태도 deny로 나왔다. 정상 흐름에 쓰이는 형태가 아니므로 문제 없다.
+- 2차 R2-6의 나머지 위험(`.build/` STALE, bridge-scan의 `*.md` 제외)은 그대로다. 이번 범위 밖이다.
+
+### R3-6. 3차 결과 요약
+
+| 항목 | 결과 |
+|---|---|
+| npm test / plugin validate / 스텁 | 319/319 PASS / passed / 0건 |
+| L-5b (LOW) | 해소 — 2분·10분 run → `mis retro` 중앙값 6 |
+| 상태 루트 삭제·이동 위험 | 해소 — `rm -rf`/`mv .git/make-it-ship` deny, 정상 읽기 명령 allow |
+| M5-01..M5-09 AC 테스트 | 모두 pass |
+
+ROUND3: PASS

@@ -1,5 +1,5 @@
 STATUS: RUNNING
-CURRENT: M5
+CURRENT: FINAL
 VERIFY: PENDING
 
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -91,6 +91,7 @@ VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m
 | M4-07 | 새 환경 설치 검증: 새 clone + 외부 플러그인 없는 설정으로 데모 C 완료, 설치 문서 | DONE | `docs/milestones/M4-e2e.md` | §11 M4 종료 기준 | 16a10bd | docs/milestones/M4-e2e.md |
 | M4-08 | 독립 검증 → `M4-report.md`, `m4-verified` | DONE | VERIFIER_PROMPT | §11 M4 | (this) | M4-report.md 1~3차, ROUND3: PASS |
 ## M5 — 확장
+VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m5-verified`. NEEDS_HUMAN: NH-3, NH-6~NH-9.
 
 종료 기준(Spec §11): "별도 AC". 아래 AC를 M5 종료 기준으로 정의한다(Spec 범위 항목을 그대로 따르며 결정 변경 없음).
 
@@ -105,7 +106,7 @@ VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m
 | M5-07 | 토큰 예산(호스트 지원 시): HUD가 statusLine 입력의 비용 값을 표시, 강제는 미지원으로 보고서·doctor에 명시 | DONE | `statusline.test.mjs` 확장 | §3-4, §11 M5 | 7056685 | statusline.test.mjs (cost.total_cost_usd 필드는 공식 문서 statusline.md 확인) |
 | M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | DONE | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | 7056685 | plugin-files.test.mjs; Codex 실행은 NEEDS_HUMAN |
 | M5-09 | E2E/NEEDS_HUMAN 기록: 시뮬레이터 SDK 타입체크, 실기기·외부 모델 호출은 NEEDS_HUMAN | DONE | `docs/milestones/M5-e2e.md` | §11 M5 | c1821cf | docs/milestones/M5-e2e.md; NH-6~9 |
-| M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | TODO | VERIFIER_PROMPT | §11 M5 | | |
+| M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | DONE | VERIFIER_PROMPT | §11 M5 | (this) | M5-report.md 1~3차, ROUND3: PASS |
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | TODO | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | | |
 
 ## NEEDS_HUMAN
@@ -137,3 +138,5 @@ VERIFY: PASSED (3차, `docs/milestones/M4-report.md` ROUND3: PASS) — 태그 `m
 - (M2 검증) 범위 밖 편집 경고는 Write/Edit 도구만 대상이다(§7 표). 모델이 Bash(`sed -i`, 스크립트)로 편집하면 발동하지 않는다. Bash 편집 대상 경로를 신뢰성 있게 추출할 수 없어 수용한다.
 - (M2 2차 R2-R1 → 처리됨) BLOCKED 상태에서도 계획 범위 검사를 유지한다(M3 병합 시 guard.mjs).
 - (M2 2차 R2-R2) 모델이 `M="node …"; $M` 형태를 습관적으로 쓰면 zsh에서 실패한다. 스킬이 지시한 형태는 아니다.
+- (M5 2차) SwiftPM 저장소에 `/.build`가 `.gitignore`에 없으면 `swift test` check가 통과 직후 STALE이 된다(안전한 쪽 오류). `.gitignore`에 빌드 산출물을 넣어야 한다.
+- (M5 2차) `mis ios bridge-scan`은 Markdown 파일을 제외한다(DocC 안 코드는 놓침, Swift 주석 속 이름은 보수적으로 잡음).
