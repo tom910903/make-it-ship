@@ -67,3 +67,10 @@ test('verdict reports per-check status incl. MISSING', () => {
   const s = base(); s.evidence.pop();
   assert.deepEqual(verdict(s, ctx).checks, { unit: 'PASS', lint: 'MISSING' });
 });
+
+test('plan-level reviews (plan-critic, product) never count toward the code verdict', () => {
+  const s = base();
+  s.reviews.push({ kind: 'product', blocking: 1, major: 0, treeHash: T, planHash: 'old-plan' });
+  s.reviews.push({ kind: 'plan-critic', blocking: 2, major: 0, treeHash: T });
+  assert.equal(verdict(s, ctx).verdict, 'VERIFIED');
+});

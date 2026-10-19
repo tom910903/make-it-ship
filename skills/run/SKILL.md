@@ -22,6 +22,7 @@ Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis s
 Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never write plans, reviews, or scratch files into the repository: any file there changes the code hash and pollutes the change list.
 
 ## Hard rules
+- Before you report what was recorded (reviews, approvals, checks), confirm it in `mis status`; if a command was refused or not executed, its effect did not happen — say so.
 - Never read or write `.git/make-it-ship/` directly (the guard denies it). Use `mis status` / `mis status --json`.
 - The verdict words VERIFIED, PARTIAL, BLOCKED, FAILED come **only** from `mis verdict` / `mis report` output, quoted as-is. Never say "done", "works", "ready to ship" unless the verdict is VERIFIED. Avoid "should", "probably", "seems" about results.
 - Never edit `.make-it-ship.json` or a check command to make a check pass.
@@ -64,7 +65,7 @@ Read each phase file **when you reach it** (not all up front):
 2b. **product-review** (Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/product-review.md`; **design** (Full, or Standard when needed) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/design.md`; **design-explore** (Full with UI) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/design-explore.md`
 3. **plan** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan.md` (includes `mis plan set` and `mis mode set`)
 4. **plan-critique** (Standard/Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/plan-critique.md`
-5. **approval**: show the plan (goal, tasks with acceptance criteria, mode and reason, required checks) and run `mis approve plan`. The guard shows the user a confirmation; their confirmation is the approval. `mis` refuses if a HIGH ambiguity is open or the critic review is missing/blocking. Quick without risk flags skips this step.
+5. **approval**: show the plan (goal, tasks with acceptance criteria, mode and reason, required checks) and run `mis approve plan` **as its own Bash command** — never chained with other commands (a refused chain also drops the other commands, e.g. a review you meant to record). The guard shows the user a confirmation; their confirmation is the approval. `mis` refuses if a HIGH ambiguity is open or the critic review is missing/blocking. Quick without risk flags skips this step.
 5b. **parallel** (optional, independent tasks) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/parallel.md`
 6. **implement** each task — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/implement.md`; when a check or task fails, **debug** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/debug.md`
 6b. **simplify** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/simplify.md`
