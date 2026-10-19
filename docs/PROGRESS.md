@@ -80,9 +80,9 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
 | M4-01 | QA 프로파일 탐지 `mis qa detect`(CLI·API·Web·iOS 시뮬레이터) + Standard/Full에서 `qa-*` check 필수화 | DONE | `tests/integration/mis-qa.test.mjs`, verdict 표 | §14 qa, §14.1 | 8d5d875 | npm test 274/274 |
-| M4-02 | qa phase + qa-tester 에이전트 + `/make-it-ship:qa` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-02 | qa phase + qa-tester 에이전트 + `/make-it-ship:qa` | DONE | `plugin-files.test.mjs` | §14.3 | 0fcfe04 | npm test 280/280, validate ✔ |
 | M4-03 | `mis ship`: PR 초안·체인지로그 초안·릴리스 체크리스트, VERIFIED 아니면 NOT READY | DONE | `tests/integration/mis-ship.test.mjs` | §14 ship | 3ef7d96 | npm test 276/276 |
-| M4-04 | ship·docs phase + `/make-it-ship:ship` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-04 | ship·docs phase + `/make-it-ship:ship` | DONE | `plugin-files.test.mjs` | §14.3 | 0fcfe04 | npm test 280/280, validate ✔ |
 | M4-05 | 데모 C(md 요구사항 → 소형 앱) 픽스처 + Full 경로 E2E | TODO | `docs/milestones/M4-e2e.md` | 데모 C | | |
 | M4-06 | 파일럿 과제 8종 픽스처(PRD 13.3) + 헤드리스 실행 기록 | TODO | `docs/milestones/M4-pilots.md` | §11 M4 | | |
 | M4-07 | 새 환경 설치 검증: 새 clone + 외부 플러그인 없는 설정으로 데모 C 완료, 설치 문서 | TODO | `docs/milestones/M4-e2e.md` | §11 M4 종료 기준 | | |

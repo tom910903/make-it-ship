@@ -49,7 +49,7 @@ export function detectQa(root, probe) {
   const xcodeproj = readdirSync(root).find((f) => f.endsWith('.xcodeproj'));
   const spmIos = existsSync(join(root, 'Package.swift')) && /\.iOS\(/.test(readFileSync(join(root, 'Package.swift'), 'utf8'));
   if (xcodeproj || spmIos) {
-    const p = probe ?? probeIos(root, xcodeproj);
+    const p = probe?.surfacesOnly ? { xcodebuild: true, scheme: '?', simulator: '?' } : probe ?? probeIos(root, xcodeproj);
     const base = { profile: 'ios', surface: 'iOS app (simulator)', how: 'Build and run the UI/unit tests on an iOS Simulator; on-device checks are not covered (BLOCKED without a device).' };
     if (!p.xcodebuild) profiles.push({ ...base, check: null, blocked: 'Xcode (xcodebuild) not available; iOS QA is BLOCKED' });
     else if (!p.scheme || !p.simulator) profiles.push({ ...base, check: null, blocked: `could not determine ${!p.scheme ? 'a scheme' : 'an available iPhone simulator'}` });

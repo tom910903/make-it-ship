@@ -363,7 +363,11 @@ export function verdictContext(run, cwd) {
   const tree = treeHash(root);
   const manifests = cfg.config?.dependencyManifests ?? [];
   const changed = manifests.length ? changedManifests(root, run.state.baseCommit, tree, manifests) : [];
-  return { treeHash: tree, configHash: cfg.configHash, required: cfg.config ? requiredChecks(cfg.config, run.state.mode) : [],
+  const required = cfg.config ? requiredChecks(cfg.config, run.state.mode) : [];
+  if (cfg.config && run.state.mode && run.state.mode !== 'quick') {
+    for (const p of detectQa(root, { surfacesOnly: true }).profiles) if (!required.includes(`qa-${p.profile}`)) required.push(`qa-${p.profile}`);
+  }
+  return { treeHash: tree, configHash: cfg.configHash, required,
     dependencyChanged: changed.length > 0, changedManifests: changed, configErrors: cfg.errors, configExists: cfg.exists };
 }
 

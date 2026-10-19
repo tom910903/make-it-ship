@@ -38,3 +38,15 @@ test('qa detect: iOS project → simulator xcodebuild test check (or BLOCKED wit
 test('qa detect: library without a runtime surface → no profiles', () => {
   assert.deepEqual(detectQa(makeRepo({ 'package.json': { name: 'lib', main: 'index.js' } })).profiles, []);
 });
+
+test('standard/full: a detected user-facing surface makes its qa-* check required even if undefined (§14.1)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } }, 'package.json': { bin: { t: 'bin/t.js' } } });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'small']));
+  assert.deepEqual(Object.keys(ok(mis(dir, ['verdict'])).checks), ['unit'], 'quick: unit only');
+  ok(mis(dir, ['mode', 'set', 'standard', '--reason', 'feature']));
+  const v = ok(mis(dir, ['verdict']));
+  assert.equal(v.checks['qa-cli'], 'MISSING');
+  assert.ok(v.reasons.some((r) => /qa-cli/.test(r)), v.reasons.join());
+});
