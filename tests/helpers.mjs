@@ -32,7 +32,9 @@ export function write(dir, files) {
 
 /** Run mis CLI; returns {code, out, err, json} */
 export function mis(cwd, args, opts = {}) {
-  const r = spawnSync(process.execPath, [MIS, ...args], { cwd, encoding: 'utf8', env: { ...process.env, ...opts.env }, input: opts.input });
+  const env = { ...process.env, ...opts.env };
+  delete env.NODE_TEST_CONTEXT; // else a nested `node --test` check reports to this runner instead of failing
+  const r = spawnSync(process.execPath, [MIS, ...args], { cwd, encoding: 'utf8', env, input: opts.input });
   let json; try { json = JSON.parse(r.stdout); } catch { /* not json */ }
   return { code: r.status, out: r.stdout, err: r.stderr, json };
 }

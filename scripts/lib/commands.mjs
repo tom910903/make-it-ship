@@ -12,6 +12,11 @@ import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { renderStatus, renderReport } from './render.mjs';
+import { REPORT_DIR } from './tree-hash.mjs';
+
+const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
 const MODES = ['quick', 'standard', 'full'];
 const REVIEW_KINDS = ['plan-critic', 'product', 'spec', 'quality', 'security', 'design'];
@@ -293,7 +298,32 @@ function verdictCmd(args, cwd) {
 function status(args, cwd) {
   const run = requireRun(cwd);
   if (args.includes('--json')) return { state: run.state };
-  return fail('human status not implemented yet');
+  return renderStatus(run.state, verdictContext(run, cwd));
+}
+
+function changedFiles(root, base, tree) {
+  const out = execFileSync('git', ['diff', '--name-status', base ?? '4b825dc642cb6eb9a060e54bf8d69288fbee4904', tree], { cwd: root, encoding: 'utf8' });
+  return out.split('\n').filter(Boolean).map((l) => { const [st, ...p] = l.split('\t'); return { status: st, path: p.join(' → ') }; });
+}
+
+function report(args, cwd) {
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const root = repoRoot(cwd);
+    const ctx = verdictContext(run, cwd);
+    const v = judge(s, ctx);
+    if (!ctx.configExists || ctx.configErrors.length) {
+      v.reasons.push(!ctx.configExists ? 'no .make-it-ship.json: no required checks are defined' : `.make-it-ship.json invalid: ${ctx.configErrors.join('; ')}`);
+      if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL';
+    }
+    if (s.state === 'EXECUTING') transition(s, 'VERIFYING');
+    if (s.state === 'VERIFYING') transition(s, 'REPORTED');
+    const rel = `${REPORT_DIR}/${s.runId}/report.md`;
+    mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
+    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), generatedAt: new Date().toISOString() }));
+    s.lastReport = { path: rel, verdict: v.verdict, treeHash: ctx.treeHash };
+    return { event: { type: 'report', verdict: v.verdict, path: rel }, result: { path: rel, verdict: v.verdict, reasons: v.reasons, state: s.state } };
+  });
 }
 
 function block(args, cwd) {
@@ -313,5 +343,5 @@ function cancel(args, cwd) {
   });
 }
 
-export const commands = { start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, block, cancel };
+export const commands = { start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, block, cancel };
 export { requiredChecks };
