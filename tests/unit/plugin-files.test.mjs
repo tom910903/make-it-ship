@@ -132,3 +132,10 @@ test('Codex adapter: mis-based flow, honest about missing guard hooks, only real
   for (const m of t.matchAll(/`mis ([a-z-]+)/g)) assert.ok(commands[m[1]], `unknown mis command ${m[1]}`);
   for (const m of t.matchAll(/skills\/run\/phases\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `skills/run/phases/${m[1]}.md`)), m[0]);
 });
+
+test('ship file edits happen before verify; after the report only drafts and branch finishing (M4 D1)', () => {
+  const run = read('skills/run/SKILL.md');
+  assert.ok(run.indexOf('ship, part A') < run.indexOf('**verify**'), 'part A is listed before verify');
+  assert.match(read('skills/run/phases/ship.md'), /Part B — after the report.*no more file edits/s);
+  assert.match(read('skills/run/phases/ship.md'), /follow-up run/);
+});
