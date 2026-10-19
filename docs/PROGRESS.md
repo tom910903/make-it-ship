@@ -64,20 +64,34 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | TODO | `docs/adr/0002-parallel-state.md` | ADR-004 | | |
-| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | TODO | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | | |
-| M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | TODO | `tests/unit/parallel.test.mjs` | §14 parallel | | |
-| M3-04 | `mis worktree add|merge <task>`: 격리 worktree, 소유 파일 범위 guard, 충돌 시 안전 중단 | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | §11 M3 종료 기준 | | |
-| M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | TODO | `plugin-files.test.mjs` | §14 parallel | | |
-| M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14.1 product-review | | |
-| M3-07 | architect 에이전트 + design phase(ADR 초안) | TODO | `plugin-files.test.mjs` | §14 design | | |
-| M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14 design-explore | | |
-| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | TODO | `docs/milestones/M3-e2e.md` | §11 M3 | | |
+| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | DONE | `docs/adr/0002-parallel-state.md` | ADR-004 | cc8f5f7 | ADR-0002 |
+| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | DONE | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | cc8f5f7 | npm test 231/231 (동시 8 writer 무손실) |
+| M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | DONE | `tests/unit/parallel.test.mjs` | §14 parallel | aba7d4b | parallel.test.mjs |
+| M3-04 | `mis worktree add| DONE | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | aba7d4b | npm test 238/238, 충돌 재현 mis-worktree.test.mjs | |
+| M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | DONE | `plugin-files.test.mjs` | §14 parallel | 875b944 | npm test 244/244, validate ✔ |
+| M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14.1 product-review | 875b944 | npm test 244/244, validate ✔ |
+| M3-07 | architect 에이전트 + design phase(ADR 초안) | DONE | `plugin-files.test.mjs` | §14 design | 875b944 | npm test 244/244, validate ✔ |
+| M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14 design-explore | 875b944 | npm test 244/244, validate ✔ |
+| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | DONE | `docs/milestones/M3-e2e.md` | §11 M3 | 00f54b2 | p1 VERIFIED, implementer×2 병렬, guard 0건; 충돌은 통합 테스트; NH-4 |
 | M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
-## M4
+## M4 — 제품화
+
+종료 기준(Spec §11): 새 환경 설치 → 소형 프로젝트 완료.
+
+| ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
+|---|---|---|---|---|---|---|
+| M4-01 | QA 프로파일 탐지 `mis qa detect`(CLI·API·Web·iOS 시뮬레이터) + Standard/Full에서 `qa-*` check 필수화 | TODO | `tests/integration/mis-qa.test.mjs`, verdict 표 | §14 qa, §14.1 | | |
+| M4-02 | qa phase + qa-tester 에이전트 + `/make-it-ship:qa` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-03 | `mis ship`: PR 초안·체인지로그 초안·릴리스 체크리스트, VERIFIED 아니면 NOT READY | TODO | `tests/integration/mis-ship.test.mjs` | §14 ship | | |
+| M4-04 | ship·docs phase + `/make-it-ship:ship` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-05 | 데모 C(md 요구사항 → 소형 앱) 픽스처 + Full 경로 E2E | TODO | `docs/milestones/M4-e2e.md` | 데모 C | | |
+| M4-06 | 파일럿 과제 8종 픽스처(PRD 13.3) + 헤드리스 실행 기록 | TODO | `docs/milestones/M4-pilots.md` | §11 M4 | | |
+| M4-07 | 새 환경 설치 검증: 새 clone + 외부 플러그인 없는 설정으로 데모 C 완료, 설치 문서 | TODO | `docs/milestones/M4-e2e.md` | §11 M4 종료 기준 | | |
+| M4-08 | 독립 검증 → `M4-report.md`, `m4-verified` | TODO | VERIFIER_PROMPT | §11 M4 | | |
 ## M5
 
 ## NEEDS_HUMAN
+- **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-3 (M2)**: HUD statusLine 실제 표시. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-1 (M1)**: 대화형 승인 확인 창 → 승인/거절 동작. 절차: `docs/milestones/M1-e2e.md` "NEEDS_HUMAN" 절. 상태: 미확인(통과로 기록하지 않음)
@@ -87,7 +101,8 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
-- (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING)에서만 적용한다.
+- (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING, BLOCKED 포함)에서만 적용한다.
+- (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.
 
 ## RISKS
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
@@ -98,5 +113,5 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 - (M2 E2E d2) rootcause 노트 순서는 `task fail` → `retry` 경로에서만 강제된다. 같은 task 안에서 바로 고치면 노트가 수정 뒤에 올 수 있다(모델 판단 영역).
 - (M1 4차 R-1~R-6) guard의 매트릭스 밖 형태: `node --flag mis.mjs approve`, 셸 주석 `#`, `bash -o pipefail -c`, main에서 `git push --force origin HEAD`, `npm --prefix x install`, `bash <<EOF` 본문. M2 guard 우회 사례 작업(M2-07b)에서 처리.
 - (M2 검증) 범위 밖 편집 경고는 Write/Edit 도구만 대상이다(§7 표). 모델이 Bash(`sed -i`, 스크립트)로 편집하면 발동하지 않는다. Bash 편집 대상 경로를 신뢰성 있게 추출할 수 없어 수용한다.
-- (M2 2차 R2-R1) 시간·재시도 상한으로 BLOCKED인 동안에는 계획 범위 검사가 꺼진다. `approve continue` 뒤에 그 사이 편집이 확인 없이 남을 수 있다.
+- (M2 2차 R2-R1 → 처리됨) BLOCKED 상태에서도 계획 범위 검사를 유지한다(M3 병합 시 guard.mjs).
 - (M2 2차 R2-R2) 모델이 `M="node …"; $M` 형태를 습관적으로 쓰면 zsh에서 실패한다. 스킬이 지시한 형태는 아니다.

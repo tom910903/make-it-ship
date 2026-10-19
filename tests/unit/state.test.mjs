@@ -58,7 +58,7 @@ test('lock: exclusive while holder alive, stale lock reclaimed', () => {
   withLock(run, () => {
     assert.ok(existsSync(lock));
     assert.equal(JSON.parse(readFileSync(lock, 'utf8')).pid, process.pid);
-    assert.throws(() => withLock(run, () => {}), /locked by pid/);
+    assert.throws(() => withLock(run, () => {}, { waitMs: 100 }), /locked by pid/);
   });
   assert.ok(!existsSync(lock), 'released');
   writeFileSync(lock, JSON.stringify({ pid: 2 ** 22 + 12345, at: 'old' }));

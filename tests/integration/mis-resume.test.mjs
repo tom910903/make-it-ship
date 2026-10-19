@@ -23,12 +23,9 @@ test('resume after a session is killed mid-check: stale lock reclaimed, changes 
 
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const child = spawn(process.execPath, [MIS, 'check', 'slow'], { cwd: dir, env, stdio: 'ignore' });
-  const lock = join(stateRoot(dir), 'runs', runId, 'lock');
-  for (let i = 0; i < 100 && !existsSync(lock); i++) await sleep(50);
-  assert.ok(existsSync(lock), 'check holds the lock');
-  const locked = mis(dir, ['task', 'T1', 'done']);
-  assert.notEqual(locked.code, 0);
-  assert.match(locked.err, /locked by pid/);
+  const marker = join(stateRoot(dir), 'runs', runId, 'running', `${child.pid}.json`);
+  for (let i = 0; i < 100 && !existsSync(marker); i++) await sleep(50);
+  assert.ok(existsSync(marker), 'running check leaves a marker');
   child.kill('SIGKILL');
   await new Promise((r) => child.on('exit', r));
 
@@ -36,12 +33,12 @@ test('resume after a session is killed mid-check: stale lock reclaimed, changes 
   const r = ok(mis(dir, ['resume']));
   assert.equal(r.runId, runId);
   assert.equal(r.state, 'EXECUTING');
-  assert.ok(r.reclaimedLock, 'stale lock reported');
+  assert.deepEqual(r.interruptedChecks.map((c) => c.check), ['slow'], 'killed check reported');
+  assert.ok(!existsSync(marker), 'marker cleaned up');
   assert.deepEqual(r.changedSinceLastEvent.map((c) => c.path).sort(), ['added.txt', 'src.txt']);
   assert.deepEqual(r.staleEvidence.map((e) => e.id), ['E1']);
   assert.deepEqual(r.inProgressTasks, ['T1']);
   assert.ok(r.next.length > 0);
-  assert.ok(!existsSync(lock));
   assert.equal(ok(mis(dir, ['task', 'T1', 'done'])).status, 'DONE', 'usable again');
 });
 

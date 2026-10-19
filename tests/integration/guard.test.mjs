@@ -81,3 +81,14 @@ test('guard: plan scope only applies while executing; after REPORTED, edits are 
   assert.equal(w(), 'allow', 'reported: no plan scope');
   assert.equal(run(bash(dir, 'git push origin x')).out.permissionDecision, 'ask', 'remote write still asks (ship after report)');
 });
+
+test('guard: plan scope still applies while the run is BLOCKED (a limit block may be lifted later)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': JSON.stringify({ version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } }) });
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const m = (args, input) => spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, ...args], { cwd: dir, input, encoding: 'utf8', env });
+  m(['start', '--input', 'x']);
+  m(['plan', 'set', '-'], JSON.stringify({ goal: 'g', plannedFiles: ['src/**'], tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }));
+  m(['block', 'runtime', 'limit']);
+  const r = run({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: `${dir}/other.js` }, cwd: dir });
+  assert.equal(r.out?.permissionDecision, 'ask');
+});
