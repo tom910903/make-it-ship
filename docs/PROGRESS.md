@@ -86,6 +86,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING)에서만 적용한다.
 
 ## RISKS
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
@@ -95,3 +96,4 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 - guard는 습관적 셸 형태(변수·함수·서브셸·접두어·제어문·`bash -c`)까지 다루지만, 의도적 난독화(eval, base64 등)는 Spec §7 위협 모델 밖이다.
 - (M2 E2E d2) rootcause 노트 순서는 `task fail` → `retry` 경로에서만 강제된다. 같은 task 안에서 바로 고치면 노트가 수정 뒤에 올 수 있다(모델 판단 영역).
 - (M1 4차 R-1~R-6) guard의 매트릭스 밖 형태: `node --flag mis.mjs approve`, 셸 주석 `#`, `bash -o pipefail -c`, main에서 `git push --force origin HEAD`, `npm --prefix x install`, `bash <<EOF` 본문. M2 guard 우회 사례 작업(M2-07b)에서 처리.
+- (M2 검증) 범위 밖 편집 경고는 Write/Edit 도구만 대상이다(§7 표). 모델이 Bash(`sed -i`, 스크립트)로 편집하면 발동하지 않는다. Bash 편집 대상 경로를 신뢰성 있게 추출할 수 없어 수용한다.

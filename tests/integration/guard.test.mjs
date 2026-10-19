@@ -65,3 +65,19 @@ test('guard: plan scope comes from the active run (plannedFiles + task files)', 
   assert.equal(w('test/a.test.js'), 'allow');
   assert.equal(w('other.js'), 'ask');
 });
+
+test('guard: plan scope only applies while executing; after REPORTED, edits are new work but remote writes still ask', () => {
+  const dir = makeRepo({ '.make-it-ship.json': JSON.stringify({ version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } }) });
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const m = (args, input) => spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, ...args], { cwd: dir, input, encoding: 'utf8', env });
+  m(['start', '--input', 'x']);
+  m(['plan', 'set', '-'], JSON.stringify({ goal: 'g', plannedFiles: ['src/**'], tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }));
+  m(['mode', 'set', 'quick', '--reason', 'r']);
+  m(['task', 'T1', 'start']);
+  const w = () => run({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: `${dir}/other.js` }, cwd: dir }).out?.permissionDecision ?? 'allow';
+  assert.equal(w(), 'ask', 'executing: out of scope asks');
+  m(['task', 'T1', 'done']);
+  assert.equal(m(['report']).status, 0);
+  assert.equal(w(), 'allow', 'reported: no plan scope');
+  assert.equal(run(bash(dir, 'git push origin x')).out.permissionDecision, 'ask', 'remote write still asks (ship after report)');
+});

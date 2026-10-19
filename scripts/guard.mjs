@@ -14,7 +14,9 @@ function context(cwd) {
     let currentBranch = null;
     try { currentBranch = execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* detached */ }
     const plan = run?.state.plan;
-    const plannedFiles = plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
+    // Plan scope applies while the plan is being executed; after the report, edits are new work (remote writes still ask).
+    const executing = ['PLANNING', 'AWAITING_APPROVAL', 'EXECUTING', 'VERIFYING'].includes(run?.state.state);
+    const plannedFiles = executing && plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
     return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
   } catch {
     return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo
