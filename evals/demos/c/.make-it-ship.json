@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "checks": {
+    "unit": { "argv": ["npm", "test"], "timeoutSec": 300 },
+    "qa-cli": { "argv": ["node", "qa/cli-smoke.mjs"], "timeoutSec": 120 }
+  },
+  "required": { "quick": ["unit"], "standard": ["unit"] },
+  "limits": { "maxAttemptsPerTask": 2, "maxRuntimeMinutes": 60 }
+}

@@ -12,10 +12,10 @@ function frontmatter(text) {
   return Object.fromEntries(m[1].split('\n').filter((l) => /^\w[\w-]*:/.test(l)).map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
 }
 
-const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer'];
+const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
-const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug'];
+const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -60,6 +60,8 @@ test('direct commands use their phase files', () => {
   assert.match(read('skills/plan-review/SKILL.md'), /phases\/plan-critique\.md/);
   assert.match(read('skills/review/SKILL.md'), /phases\/review\.md/);
   assert.match(read('skills/debug/SKILL.md'), /phases\/debug\.md/);
+  assert.match(read('skills/qa/SKILL.md'), /phases\/qa\.md/);
+  assert.match(read('skills/ship/SKILL.md'), /phases\/ship\.md/);
 });
 
 test('every `mis <command>` mentioned in skills and phases exists', () => {
@@ -79,6 +81,8 @@ test('phases name the source features they absorb (Spec §14.2)', () => {
     review: [/requesting-code-review/i, /ponytail-review/i, /cso|security-reviewer/i],
     'product-review': [/plan-ceo-review/i, /plan-design-review/i, /plan-devex-review/i], design: [/architect/i, /plan-eng-review/i, /diagram/i],
     'design-explore': [/design-consultation/i, /design-shotgun/i, /design-html/i, /designer/i], parallel: [/ultrawork|team/i, /dispatching-parallel-agents/i, /using-git-worktrees/i],
+    qa: [/gstack qa|\bqa-only/i, /browse/i, /benchmark/i, /ios-qa/i, /qa-tester/i, /visual-verdict/i],
+    ship: [/document-release/i, /document-generate/i, /finishing-a-development-branch/i, /merge-readiness/i, /git-master/i],
     debug: [/systematic-debugging/i, /investigate/i, /tracer|trace/i], simplify: [/ponytail-debt/i, /ai-slop-cleaner/i, /code-simplifier/i],
   };
   for (const [p, res] of Object.entries(expect)) {
@@ -110,4 +114,11 @@ test('implementer agent: may write but has no Agent tool and no MCP (allowlist)'
   assert.equal(fm.name, 'implementer');
   assert.equal(fm.tools, 'Read, Write, Edit, Grep, Glob, Bash');
   assert.match(read('agents/implementer.md'), /untrusted/i);
+});
+
+test('ship phase never pushes on its own and the qa phase reports BLOCKED instead of faking results', () => {
+  assert.match(read('skills/run/phases/ship.md'), /mis ship/);
+  assert.match(read('skills/run/phases/ship.md'), /approv/i);
+  assert.match(read('skills/run/phases/qa.md'), /mis qa detect/);
+  assert.match(read('skills/run/phases/qa.md'), /BLOCKED/);
 });

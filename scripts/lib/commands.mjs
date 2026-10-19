@@ -19,6 +19,8 @@ import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
+import { detectQa } from './qa.mjs';
+import { renderShip } from './ship.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -206,7 +208,8 @@ const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttempt
 
 function approve([what], cwd) {
   if (what === 'continue') return approveContinue(cwd);
-  if (what !== 'plan') fail('usage: mis approve <plan|continue>');
+  if (what === 'config') return approveConfig(cwd);
+  if (what !== 'plan') fail('usage: mis approve <plan|continue|config>');
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'approve plan');
@@ -215,6 +218,17 @@ function approve([what], cwd) {
     s.approvals.push({ action: 'plan', ...h, planHash: s.planHash, at: new Date().toISOString() });
     transition(s, 'EXECUTING');
     return { event: { type: 'approve', action: 'plan', ...h }, result: { state: s.state } };
+  });
+}
+
+/** The user accepts the current .make-it-ship.json after it changed during the run. */
+function approveConfig(cwd) {
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
+    const { configHash } = loadConfig(repoRoot(cwd));
+    s.approvals.push({ action: 'config', configHash, at: new Date().toISOString() });
+    return { event: { type: 'approve', action: 'config', configHash }, result: { configHash } };
   });
 }
 
@@ -361,7 +375,13 @@ export function verdictContext(run, cwd) {
   const tree = treeHash(root);
   const manifests = cfg.config?.dependencyManifests ?? [];
   const changed = manifests.length ? changedManifests(root, run.state.baseCommit, tree, manifests) : [];
-  return { treeHash: tree, configHash: cfg.configHash, required: cfg.config ? requiredChecks(cfg.config, run.state.mode) : [],
+  const required = cfg.config ? requiredChecks(cfg.config, run.state.mode) : [];
+  if (cfg.config && run.state.mode && run.state.mode !== 'quick') {
+    for (const p of detectQa(root, { surfacesOnly: true }).profiles) if (!required.includes(`qa-${p.profile}`)) required.push(`qa-${p.profile}`);
+  }
+  const s = run.state;
+  const configChangedUnapproved = s.configHash !== cfg.configHash && !(s.approvals ?? []).some((a) => a.action === 'config' && a.configHash === cfg.configHash);
+  return { treeHash: tree, configHash: cfg.configHash, required, configChangedUnapproved,
     dependencyChanged: changed.length > 0, changedManifests: changed, configErrors: cfg.errors, configExists: cfg.exists };
 }
 
@@ -551,6 +571,26 @@ function worktree([sub, id], cwd) {
   });
 }
 
+function ship(args, cwd) {
+  return mutate(cwd, (run) => {
+    const s = run.state;
+    const root = repoRoot(cwd);
+    const ctx = verdictContext(run, cwd);
+    const v = judge(s, ctx);
+    if (!ctx.configExists || ctx.configErrors.length) { v.reasons.push('no valid .make-it-ship.json'); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
+    const { ready, markdown } = renderShip({ root, state: s, verdict: v, ctx, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root) });
+    const rel = `${REPORT_DIR}/${s.runId}/ship.md`;
+    mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
+    writeFileSync(join(root, rel), markdown + '\n');
+    return { event: { type: 'ship', ready, verdict: v.verdict }, result: { ready, verdict: v.verdict, reasons: v.reasons, path: rel } };
+  });
+}
+
+function qa([sub], cwd) {
+  if (sub !== 'detect') fail('usage: mis qa detect');
+  return detectQa(repoRoot(cwd));
+}
+
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
@@ -574,5 +614,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, block, cancel };
 export { requiredChecks };

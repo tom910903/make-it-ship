@@ -1,0 +1,2 @@
+body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+#time { font-size: 4rem; font-variant-numeric: tabular-nums; }

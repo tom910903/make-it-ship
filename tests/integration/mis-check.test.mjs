@@ -120,3 +120,21 @@ test('mis note dep records a reason that satisfies the dependency rule (M-4)', (
   const v = ok(mis(dir, ['verdict']));
   assert.ok(!v.reasons.some((r) => /dependency/.test(r)), v.reasons.join());
 });
+
+test('config changed during the run (by any tool) keeps the verdict PARTIAL until the user approves it (pilot 4 finding)', () => {
+  const C1 = { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } };
+  const dir = makeRepo({ '.make-it-ship.json': C1 });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  write(dir, { '.make-it-ship.json': { ...C1, checks: { ...C1.checks, 'qa-x': { argv: ['node', '-e', '0'] } } } });
+  ok(mis(dir, ['check', 'unit'])); ok(mis(dir, ['check', 'qa-x']));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  let v = ok(mis(dir, ['verdict']));
+  assert.equal(v.verdict, 'PARTIAL');
+  assert.ok(v.reasons.some((r) => /changed during the run.*mis approve config/.test(r)), v.reasons.join());
+  ok(mis(dir, ['approve', 'config']));
+  v = ok(mis(dir, ['verdict']));
+  assert.equal(v.verdict, 'VERIFIED', v.reasons.join());
+});

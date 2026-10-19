@@ -1,0 +1,1 @@
+Add `canDelete(user, doc)`: only admins, or the document's owner when they are an editor, may delete. Viewers can never delete, even their own documents. Unknown roles are denied everything (canView/canEdit/canDelete). This is an authorization change: test the denial paths.
