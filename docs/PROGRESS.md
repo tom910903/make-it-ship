@@ -21,7 +21,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
 | M1-01 | 뼈대: package.json, plugin.json(author), 테스트 러너 | DONE | `tests/unit/manifest.test.mjs`, `claude plugin validate .` | ADR-003 | 9513d63 | npm test 2/2, validate ✔ |
-| M1-02 | `lib/config.mjs`: 스키마 검증(미지 키 오류), configHash | TODO | `tests/unit/config.test.mjs` | AC#5 | | |
+| M1-02 | `lib/config.mjs`: 스키마 검증(미지 키 오류), configHash | DONE | `tests/unit/config.test.mjs` | AC#5 | 422a4b2 | npm test 18/18 |
 | M1-03 | `lib/tree-hash.mjs`: 임시 인덱스 write-tree, 보고서 경로 제외 | TODO | `tests/integration/tree-hash.test.mjs` (수정/신규/ignored/제외/실제 인덱스 불변) | AC#8 | | |
 | M1-04 | `lib/state.mjs`: 상태 루트, 원자적 쓰기, events.jsonl, lock(O_EXCL·stale 회수), 전이표 | TODO | `tests/unit/state.test.mjs` | AC#4, AC#10(기반) | | |
 | M1-05 | `lib/verdict.mjs`: §6 판정 우선순위 | TODO | `tests/unit/verdict.test.mjs` (table-driven) | AC#9, AC#6 | | |
