@@ -23,6 +23,7 @@ import { detectQa } from './qa.mjs';
 import { renderShip } from './ship.mjs';
 import { loadRuns, retroMetrics, renderRetro } from './retro.mjs';
 import { addLearning, listLearnings } from './learn.mjs';
+import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
@@ -571,6 +572,8 @@ function ship(args, cwd) {
     const ctx = verdictContext(run, cwd);
     const v = judge(s, ctx);
     if (!ctx.configExists || ctx.configErrors.length) { v.reasons.push('no valid .make-it-ship.json'); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
+    const bridge = bridgeScan(root);
+    if (bridge.length) { v.reasons.push(`iOS debug bridge code remains in ${bridge.join(', ')} (remove it: templates/ios-debug-bridge/README.md)`); if (v.verdict === 'VERIFIED') v.verdict = 'PARTIAL'; }
     const { ready, markdown } = renderShip({ root, state: s, verdict: v, ctx, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root) });
     const rel = `${REPORT_DIR}/${s.runId}/ship.md`;
     mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
@@ -641,6 +644,15 @@ function bench(args, cwd) {
   });
 }
 
+function ios([sub], cwd) {
+  if (sub === 'bridge-scan') {
+    const files = bridgeScan(repoRoot(cwd));
+    return { files, clean: files.length === 0 };
+  }
+  if (sub === 'devices') return listDevices();
+  return fail('usage: mis ios <bridge-scan|devices>');
+}
+
 function qa([sub], cwd) {
   if (sub !== 'detect') fail('usage: mis qa detect');
   return detectQa(repoRoot(cwd));
@@ -669,5 +681,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel };
 export { requiredChecks };
