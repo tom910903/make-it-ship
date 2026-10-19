@@ -15,6 +15,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
+import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -343,5 +344,17 @@ function cancel(args, cwd) {
   });
 }
 
-export const commands = { start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, block, cancel };
+function init(args, cwd) {
+  const root = repoRoot(cwd);
+  const r = detectConfig(root);
+  if (args.includes('--write')) {
+    if (!r.config) fail(r.message);
+    return { written: writeConfig(root, r.config), config: r.config };
+  }
+  return r;
+}
+
+const doctor = (args, cwd) => runDoctor(cwd);
+
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, block, cancel };
 export { requiredChecks };
