@@ -1,0 +1,68 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { makeRepo, git } from '../helpers.mjs';
+import { stateRoot, createRun, loadRun, saveState, withLock, canTransition, transition, newRunId, readEvents } from '../../scripts/lib/state.mjs';
+
+test('state root lives in the git common dir, shared by worktrees', () => {
+  const dir = makeRepo();
+  assert.equal(stateRoot(dir), join(dir, '.git', 'make-it-ship'));
+  const wt = dir + '-wt';
+  git(dir, 'worktree', 'add', '-q', wt);
+  assert.equal(stateRoot(wt), join(dir, '.git', 'make-it-ship'));
+});
+
+test('run id format', () => {
+  assert.match(newRunId(new Date('2026-10-19T09:53:00')), /^20261019-0953-[0-9a-f]{4}$/);
+});
+
+test('create/load/save: atomic state + append-only events + current pointer', () => {
+  const dir = makeRepo();
+  const run = createRun(dir, { input: { kind: 'text', text: 'hi' }, baseCommit: 'abc' });
+  assert.equal(run.state.state, 'PLANNING');
+  assert.equal(run.state.schema, 1);
+  const loaded = loadRun(dir);
+  assert.equal(loaded.state.runId, run.state.runId);
+  loaded.state.mode = 'quick';
+  saveState(loaded, { type: 'mode', mode: 'quick' });
+  assert.equal(loadRun(dir).state.mode, 'quick');
+  const ev = readEvents(loaded);
+  assert.deepEqual(ev.map((e) => e.type), ['start', 'mode']);
+  assert.ok(ev.every((e) => e.at));
+  assert.ok(!readdirSync(loaded.dir).some((f) => f.endsWith('.tmp')), 'no temp files left');
+});
+
+test('loadRun without a run returns null', () => {
+  assert.equal(loadRun(makeRepo()), null);
+});
+
+test('transition table: allowed and refused', () => {
+  const ok = [['PLANNING', 'AWAITING_APPROVAL'], ['PLANNING', 'EXECUTING'], ['AWAITING_APPROVAL', 'EXECUTING'],
+    ['AWAITING_APPROVAL', 'PLANNING'], ['EXECUTING', 'VERIFYING'], ['VERIFYING', 'EXECUTING'], ['VERIFYING', 'REPORTED'],
+    ['EXECUTING', 'BLOCKED'], ['PLANNING', 'CANCELLED'], ['VERIFYING', 'BLOCKED']];
+  const bad = [['PLANNING', 'VERIFYING'], ['PLANNING', 'REPORTED'], ['AWAITING_APPROVAL', 'VERIFYING'],
+    ['EXECUTING', 'REPORTED'], ['REPORTED', 'EXECUTING'], ['CANCELLED', 'PLANNING'], ['REPORTED', 'BLOCKED']];
+  for (const [a, b] of ok) assert.ok(canTransition(a, b), `${a}->${b}`);
+  for (const [a, b] of bad) assert.ok(!canTransition(a, b), `${a}-/->${b}`);
+  const s = { state: 'PLANNING' };
+  assert.throws(() => transition(s, 'REPORTED'), /PLANNING -> REPORTED/);
+  transition(s, 'EXECUTING');
+  assert.equal(s.state, 'EXECUTING');
+});
+
+test('lock: exclusive while holder alive, stale lock reclaimed', () => {
+  const dir = makeRepo();
+  const run = createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const lock = join(run.dir, 'lock');
+  withLock(run, () => {
+    assert.ok(existsSync(lock));
+    assert.equal(JSON.parse(readFileSync(lock, 'utf8')).pid, process.pid);
+    assert.throws(() => withLock(run, () => {}), /locked by pid/);
+  });
+  assert.ok(!existsSync(lock), 'released');
+  writeFileSync(lock, JSON.stringify({ pid: 2 ** 22 + 12345, at: 'old' }));
+  let ran = false;
+  withLock(run, () => { ran = true; });
+  assert.ok(ran, 'stale lock reclaimed');
+});
