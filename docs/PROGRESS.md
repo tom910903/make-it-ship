@@ -55,7 +55,22 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M2-09 | doctor (M1-10에서 구현됨) 재확인 | DONE | 기존 테스트 | AC#12 | 07f7a97 (M1-10), cc1f768 | mis-init-doctor.test.mjs 통과; 경고 문구 'enabled in settings' 정정 |
 | M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | DONE | `docs/milestones/M2-e2e.md` | 데모 D | d4cb653 | d1/d2 강제 종료→resume→VERIFIED; NH-2, NH-3 |
 | M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | TODO | VERIFIER_PROMPT | §11 M2 | | |
-## M3
+## M3 — 선택형 협업
+
+종료 기준(Spec §11): 충돌 재현 테스트.
+
+| ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
+|---|---|---|---|---|---|---|
+| M3-01 | ADR-0002: 병렬 도입 시 상태 저장 재검토(SQLite vs JSON+lock 대기) | TODO | `docs/adr/0002-parallel-state.md` | ADR-004 | | |
+| M3-02 | lock 대기(경합 시 재시도) + 동시 mis 호출 무손실 | TODO | `tests/integration/mis-concurrency.test.mjs` | ADR-004 | | |
+| M3-03 | `mis parallel plan`: files 소유권 겹침·dependsOn으로 병렬 wave 계산 | TODO | `tests/unit/parallel.test.mjs` | §14 parallel | | |
+| M3-04 | `mis worktree add|merge <task>`: 격리 worktree, 소유 파일 범위 guard, 충돌 시 안전 중단 | TODO | `tests/integration/mis-worktree.test.mjs` (충돌 재현) | §11 M3 종료 기준 | | |
+| M3-05 | implementer 에이전트(도구 허용목록) + parallel phase | TODO | `plugin-files.test.mjs` | §14 parallel | | |
+| M3-06 | product-reviewer 에이전트 + product-review phase, Full 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14.1 product-review | | |
+| M3-07 | architect 에이전트 + design phase(ADR 초안) | TODO | `plugin-files.test.mjs` | §14 design | | |
+| M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | TODO | `mis-plan.test.mjs` 확장 | §14 design-explore | | |
+| M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | TODO | `docs/milestones/M3-e2e.md` | §11 M3 | | |
+| M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
 ## M4
 ## M5
 
