@@ -56,3 +56,11 @@ test('demo p: two independent modules plan into one parallel wave', () => {
     { id: 'T2', title: 'mean', acceptance: ['b'], files: ['src/math.js', 'test/math.test.js'] }] }) }));
   assert.deepEqual(ok(mis(dir, ['parallel', 'plan'])).waves, [['T1', 'T2']]);
 });
+
+test('demo c: requirements-only project with preset unit + qa-cli checks; qa-cli is BLOCKED/FAIL until built', () => {
+  const dir = setup('c');
+  assert.ok(existsSync(join(dir, 'REQUIREMENTS.md')));
+  ok(mis(dir, ['start', '--input', 'REQUIREMENTS.md']));
+  assert.equal(ok(mis(dir, ['check', 'unit'])).status, 'PASS');
+  assert.equal(ok(mis(dir, ['check', 'qa-cli'])).status, 'FAIL', 'qa script does not exist yet');
+});
