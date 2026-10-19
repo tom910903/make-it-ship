@@ -456,6 +456,10 @@ function cancel(args, cwd) {
 function init(args, cwd) {
   const root = repoRoot(cwd);
   const r = detectConfig(root);
+  r.hud = {
+    statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
+    how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
+  };
   if (args.includes('--write')) {
     if (!r.config) fail(r.message);
     return { written: writeConfig(root, r.config), config: r.config };

@@ -50,7 +50,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M2-04 | debug phase + `/make-it-ship:debug` | DONE | `plugin-files.test.mjs` 확장 | §14 debug | 8e1c752 | npm test 208/208, validate ✔ |
 | M2-05 | security-reviewer 에이전트 + review phase 보안 리뷰 | DONE | `plugin-files.test.mjs`, verdict 표(이미 있음) | PRD 8.1 | 8e1c752 | npm test 208/208, validate ✔ |
 | M2-06 | simplify: `mis check` 의존성 변경 경고·`note dep`, 보고서 shortcut 목록, simplify phase | DONE | `tests/integration/mis-simplify.test.mjs` | AC#7, §14 simplify | 8e1c752 | npm test 208/208, validate ✔ |
-| M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | TODO | `policy.test.mjs` 확장 | §7, AC#11 | | |
+| M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | DONE | `policy.test.mjs` 확장 | §7, AC#11 | 1739049 | npm test 211/211 (우회 변형 26건 포함) |
 | M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | TODO | `tests/unit/statusline.test.mjs` | §14 hud | | |
 | M2-09 | doctor (M1-10에서 구현됨) 재확인 | TODO | 기존 테스트 | AC#12 | | |
 | M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | TODO | `docs/milestones/M2-e2e.md` | 데모 D | | |
