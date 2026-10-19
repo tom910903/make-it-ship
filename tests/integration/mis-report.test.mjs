@@ -25,6 +25,8 @@ function quickRun() {
 
 test('quick run end-to-end: no review → PARTIAL; with review → VERIFIED; report has the 8 sections', () => {
   const dir = quickRun();
+  ok(mis(dir, ['interview', 'add', JSON.stringify({ question: 'Overflow behavior?', impact: 'MED' })]));
+  ok(mis(dir, ['interview', 'resolve', 'Q1', 'use JS number semantics']));
   ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
   let v = ok(mis(dir, ['verdict']));
@@ -46,6 +48,7 @@ test('quick run end-to-end: no review → PARTIAL; with review → VERIFIED; rep
   assert.match(md, /node --test test\.mjs/);
   assert.match(md, /VERIFIED/);
   assert.match(md, /토큰 예산/);
+  assert.match(md, /가정: Q1 \(MED\) Overflow behavior\? → use JS number semantics/, 'resolved assumptions are listed for the user');
   // report path is excluded from the tree hash, so reporting does not make evidence stale
   assert.equal(ok(mis(dir, ['verdict'])).verdict, 'VERIFIED');
 });

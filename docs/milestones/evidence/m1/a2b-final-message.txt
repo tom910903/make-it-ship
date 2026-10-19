@@ -1,0 +1,22 @@
+`mis verdict` returned **VERIFIED**. It gave no reasons, the required `unit` check passed, and the spec and quality reviews each found 0 blocking and 0 major problems.
+
+**Task:** T1, "Implement slugify with tests", is done. Nothing is left undone or blocked.
+
+**What changed:**
+- `src/text.ts`: new exported `slugify(title)`. It splits accented letters apart (NFD), removes the accent marks (U+0300–U+036F), lowercases, turns each run of characters other than `a-z` and `0-9` into one `-`, and removes a `-` from each end.
+- `test/text.test.ts`: `slugify` added to the import, plus a `slugify` test covering every acceptance example and the agreed behaviour for `Straße` → `stra-e` and `日本語` → `''`.
+- The `capitalize` and `truncate` tests are unchanged, and `package.json` is untouched, so no dependencies were added.
+
+**Checks:** `unit` (`npm test`) passed on the final code (run E2: 3 tests, 3 pass, 0 fail).
+
+**Fixed after the first review:** When the shell wrote the file, it turned the `\u0300-\u036f` escapes in the regex into the raw invisible characters. The code still worked but was hard to read, so I changed it back to ASCII escapes and added the two tests above. Because the code changed, I re-ran the check and both reviews; nothing is stale and everything was verified.
+
+**A review note I rejected:** The spec reviewer said `'İstanbul'` would give `'i-stanbul'`. I ran it and it returns `'istanbul'`, so I made no change.
+
+**Decisions for you (optional, low priority):**
+- Fullwidth letters (`Ａｂｃ`) and ligatures (`ﬁ`) are currently dropped, because the plan uses NFD. Switching to NFKD, a one-word change, would convert them to plain letters instead.
+- The quality reviewer suggested adding `assert.equal(slugify('-a-'), 'a')` to test a single dash at each end.
+
+**To run it:** `npm test`
+
+Nothing is committed. The report is at `docs/make-it-ship/20261019-1116-2267/report.md`.

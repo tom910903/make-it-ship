@@ -1,0 +1,19 @@
+`slugify` is now in `src/text.ts`, and `mis verdict` returned **VERIFIED** with no reasons listed.
+
+**What changed**
+- `src/text.ts`: new `slugify(title)`. It lowercases the title, removes accents ("Crème Brûlée" → `creme-brulee`), turns any run of characters other than a–z/0–9 into a single `-`, and trims `-` from both ends. `capitalize` and `truncate` are unchanged, and no dependencies were added.
+- `test/text.test.ts`: a new `slugify` test. It covers both examples from the request, accents, digits, "İstanbul", "Straße", the empty string, and input that is all punctuation. The existing tests weren't modified.
+- `.make-it-ship.json` (new, untracked): the run's config. I wrote the proposed config without waiting for your confirmation. It has one required check, `unit` = `npm test`, the repo's only test script.
+
+**Evidence**
+- I ran the test first and it failed because `slugify` didn't exist yet. After the implementation, the recorded `unit` check (`npm test`) passed 3 of 3 tests on the final code.
+- The quality review found 0 blocking and 0 major issues. It suggested one extra test (Straße), which I added; I then re-ran the check and the review on the final code. A long-input timing test showed no slowdown from the regexes.
+- Nothing is unverified and no evidence is stale.
+
+**Decisions for you**
+- **Letters with no plain-letter form (ß, ø, æ):** I followed the request's rules literally rather than converting them (for example ß → ss), so `slugify("Straße")` gives `"stra-e"`. A test now pins this behaviour. If you want ß → ss and similar, that needs a lookup table and is a separate change.
+- **Text with no a–z or 0–9:** Japanese text and full-width digits (`"１２３"`) give `""`, which also follows the literal rules.
+- Nothing is committed.
+
+Run the tests with `npm test`. The report is at `docs/make-it-ship/20261019-1116-0cce/report.md`.
+A exit 0

@@ -72,6 +72,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
   const decisions = [];
   if (v.verdict !== 'VERIFIED') decisions.push(`판정이 ${v.verdict}이므로 아직 배포 대상이 아니다. 6절의 항목을 먼저 해결해야 한다.`);
   for (const q of (s.interview ?? []).filter((x) => !x.answer)) decisions.push(`미해결 질문 ${q.id} (${q.impact}): ${q.question}`);
+  for (const q of (s.interview ?? []).filter((x) => x.answer)) decisions.push(`가정: ${q.id} (${q.impact}) ${q.question} → ${q.answer} (다르면 알려 달라)`);
   for (const r of (s.reviews ?? []).filter((x) => x.major > 0 && x.treeHash === ctx.treeHash)) decisions.push(`${r.kind} 리뷰의 major 이슈 ${r.major}건 확인 필요 (\`${r.file}\`)`);
   if (s.blockedReason) decisions.push(`차단 사유: ${s.blockedReason}`);
   if (ctx.changedManifests?.length) decisions.push(`의존성 매니페스트 변경: ${ctx.changedManifests.join(', ')}`);
