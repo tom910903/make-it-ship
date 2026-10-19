@@ -60,6 +60,8 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 ## M5
 
 ## NEEDS_HUMAN
+- **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
+- **NH-3 (M2)**: HUD statusLine 실제 표시. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-1 (M1)**: 대화형 승인 확인 창 → 승인/거절 동작. 절차: `docs/milestones/M1-e2e.md` "NEEDS_HUMAN" 절. 상태: 미확인(통과로 기록하지 않음)
 
 ## BLOCKED
@@ -74,3 +76,4 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 - (M1 검증 L-2) `mis doctor`는 설정 파일의 `enabledPlugins`를 읽으므로, 이번 세션에 실제로 로드되지 않은 플러그인도 경고할 수 있다. 플러그인이 로드 목록을 얻을 방법이 없어 "enabled in settings" 문구로 수용.
 - (M1 2차 검증) 모호성 영향도(HIGH/MED/LOW)는 모델이 분류한다. 모델이 HIGH를 MED로 낮추면 승인 게이트가 열린다. 기계로 막을 수 없는 모델 판단 영역이며, 보고서 8절에 해소된 가정을 모두 노출해 사용자가 볼 수 있게 했다.
 - guard는 습관적 셸 형태(변수·함수·서브셸·접두어·제어문·`bash -c`)까지 다루지만, 의도적 난독화(eval, base64 등)는 Spec §7 위협 모델 밖이다.
+- (M2 E2E d2) rootcause 노트 순서는 `task fail` → `retry` 경로에서만 강제된다. 같은 task 안에서 바로 고치면 노트가 수정 뒤에 올 수 있다(모델 판단 영역).
