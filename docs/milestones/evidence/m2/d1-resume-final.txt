@@ -1,0 +1,16 @@
+I resumed the run and finished it. `mis verdict` returned **VERIFIED**, with no remaining reasons.
+
+**Where it stopped:** task T1 ("Round discount half up in cartTotal") was done and the `unit` check had passed. The only step left was the quality review. Nothing had changed since the last recorded step, nothing was stale, and the only uncommitted change was the T1 fix.
+
+**What I did:** ran the quality review, which came back SHIP with 0 blocking and 0 major findings, then recorded it and ran the verdict and report.
+
+- **Change:** `src/cart.js:13` now calculates the discount as `Math.floor((subtotal * discount.percent + 50) / 100)`, which rounds it half up to the nearest cent. `lineTotal` and the no-discount path are unchanged, and there are no new dependencies.
+- **Checks:** `unit` (`npm test`) is PASS on the current code, including the 15% case (subtotal 1050 → total 892).
+- **Report:** `docs/make-it-ship/20261019-1148-0942/report.md`
+- **To re-check:** `npm test`
+
+**Decisions for you (both optional, outside this task):**
+1. **Decimal percents:** the fix is exact for whole-number percents. With decimal percents, floating-point error can make a discount come out one cent too low. For example, a subtotal of 250 at 64.6% gives a discount of 161 instead of 162. The old code had the same kind of problem, and nothing in the code or tests says whether percents must be whole numbers. If they can have decimals, that needs a separate fix.
+2. **Another test:** the suite only tests a discount that lands exactly on half a cent, so a version that always rounds up would also pass. One more case would catch that, for example a subtotal of 1020 at 15%, which should total 867.
+
+Nothing is committed yet. Tell me if you want me to commit.
