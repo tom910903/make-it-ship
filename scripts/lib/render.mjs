@@ -60,15 +60,11 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
   const checks = evRows.length
     ? ['| ID | check | 명령(argv) | exit | 기록 당시 | 현재 코드 기준 | 종료 시각 |', '|---|---|---|---|---|---|---|', ...evRows].join('\n')
     : '실행된 check가 없다.';
-<<<<<<< HEAD
   const opinions = (s.notes ?? []).filter((n) => n.kind === 'second-opinion').map((n) => `second opinion (다른 모델, 판정에 미반영): ${n.text.trim().split('\n')[0]}`);
-  const reviews = (s.reviews ?? []).map((r) => `${r.kind}: blocking ${r.blocking}, major ${r.major} — ${r.treeHash === ctx.treeHash || r.kind === 'plan-critic' ? '현재 코드 기준' : '이전 코드 기준(무효)'} (\`${r.file}\`)`);
-=======
   const basis = (r) => (['plan-critic', 'product'].includes(r.kind)
     ? (r.planHash === s.planHash ? '현재 계획 기준' : '이전 계획 기준(무효)')
     : (r.treeHash === ctx.treeHash ? '현재 코드 기준' : '이전 코드 기준(무효)'));
   const reviews = (s.reviews ?? []).map((r) => `${r.kind}: blocking ${r.blocking}, major ${r.major} — ${basis(r)} (\`${r.file}\`)`);
->>>>>>> develop
   const unverified = [];
   for (const name of ctx.required) {
     const e = latest.get(name);
