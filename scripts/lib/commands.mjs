@@ -22,7 +22,7 @@ import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
 import { renderShip } from './ship.mjs';
 import { loadRuns, retroMetrics, renderRetro } from './retro.mjs';
-import { addLearning, listLearnings } from './learn.mjs';
+import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 
@@ -611,7 +611,7 @@ function retro(args, cwd) {
 
 function learn([sub, arg], cwd) {
   const root = repoRoot(cwd);
-  if (sub === 'list') return { entries: listLearnings(root) };
+  if (sub === 'list') return { entries: refreshLearnings(root) };
   if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, arg)) };
   return fail('usage: mis learn <add <json|->|list>');
 }
@@ -627,7 +627,7 @@ function secondOpinion([sub], cwd) {
       if (d && existsSync(p)) { available.push({ name, path: p }); break; }
     }
   }
-  return { available, note: 'Optional. Running another model sends repository content to an external service: the guard asks the user first. Record the result with mis note second-opinion - (it does not change the verdict).' };
+  return { available, note: 'Optional. Running another model sends repository content to an external service: ask the user first (the guard also asks while a Make It Ship run is active). Record the result with mis note second-opinion - (it does not change the verdict).' };
 }
 
 /** mis bench <check> [--runs N]: wall-clock median of N runs, compared with the run's first measurement of that check. */

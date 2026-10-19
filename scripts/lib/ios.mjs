@@ -6,8 +6,10 @@ import { join } from 'node:path';
 
 /** Files outside the template that still reference the debug bridge. */
 export function bridgeScan(root) {
-  const r = spawnSync('git', ['grep', '--no-index', '--exclude-standard', '-lE', 'import DebugBridge|DebugBridge\\.start|DebugBridgeManager',
-    '--', '.', ':(exclude)templates/ios-debug-bridge', ':(exclude)docs/make-it-ship'], { cwd: root, encoding: 'utf8' });
+  // Any code or project file naming the bridge counts (imports, wiring, a copied package, Package.swift deps, pbxproj refs);
+  // prose in Markdown does not.
+  const r = spawnSync('git', ['grep', '--no-index', '--exclude-standard', '-l', 'DebugBridge',
+    '--', '.', ':(exclude)templates/ios-debug-bridge', ':(exclude)docs/make-it-ship', ':(exclude)*.md'], { cwd: root, encoding: 'utf8' });
   return r.status === 0 ? r.stdout.split('\n').filter(Boolean) : [];
 }
 

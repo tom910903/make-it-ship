@@ -39,7 +39,14 @@ export function addLearning(root, e) {
   const { jsonl, md } = paths(root);
   mkdirSync(join(root, REPORT_DIR), { recursive: true });
   appendFileSync(jsonl, JSON.stringify({ ...e, at: new Date().toISOString() }) + '\n');
+  return refreshLearnings(root);
+}
+
+/** Re-render learnings.md from the ledger (STALE recomputed). */
+export function refreshLearnings(root) {
+  const { md } = paths(root);
   const entries = listLearnings(root);
+  if (!entries.length) return entries;
   const L = ['# Project learnings (Make It Ship)', '', '`mis learn add`로 기록. 같은 key는 최신 기록이 우선. STALE = 참조 파일이 사라짐.', ''];
   for (const t of TYPES) {
     const es = entries.filter((x) => x.type === t);

@@ -139,3 +139,15 @@ test('ship file edits happen before verify; after the report only drafts and bra
   assert.match(read('skills/run/phases/ship.md'), /Part B — after the report.*no more file edits/s);
   assert.match(read('skills/run/phases/ship.md'), /follow-up run/);
 });
+
+test('M5 features are reachable from the flow and docs (M5 D-2, L-2, L-6)', () => {
+  const qa = read('skills/run/phases/qa.md');
+  assert.match(qa, /mis ios devices/);
+  assert.match(qa, /ios-debug-bridge/);
+  assert.match(qa, /bsp/);
+  assert.match(read('skills/run/phases/ship.md'), /mis ios bridge-scan/);
+  const readme = read('README.md');
+  for (const re of [/mis bench/, /mis learn/, /BSP|bsp/, /second opinion/i, /ios-debug-bridge/, /adapters\/codex/]) assert.match(readme, re);
+  for (const m of read('adapters/codex/AGENTS.md').matchAll(/agents\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), m[0]);
+  assert.match(read('adapters/codex/AGENTS.md'), /spec-reviewer/);
+});

@@ -5,7 +5,7 @@ Absorbs: gstack retro, learn · OMC learner, remember, wiki, skillify · Superpo
 Full mode at the end of a run, or on request (`/make-it-ship:retro`).
 
 1. `mis retro [--days N]` aggregates every run's events into metrics (verdicts, fail→pass cycles, retries, root causes, resumes, blocked reasons, review blocking issues, durations) and writes `docs/make-it-ship/retro-<date>.md` with rule-based wins and improvements. Numbers are machine-counted; keep them as they are.
-2. Add your judgment below the metrics, clearly as judgment: up to 3 habits for the next run, each tied to a metric (e.g. "2 runs BLOCKED on a missing simulator → run `mis qa detect` during discover").
+2. Edit the retro file: replace `_(아직 기록되지 않음)_` under "다음 습관 (모델 판단)" with up to 3 habits for the next run, each tied to a metric (e.g. "2 runs BLOCKED on a missing simulator → run `mis qa detect` during discover").
 3. **Learnings** — record only what passes all three: not findable in five minutes of searching, specific to this codebase, and it took real effort to discover:
 
 ```

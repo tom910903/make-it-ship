@@ -54,3 +54,18 @@ test('ios devices: parsing devicectl output; no connected device → device QA B
   assert.match(deviceProfile([]).blocked, /no connected iOS device/);
   assert.equal(deviceProfile([{ id: 'ABC', name: 'x', connected: true }]).blocked, undefined);
 });
+
+test('bridge-scan also finds a copied bridge package, a Package.swift dependency, and an Xcode project reference (M5 D-1)', () => {
+  const dir = makeRepo({ 'App/Main.swift': 'import SwiftUI\n' });
+  for (const [path, body] of [
+    ['Packages/DebugBridge/Sources/DebugBridge/DebugBridge.swift', '#if DEBUG\npublic enum DebugBridge {}\n#endif\n'],
+    ['Package.swift', '.package(path: "Packages/DebugBridge")\n'],
+    ['App.xcodeproj/project.pbxproj', '/* XCLocalSwiftPackageReference "Packages/DebugBridge" */\n'],
+  ]) {
+    const d = makeRepo({ [path]: body });
+    assert.deepEqual(ok(mis(d, ['ios', 'bridge-scan'])).files, [path], path);
+  }
+  assert.deepEqual(ok(mis(dir, ['ios', 'bridge-scan'])).files, []);
+  const docs = makeRepo({ 'docs/notes.md': 'We removed DebugBridge last week.\n' });
+  assert.deepEqual(ok(mis(docs, ['ios', 'bridge-scan'])).files, [], 'prose in markdown is not code');
+});

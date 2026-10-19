@@ -103,8 +103,9 @@ test('every command shape the skills and phases tell the model to run is allowed
   for (const c of shapes) assert.equal(decide(c), 'allow', c);
 });
 
-test('documented choice: any shell text naming the state dir outside heredoc data is denied, even in a commit message', () => {
-  assert.equal(decide('git commit -m "docs: explain .git/make-it-ship layout"'), 'deny');
+test('documented choice (revised after M5 L-7, matches Spec §7): text naming runs/ or current is denied even in a commit message; the bare dir name is not', () => {
+  assert.equal(decide('git commit -m "docs: explain .git/make-it-ship/runs layout"'), 'deny');
+  assert.equal(decide('git commit -m "docs: explain the .git/make-it-ship layout"'), 'allow');
 });
 
 // M1 round-4 residual risks R-1..R-6, folded into the matrix as new classes.
@@ -145,3 +146,9 @@ for (const [cmd, want] of CASES) {
     assert.deepEqual(bad, []);
   });
 }
+
+test('read-only commands that merely mention the state dir in a pattern are allowed; runs/current paths stay denied (M5 L-7)', () => {
+  assert.equal(decide("git ls-files | grep -v '^\\.git/make-it-ship'"), 'allow');
+  assert.equal(decide('cat .git/make-it-ship/runs/r/state.json'), 'deny');
+  assert.equal(decide('cd .git/make-it-ship && ls'), 'deny');
+});

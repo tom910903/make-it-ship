@@ -54,7 +54,7 @@ test('standard/full: a detected user-facing surface makes its qa-* check require
 test('BSP: Yocto / Buildroot / kernel trees → build check proposal, target verification BLOCKED (build ≠ hardware)', () => {
   const y = by(detectQa(makeRepo({ 'conf/local.conf': 'MACHINE ?= "qemuarm64"\n', 'meta-demo/conf/layer.conf': 'BBFILE_COLLECTIONS += "demo"\n', 'oe-init-build-env': '#!/bin/sh\n' })));
   assert.equal(y.bsp.kind, 'yocto');
-  assert.deepEqual(y.bsp.check.argv, ['bitbake', 'core-image-minimal']);
+  assert.deepEqual(y.bsp.check.argv, ['bash', '-c', '. ./oe-init-build-env build >/dev/null && bitbake core-image-minimal']);
   assert.equal(y.bsp.check.name, 'build-bsp');
   assert.match(y.bsp.blocked, /target hardware/);
   const br = by(detectQa(makeRepo({ 'Config.in': 'menu "Target"\n', 'package/Config.in': '', Makefile: 'BR2_VERSION := 2024.02\nall:\n' })));
@@ -62,7 +62,8 @@ test('BSP: Yocto / Buildroot / kernel trees → build check proposal, target ver
   assert.deepEqual(br.bsp.check.argv, ['make']);
   const k = by(detectQa(makeRepo({ Kbuild: 'obj-y += kernel/\n', Kconfig: 'mainmenu "Linux"\n', 'arch/arm64/Kconfig': '' })));
   assert.equal(k.bsp.kind, 'kernel');
-  assert.deepEqual(k.bsp.check.argv, ['make', 'ARCH=arm64', '-j8']);
+  assert.deepEqual(k.bsp.check.argv, ['make', '-j8'], 'native build; set ARCH/CROSS_COMPILE in the config for cross builds');
+  assert.match(k.bsp.how, /ARCH/);
 });
 
 test('BSP in standard mode: qa-bsp (target) is required, so a build-only run cannot be VERIFIED', () => {

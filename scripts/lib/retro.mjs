@@ -60,6 +60,6 @@ export function renderRetro(m, date) {
     `| run 소요 시간 중앙값(분) | ${m.medianMinutes} |`, '',
     '## 잘한 점', ...(wins.length ? wins.map((w) => `- ${w}`) : ['- (지표에서 도출된 항목 없음)']), '',
     '## 개선할 점', ...(improve.length ? improve.map((w) => `- ${w}`) : ['- (지표에서 도출된 항목 없음)']), '',
-    '## 다음 습관', '- 위 지표를 근거로 다음 run에 적용할 습관 3개 이하를 모델 판단으로 덧붙인다(retro phase).', ''];
+    '## 다음 습관 (모델 판단)', '_(아직 기록되지 않음)_', ''];
   return L.join('\n');
 }

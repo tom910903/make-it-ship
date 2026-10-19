@@ -64,7 +64,7 @@ export function detectQa(root, probe) {
   const bsp = detectBsp(root);
   if (bsp) profiles.push({ profile: 'bsp', surface: 'embedded / BSP', kind: bsp.kind, check: bsp.check,
     blocked: 'real target verification needs target hardware (or an agreed emulator): build success ≠ hardware behavior. Define qa-bsp (e.g. flash + on-target test over ssh/serial) or it stays unverified',
-    how: 'Keep the build check (build-bsp) and add a target check qa-bsp that runs on the device; without it the report must say the target was not verified.' });
+    how: `Keep the build check (build-bsp; ${bsp.kind === 'kernel' ? 'for cross builds add ARCH=<arch> CROSS_COMPILE=<prefix> and the defconfig to its argv' : bsp.kind === 'yocto' ? 'set MACHINE/image to the project\'s' : 'select the board defconfig first'}) and add a target check qa-bsp that runs on the device; without it the report must say the target was not verified.` });
   return { profiles };
 }
 
@@ -72,14 +72,13 @@ function detectBsp(root) {
   const has = (p) => existsSync(join(root, p));
   const ls = (d) => { try { return readdirSync(join(root, d)); } catch { return []; } };
   if (has('oe-init-build-env') || has('conf/local.conf') || ls('.').some((d) => d.startsWith('meta-') && has(`${d}/conf/layer.conf`))) {
-    return { kind: 'yocto', check: { name: 'build-bsp', argv: ['bitbake', 'core-image-minimal'], timeoutSec: 14400 } };
+    return { kind: 'yocto', check: { name: 'build-bsp', argv: ['bash', '-c', '. ./oe-init-build-env build >/dev/null && bitbake core-image-minimal'], timeoutSec: 14400 } };
   }
   if (has('Config.in') && has('package') && has('Makefile') && /BR2_/.test(readFileSync(join(root, 'Makefile'), 'utf8'))) {
     return { kind: 'buildroot', check: { name: 'build-bsp', argv: ['make'], timeoutSec: 14400 } };
   }
   if (has('Kbuild') && has('Kconfig') && ls('arch').length) {
-    const arch = ls('arch').sort()[0];
-    return { kind: 'kernel', check: { name: 'build-bsp', argv: ['make', `ARCH=${arch}`, '-j8'], timeoutSec: 7200 } };
+    return { kind: 'kernel', check: { name: 'build-bsp', argv: ['make', '-j8'], timeoutSec: 7200 } };
   }
   return null;
 }

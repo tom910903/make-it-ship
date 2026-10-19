@@ -39,6 +39,15 @@ What happens:
 
 8. **Ship (on request, or Full).** Doc and changelog edits happen before verify. After the report, `mis ship` writes a PR draft, a changelog draft and a release checklist (`NOT READY` unless VERIFIED). Push or PR happens only after your approval.
 
+More tools:
+- `mis bench <check> --runs N` measures performance. It flags +20% as WARN and +50% as REGRESSION.
+- `mis retro` aggregates metrics across runs.
+- `mis learn add|list` records project learnings.
+- For a second opinion from another model, `mis second-opinion detect` finds codex/gemini CLIs. Calling them sends code to an external service, so it happens only with your approval.
+- `mis qa detect` also covers BSP trees. A build alone never counts as target verification.
+- iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`. `mis ios devices` lists devices and `mis ios bridge-scan` finds leftover bridge code.
+- Codex users: see `adapters/codex/AGENTS.md`. Its flow is the same, but no guard enforces it.
+
 Run state lives in `.git/make-it-ship/`, so it is never committed and never affects the code hash.
 
 ## `mis` CLI

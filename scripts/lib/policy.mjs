@@ -10,7 +10,7 @@ const deny = (reason) => ({ decision: 'deny', reason: `${R}: ${reason}` });
 
 const STATE_PATH = /\.git\/(?:.*\/)?make-it-ship\/(?:runs\/|current$)/;
 // Any mention of the state dir in a shell command is denied: mis.mjs never takes state paths as arguments.
-const BASH_STATE = /make-it-ship\/(?:runs|current)\b|\.git\/(?:[^\s'"]*\/)?make-it-ship\b/;
+const BASH_STATE = /make-it-ship\/(?:runs|current)\b/; // §7: state paths; `cd` into the state dir is checked separately
 const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|write/i;
 const CONFIG = '.make-it-ship.json';
 
