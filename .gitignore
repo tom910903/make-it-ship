@@ -1,0 +1,4 @@
+.DS_Store
+.omc/
+.dev-loop/
+node_modules/
