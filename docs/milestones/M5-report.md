@@ -116,3 +116,95 @@
 - `mis bench`는 활성 run을 확인하기 전에 명령을 N회 먼저 실행한다(결과는 기록되지 않는다).
 - 회고 중에 모델이 `.git/make-it-ship/runs/*/events.jsonl`을 읽으려다 §7 규칙으로 deny됐다. 회고가 필요로 하는 세부 정보(어떤 check가 실패했는지 등)를 `mis retro` 출력이 주지 않아서 생긴 시도로 보인다.
 - 브리지는 `#if DEBUG`로 감싸져 있어 Release 빌드에는 포함되지 않는다. 따라서 D-1이 실제로 배포물에 미치는 영향은 작다. 다만 AC가 정한 "코드가 남으면 NOT READY"는 지켜지지 않는다.
+
+## 2차 검증 (round 2)
+
+대상: `develop` HEAD `62903ab` (M5-fix). 1차 결함 D-1, D-2, L-1~L-7을 원래 재현 방법으로 다시 실행한다.
+
+### R2-1. 기본 검사
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | tests 317, pass 317, fail 0, skipped 0, todo 0 (EXIT 0) |
+| `claude plugin validate .` | ✔ Validation passed |
+| 스텁 검사(1차와 같은 grep, `adapters` 포함) | 걸린 곳은 task 상태 문자열(`'TODO'`, `commands.mjs:512` "next TODO task")뿐이다. `.skip`/`.only`/FIXME/not implemented는 0건이다 |
+
+### R2-2. D-1 재검증 (bridge-scan / ship) — **해소**
+
+scratchpad의 임시 저장소 3개에서 1차 재현을 그대로 다시 실행했다. 각 저장소에 남은 형태 하나를 커밋한 뒤 Quick run을 VERIFIED 조건까지 진행했다(task done, `check unit` PASS, quality 0/0). 그다음 `mis ios bridge-scan`과 `mis ship`을 실행했다.
+
+| 남은 형태 | `mis ios bridge-scan` | `mis ship` |
+|---|---|---|
+| 템플릿을 `Packages/DebugBridge`로 복사(README.md 제외), 앱 코드 연결 없음 | `clean:false`, `Packages/DebugBridge/Package.swift`, `…/Sources/DebugBridge/DebugBridge.swift` | `ready:false, PARTIAL`, 사유 "iOS debug bridge code remains in …" |
+| 앱 `Package.swift`에 `.package(path: "Packages/DebugBridge")` | `clean:false`, `Package.swift` | `ready:false, PARTIAL` |
+| `App.xcodeproj/project.pbxproj`에 `XCLocalSwiftPackageReference "Packages/DebugBridge"` | `clean:false`, `project.pbxproj` | `ready:false, PARTIAL` |
+
+- 대조군: 복사한 패키지를 지우자 scan은 `clean:true`가 됐다. ship은 처음에 "dependency manifest changed without a recorded reason"으로 PARTIAL이었다(패키지의 Package.swift 삭제가 매니페스트 변경으로 잡힌 것이며 정상 동작이다). `mis note dep`를 기록한 뒤에는 `ready:true, VERIFIED`였다.
+- 커밋하지 않은(untracked) 복사본도 잡혔다(`--no-index --exclude-standard`).
+- 회귀 테스트 `mis-ios.test.mjs:58`은 세 형태를 scan 수준에서 단언하고, Markdown 산문은 제외하는지 확인한다. ship 연동은 기존 테스트(`:26`)가 앱 코드 형태로 다룬다. 정규식이 이제 `DebugBridge` 단일 토큰이라 형태별 ship 경로는 같은 코드(`commands.mjs:591`)를 탄다.
+- 참고(남은 위험): `*.md`를 통째로 제외하므로 DocC 등 Markdown 안의 코드는 잡지 않는다. 반대로 Swift 주석 "// removed DebugBridge"도 잡는다(보수적 오탐이고, 사용자가 주석을 지우면 해결된다).
+
+### R2-3. L-1 ~ L-7 재검증
+
+guard는 `scripts/guard.mjs`에 PreToolUse JSON을 직접 넣어 확인했다(활성 run이 있는 임시 저장소, run이 없는 임시 저장소).
+
+| ID | 결과 | 증거 |
+|---|---|---|
+| L-1 | **해소(문구)** | 동작은 그대로다. run이 없으면 `codex exec "review"`가 allow이고, 활성 run이 있으면 ask다. 안내 문구는 사실에 맞게 바뀌었다: `mis second-opinion detect` note와 `review.md:27`이 "ask the user first (the guard also asks while a … run is active)"로 적는다. 무조건 "guard asks"라고 단정하는 문구는 skills, scripts, README, adapters 어디에도 남아 있지 않다 |
+| L-2 | **해소** | `qa.md:7`의 표면 목록에 bsp가 들어갔다. 9단계가 BSP 타깃 검증을 설명한다 |
+| L-3 | **해소** | 커널 트리(`arch/alpha`, `arm64`, `x86`)의 argv가 `["make","-j8"]`(네이티브)로 바뀌었다. `how`에 교차 빌드용 ARCH/CROSS_COMPILE/defconfig 안내가 있다. Yocto argv는 `bash -c ". ./oe-init-build-env build >/dev/null && bitbake core-image-minimal"`이다. 가짜 `oe-init-build-env`와 PATH의 가짜 bitbake로 실행해 보니 rc=0이었고, env 스크립트를 source한 뒤 bitbake까지 도달했다. 실제 poky 빌드는 NH-9로 남는다 |
+| L-4 | **해소** | `learn add`(files=src/b.js) → 파일 삭제 → `learn list`만 실행해도 `learnings.md` 6행이 "… observed, STALE"로 바뀌었다 |
+| L-5 | **부분 해소** | 회고 파일의 "## 다음 습관 (모델 판단)" 절에 이제 `_(아직 기록되지 않음)_` 자리표시가 들어간다. `retro.md` 2단계는 이 자리를 파일에서 직접 고치라고 지시한다. **미해소(L-5b)**: 1차에 함께 적은 "짝수 개 run의 중앙값은 위쪽 값" 문제가 그대로다. 직접 재현했다: `retroMetrics`에 2분짜리 run과 10분짜리 run을 넣으면 `medianMinutes`가 10이다(관례상 중앙값은 6). 원인은 `retro.mjs:43`의 `minutes[Math.floor(n/2)]`이다. 커밋 본문은 "Fixes M5-report D-1, D-2, L-1..L-7"이라고 적어 L-5 전체를 고쳤다고 주장한다. 따라서 이미 수용한 위험으로 볼 수 없다 |
+| L-6 | **해소** | `adapters/codex/AGENTS.md`가 `critic`, `spec-reviewer`, `quality-reviewer`, `security-reviewer`, `product-reviewer`, `qa-tester`를 나열하고, 모두 `agents/`에 파일이 있다. 테스트 `plugin-files.test.mjs:143`이 `agents/<name>.md` 참조가 존재하는지 검사한다 |
+| L-7 | **해소** | 활성 run에서 `git ls-files \| grep -v '^\.git/make-it-ship'`와 1차 transcript의 for 루프 원문이 allow다. `cat …/runs/r/state.json`, `grep x …/runs/*/events.jsonl`, `echo x > …/current`, `cd .git/make-it-ship && ls`, `cd …/runs && cat */state.json`은 deny다. run이 없어도 runs 쓰기는 deny다(§7 "항상 적용"). `mis status`는 allow다 |
+
+**L-7 수정이 남긴 부작용(남은 위험)**: 정규식을 §7 문구(`make-it-ship/runs`)에 맞춰 좁혔다. 그 결과 활성 run에서도 `rm -rf .git/make-it-ship`, `mv .git/make-it-ship /tmp/x`, `ls .git/make-it-ship`가 allow가 됐다. 1차에서는 이 셋이 deny였다. 상태 루트를 통째로 지우면 run이 사라지고 guard 적용도 꺼진다. 다만 판정 기준상 결함은 아니다. §7 표 행의 기본 형태가 아니고(행 문구는 `make-it-ship/runs`), 스킬이 지시하거나 transcript에 나온 형태도 아니며, `shell.test.mjs` 매트릭스의 상태 경로 클래스(`runs/…`, `current`, cd)에도 들지 않는다. 이 형태로 위조된 VERIFIED는 만들 수 없다(run이 없으면 판정도 없다). 증거 삭제 위험이므로 사람이 판단해야 한다.
+
+### R2-4. D-2 재검증 (실행 흐름 연결)
+
+**정적 연결 — 해소**
+
+- `skills/run/phases/qa.md:14`(8단계): 시뮬레이터 결과는 실기기 검증으로 치지 않는다. `mis ios devices`로 기기를 찾고, 없으면 기기 QA를 보고서에 BLOCKED로 적는다. 기기가 있고 사용자가 OK하면 `${CLAUDE_PLUGIN_ROOT}/templates/ios-debug-bridge/`를 쓴다. ship 전에 제거하고 `mis ios bridge-scan`으로 확인한다.
+- `qa.md:15`(9단계): BSP는 `build-bsp`만으로는 빌드만 증명한다. 타깃 검증에는 `qa-bsp`가 필요하다.
+- `skills/run/phases/ship.md:13`: iOS 프로젝트는 `mis ios bridge-scan`이 빈 결과여야 한다.
+- `skills/qa/SKILL.md`와 `skills/ship/SKILL.md`는 각각 위 phase 파일을 읽는다. 그래서 `/make-it-ship:qa`, `/make-it-ship:ship`, run의 qa/ship 단계 모두 이 지시에 닿는다.
+- README:41-48에 bench, retro, learn, second opinion, BSP, iOS 브리지·devices·bridge-scan, Codex 어댑터가 나온다.
+- 회귀 테스트는 `plugin-files.test.mjs:143`이다.
+- 남은 차이: `skills/qa/SKILL.md`의 description은 여전히 "iOS-simulator surface"라고만 적는다. 본문은 phase 파일을 따르므로 동작에는 영향이 없다.
+- 이 환경의 `mis ios devices` 결과는 `{devices: [], blocked: "no connected iOS device: on-device QA is BLOCKED …"}`였다.
+
+
+**headless `/make-it-ship:qa` — 해소 확인**
+
+실행 조건: 합성 SwiftPM iOS 패키지(`Counter`, SwiftUI `CounterView`, XCTest 1개, `checks.unit = ["swift","test"]`), 연결된 기기 없음. 명령은 `claude -p "/make-it-ship:qa … including on a real iPhone. Proceed without asking questions; do not install anything." --plugin-dir <repo> --setting-sources project --strict-mcp-config --permission-mode bypassPermissions --max-turns 50 --output-format stream-json --verbose`이다. 결과는 success, 11 turns였다.
+
+- **흐름**: 모델이 `qa.md`를 읽었다 → `mis start` → `mis qa detect`(ios 시뮬레이터 표면, `qa-ios` 제안) → `mis ios devices` → `make-it-ship:qa-tester` 서브에이전트 → `CounterViewQATests.swift` 작성 → 시뮬레이터 `xcodebuild test` 통과. 이어서 소스를 일부러 `value += 2`로 바꿔 테스트가 실패하는 것을 확인한 뒤 원복했다. 원복은 직접 확인했다(`Counter.swift:2` `value += 1`). 마지막으로 `mis check unit` PASS를 기록했다.
+- **기기 QA**: 최종 보고는 "I could not verify it on a real iPhone because none is connected"였다. `mis ios devices`의 BLOCKED 문구를 그대로 인용했고, "Still blocked: 1. Real iPhone … the simulator doesn't count as device testing"이라고 적었다. 시뮬레이터 결과를 실기기 검증으로 세지 않았다. 브리지는 기기가 없어서 쓰지 않았다(8단계 지시와 같다).
+- **guard 개입**: `permission_denials`는 정확히 1건이다. 대상은 Bash heredoc으로 `.make-it-ship.json`에 `qa-ios`를 추가하려던 명령이다. 같은 형태를 guard에 직접 넣으면 **ask**가 나온다. 이것은 §7 "설정 변경 → ask"이고, `qa.md` 4단계가 예고한 확인이다. headless라 확인할 수 없을 뿐 오탐은 아니다. 모델은 이를 BLOCKED로 보고하고 사용자에게 승인을 요청했다. 그 밖의 ask/deny는 없었다.
+- **최종 상태(직접 확인)**:
+  - `mis verdict`는 PARTIAL이다(mode·plan 없음, 리뷰 없음, unit STALE — STALE 원인은 아래).
+  - `git status`에는 untracked `.build/`와 새 테스트 파일만 있다. 커밋은 없다.
+
+### R2-5. 범위 메모
+
+- 호출자의 지시로 범위를 좁혔다. 이번 라운드는 VERIFIER_PROMPT 4단계의 Standard stream-json 도그푸딩과 판정 기준 끝 문단(Standard run에서 승인 외 guard 개입 없음 확인)을 다시 실행하지 않았다. 그 대신 headless `/make-it-ship:qa` 1회를 실행했다. Standard 흐름에 대한 근거는 1차 기록뿐이다. 1차 이후 바뀐 guard 정규식(L-7)은 위 직접 probe로만 확인했다.
+- 외부 모델 서비스는 호출하지 않았다.
+
+### R2-6. 남은 위험 (추가)
+
+- **`.build/` STALE**: `/.build`가 `.gitignore`에 없는 SwiftPM 저장소에서는 `swift test` check가 `.build/`를 만든다. 그러면 트리 해시가 바뀌어 check가 곧바로 STALE이 된다. 실측: `mis check unit` PASS 직후 `mis verdict`가 `unit: STALE`이었다. `/.build`를 무시 목록에 넣자 PASS로 유지됐다. 원인은 이번 합성 픽스처다(`swift package init`은 이 ignore를 만든다). 판정이 거짓 VERIFIED 쪽으로 틀리지는 않는다(안전 방향). 다만 사용자를 헷갈리게 할 수 있다.
+- **상태 루트 삭제 허용**: L-7 수정 뒤 `rm -rf .git/make-it-ship`와 `mv .git/make-it-ship …`가 allow다(R2-3 참조).
+- **bridge-scan의 `*.md` 제외**: Markdown(DocC 등) 안의 브리지 코드는 잡지 않는다. Swift 주석의 단어도 잡는 보수적 오탐이 있다.
+- **qa 스킬 description**: `skills/qa/SKILL.md`의 description은 여전히 "iOS-simulator surface"라고만 적는다. 본문이 phase 파일을 따르므로 동작에는 영향이 없다.
+
+### R2-7. 2차 결과 요약
+
+| 항목 | 결과 |
+|---|---|
+| npm test / plugin validate / 스텁 | 317/317 PASS / passed / 0건 |
+| D-1 (MEDIUM) | 해소 — 세 형태 모두 scan `clean:false`, ship `ready:false, PARTIAL`. 제거하면 VERIFIED |
+| D-2 (MEDIUM) | 해소 — qa/ship phase와 README가 연결됐다. headless qa가 `mis ios devices`를 호출했고 기기 QA를 BLOCKED로 보고했다 |
+| L-1, L-2, L-3, L-4, L-6, L-7 | 해소 |
+| L-5 | 부분 해소 — 자리표시는 고쳤다. 짝수 개 run의 중앙값은 위쪽 값으로 남아 있다(**L-5b, LOW**, 재현: 2분·10분 → 10, 위치 `scripts/lib/retro.mjs:43`). 커밋은 이를 고쳤다고 주장한다 |
+
+ROUND2: DEFECTS FOUND

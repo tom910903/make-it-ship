@@ -152,3 +152,8 @@ test('read-only commands that merely mention the state dir in a pattern are allo
   assert.equal(decide('cat .git/make-it-ship/runs/r/state.json'), 'deny');
   assert.equal(decide('cd .git/make-it-ship && ls'), 'deny');
 });
+
+test('deleting or moving the run state dir is denied (M5 round-2 risk; reads of the bare dir name stay allowed)', () => {
+  for (const c of ['rm -rf .git/make-it-ship', 'mv .git/make-it-ship /tmp/x', 'rm -r ./.git/make-it-ship/', 'cp -r x .git/make-it-ship']) assert.equal(decide(c), 'deny', c);
+  assert.equal(decide("git ls-files | grep -v '^\\.git/make-it-ship'"), 'allow');
+});

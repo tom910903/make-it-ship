@@ -14,6 +14,8 @@ export function loadRuns(root) {
   }));
 }
 
+const median = (xs) => (xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2);
+
 export function retroMetrics(runs, { sinceMs = 0 } = {}) {
   const rs = runs.filter((r) => Date.parse(r.state.startedAt) >= sinceMs);
   const ev = (r, type) => r.events.filter((e) => e.type === type);
@@ -40,7 +42,7 @@ export function retroMetrics(runs, { sinceMs = 0 } = {}) {
     resumes: rs.flatMap((r) => ev(r, 'resume')).length,
     blockedReasons: rs.flatMap((r) => ev(r, 'block')).map((e) => e.reason),
     reviewBlocking,
-    medianMinutes: minutes.length ? Math.round(minutes[Math.floor(minutes.length / 2)] * 10) / 10 : 0,
+    medianMinutes: minutes.length ? Math.round(median(minutes) * 10) / 10 : 0,
   };
 }
 

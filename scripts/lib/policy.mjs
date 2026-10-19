@@ -68,6 +68,9 @@ function classifyBash(cmd, ctx, cwd) {
   for (const c of commands) if (c.redirects.some((t) => BASH_STATE.test(t))) return deny('run state is written only by mis.mjs');
   let dir = cwd;
   for (const c of commands) {
+    if (['rm', 'mv', 'cp', 'rsync', 'ln'].includes(c.argv[0]) && c.argv.slice(1).some((a) => /(^|\/)\.git\/(?:[^/]+\/)*make-it-ship\/?$|(^|\/)\.git\/(?:[^/]+\/)*make-it-ship\//.test(a))) {
+      return deny('run state is managed only by mis.mjs (deleting or moving it destroys the run history)');
+    }
     if (c.argv[0] === 'cd' && c.argv[1] && /\.git(\/|$)/.test(c.argv[1]) && /make-it-ship/.test(resolve(dir, c.argv[1]))) {
       return deny('run state is written only by mis.mjs');
     }
