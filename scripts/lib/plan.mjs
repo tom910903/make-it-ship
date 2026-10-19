@@ -8,12 +8,13 @@ const strArr = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' &
 export function validatePlan(p) {
   const errs = [];
   if (!isObj(p)) return ['plan must be an object'];
-  const keys = ['goal', 'constraints', 'nonGoals', 'acceptance', 'tasks', 'plannedFiles', 'riskFlags', 'howToRun'];
+  const keys = ['goal', 'constraints', 'nonGoals', 'acceptance', 'tasks', 'plannedFiles', 'riskFlags', 'howToRun', 'ui'];
   for (const k of Object.keys(p)) if (!keys.includes(k)) errs.push(`unknown key: ${k}`);
   if (typeof p.goal !== 'string' || !p.goal.trim()) errs.push('goal must be a non-empty string');
   for (const k of ['constraints', 'nonGoals', 'acceptance', 'plannedFiles', 'howToRun']) {
     if (p[k] !== undefined && !strArr(p[k])) errs.push(`${k} must be an array of non-empty strings`);
   }
+  if (p.ui !== undefined && typeof p.ui !== 'boolean') errs.push('ui must be true or false (UI project: Web or iOS screens)');
   if (p.riskFlags !== undefined && !(strArr(p.riskFlags) && p.riskFlags.every((f) => RISK_FLAGS.includes(f)))) {
     errs.push(`riskFlags must be a subset of ${RISK_FLAGS.join(', ')}`);
   }

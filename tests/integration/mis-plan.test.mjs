@@ -122,3 +122,28 @@ test('unapproved execution is refused; quick low-risk skips approval', () => {
   ok(mis(dir, ['task', 'T1', 'start']));
   assert.equal(state(dir).state, 'EXECUTING');
 });
+
+test('full mode: approval needs a product review of the current plan; UI plans also need a recorded design choice', () => {
+  const dir = setup({ ...PLAN, ui: true });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', 'plan.json']));
+  ok(mis(dir, ['mode', 'set', 'full', '--reason', 'new app']));
+  ok(mis(dir, ['review', 'add', 'plan-critic', 'critic-ok.md']));
+  no(mis(dir, ['approve', 'plan']), /product review/);
+  ok(mis(dir, ['review', 'add', 'product', 'critic-bad.md']));
+  no(mis(dir, ['approve', 'plan']), /product review has 1 blocking/);
+  ok(mis(dir, ['review', 'add', 'product', 'critic-ok.md']));
+  no(mis(dir, ['approve', 'plan']), /design/);
+  no(mis(dir, ['note', 'design', '-'], { input: '' }), /design note/);
+  ok(mis(dir, ['note', 'design', '-'], { input: '# Chosen: variant B\nDESIGN.md tokens: ...\n' }));
+  assert.equal(ok(mis(dir, ['approve', 'plan'])).state, 'EXECUTING');
+});
+
+test('standard mode does not require product review or design choice', () => {
+  const dir = setup({ ...PLAN, ui: true });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', 'plan.json']));
+  ok(mis(dir, ['mode', 'set', 'standard', '--reason', 'feature']));
+  ok(mis(dir, ['review', 'add', 'plan-critic', 'critic-ok.md']));
+  assert.equal(ok(mis(dir, ['approve', 'plan'])).state, 'EXECUTING');
+});

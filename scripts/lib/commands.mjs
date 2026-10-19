@@ -96,6 +96,12 @@ function executionGates(s, cwd) {
     if (!critic) fail('plan-critic review for the current plan is missing (mis review add plan-critic <file>)');
     if (critic.blocking > 0) fail(`plan-critic review has ${critic.blocking} blocking issue(s); revise the plan`);
   }
+  if (s.mode === 'full') {
+    const product = s.reviews.filter((r) => r.kind === 'product' && r.planHash === s.planHash).at(-1);
+    if (!product) fail('full mode: product review of the current plan is missing (mis review add product -)');
+    if (product.blocking > 0) fail(`product review has ${product.blocking} blocking issue(s); revise the plan`);
+    if (s.plan.ui && !s.notes.some((n) => n.kind === 'design')) fail('full mode UI project: record the chosen design first (design-explore, then mis note design -)');
+  }
   const open = openAmbiguities(s, cwd);
   if (open.length) fail(`unresolved ambiguity: ${open.map((q) => `${q.id} (${q.impact}) ${q.question}`).join('; ')}`);
 }
@@ -428,7 +434,13 @@ function note([kind, ...rest], cwd) {
     const missing = ROOTCAUSE_PARTS.filter((p) => !new RegExp(`^${p}:\\s*\\S`, 'mi').test(text));
     if (missing.length) fail(`root-cause note needs non-empty ${missing.map((p) => `${p}:`).join(', ')} lines`);
     rec = { kind, task: taskId, text };
-  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->>');
+  } else if (kind === 'design') {
+    const [file] = rest;
+    if (!file) fail('usage: mis note design <md-file|->');
+    const text = file === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, file), 'utf8');
+    if (!text.trim()) fail('design note is empty: describe the chosen variant and the design system');
+    rec = { kind, text };
+  } else fail('usage: mis note <dep <text>|rootcause <task> <file|->|design <file|->>');
   return mutate(cwd, (run) => {
     if (TERMINAL.includes(run.state.state)) fail(`run is ${run.state.state}`);
     if (rec.task && !run.state.plan?.tasks.some((t) => t.id === rec.task)) fail(`no task ${rec.task} in plan`);

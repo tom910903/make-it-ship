@@ -12,9 +12,9 @@ function frontmatter(text) {
   return Object.fromEntries(m[1].split('\n').filter((l) => /^\w[\w-]*:/.test(l)).map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
 }
 
-const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer'];
-const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer'];
-const PHASES = ['discover', 'interview', 'plan', 'plan-critique', 'implement', 'debug', 'verify', 'review', 'simplify'];
+const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer'];
+const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
+const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify'];
 const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug'];
 
 for (const a of AGENTS) {
@@ -77,6 +77,8 @@ test('phases name the source features they absorb (Spec §14.2)', () => {
     plan: [/writing-plans/i, /planner/i], 'plan-critique': [/ralplan|critic/i, /autoplan/i],
     implement: [/test-driven-development/i, /executor/i], verify: [/verification-before-completion/i, /verifier/i],
     review: [/requesting-code-review/i, /ponytail-review/i, /cso|security-reviewer/i],
+    'product-review': [/plan-ceo-review/i, /plan-design-review/i, /plan-devex-review/i], design: [/architect/i, /plan-eng-review/i, /diagram/i],
+    'design-explore': [/design-consultation/i, /design-shotgun/i, /design-html/i, /designer/i], parallel: [/ultrawork|team/i, /dispatching-parallel-agents/i, /using-git-worktrees/i],
     debug: [/systematic-debugging/i, /investigate/i, /tracer|trace/i], simplify: [/ponytail-debt/i, /ai-slop-cleaner/i, /code-simplifier/i],
   };
   for (const [p, res] of Object.entries(expect)) {
@@ -101,4 +103,11 @@ test('debug phase enforces the root-cause gate through mis', () => {
   assert.match(t, /mis note rootcause/);
   assert.match(t, /mis task <id> retry/);
   assert.match(t, /REPRODUCTION:/);
+});
+
+test('implementer agent: may write but has no Agent tool and no MCP (allowlist)', () => {
+  const fm = frontmatter(read('agents/implementer.md'));
+  assert.equal(fm.name, 'implementer');
+  assert.equal(fm.tools, 'Read, Write, Edit, Grep, Glob, Bash');
+  assert.match(read('agents/implementer.md'), /untrusted/i);
 });
