@@ -50,15 +50,24 @@ export function parseShell(src, depth = 0) {
       text += c;
       endCmd();
       while (pendingHeredocs.length) {
-        const { delim, strip } = pendingHeredocs.shift();
+        const { delim, strip, argvRef } = pendingHeredocs.shift();
         let j = i + 1;
+        const body = [];
         for (;;) {
           const nl = src.indexOf('\n', j);
           const line = src.slice(j, nl < 0 ? src.length : nl);
           if ((strip ? line.replace(/^\t+/, '') : line) === delim || nl < 0) { i = nl < 0 ? src.length : nl; break; }
+          body.push(strip ? line.replace(/^\t+/, '') : line);
           j = nl + 1;
         }
+        const owner = commands.find((cmd) => cmd.argv === argvRef);
+        if (owner) owner.heredoc = body.join('\n');
       }
+      continue;
+    }
+    if (c === '#' && word === null) { // comment to end of line
+      const nl = src.indexOf('\n', i);
+      i = (nl < 0 ? src.length : nl) - 1;
       continue;
     }
     text += c;
@@ -105,7 +114,7 @@ export function parseShell(src, depth = 0) {
       if (strip) j++;
       while (src[j] === ' ') j++;
       const m = src.slice(j).match(/^(['"]?)([^\s'";|&<>()]+)\1/);
-      if (m) { pendingHeredocs.push({ delim: m[2], strip }); text += src.slice(i + 1, j + m[0].length); i = j + m[0].length - 1; }
+      if (m) { pendingHeredocs.push({ delim: m[2], strip, argvRef: argv }); text += src.slice(i + 1, j + m[0].length); i = j + m[0].length - 1; }
       continue;
     }
     if (c === '>' || c === '<') {
@@ -155,6 +164,7 @@ const WRAPPERS = {
   time: ['-f', '-o', '--format', '--output'],
   timeout: ['-s', '-k', '--signal', '--kill-after'],
   nohup: [], command: [], exec: ['-a'], stdbuf: ['-i', '-o', '-e'], caffeinate: ['-t', '-w'],
+  xargs: ['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a', '--max-args', '--replace', '--delimiter', '--arg-file'],
 };
 const KEYWORDS = ['then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', 'fi', 'done'];
 const SHELLS = /^(ba|z|da|k)?sh$/;
@@ -163,7 +173,7 @@ const SHELLS = /^(ba|z|da|k)?sh$/;
  * Strip assignments, keywords and wrappers; resolve `$VAR` from earlier assignments.
  * @returns {{argv: string[], script?: string}} script = inline code of `sh -c` / `eval`, to be parsed recursively
  */
-export function normalize(argv, vars) {
+export function normalize(argv, vars, heredoc) {
   let a = argv.map((w) => {
     const m = w.match(/^\$\{?(\w+)\}?$/);
     return m && vars.has(m[1]) ? vars.get(m[1]) : w;
@@ -190,8 +200,13 @@ export function normalize(argv, vars) {
   if (SHELLS.test(a[0])) {
     let k = 1;
     let hasC = false;
-    while (a[k]?.startsWith('-')) { if (/^-[a-z]*c[a-z]*$/i.test(a[k])) hasC = true; k++; }
+    while (/^[-+]/.test(a[k] ?? '')) {
+      if (/^[-+][oO]$/.test(a[k])) { k += 2; continue; } // -o pipefail
+      if (/^-[a-z]*c[a-z]*$/i.test(a[k])) hasC = true;
+      k++;
+    }
     if (hasC && a[k] !== undefined) return { argv: a, script: a[k] };
+    if (!hasC && a[k] === undefined && heredoc !== undefined) return { argv: a, script: heredoc }; // bash <<EOF
   }
   if (a[0] === 'eval') return { argv: a, script: a.slice(1).join(' ') };
   return { argv: a };
@@ -205,7 +220,7 @@ export function commandsOf(src, depth = 0) {
   let text = p.text;
   const functions = new Map(p.functions);
   for (const c of p.commands) {
-    const n = normalize(c.argv, vars);
+    const n = normalize(c.argv, vars, c.heredoc);
     if (n.script !== undefined && depth < 5) {
       const inner = commandsOf(n.script, depth + 1);
       out.push(...inner.commands);

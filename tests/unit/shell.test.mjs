@@ -106,3 +106,42 @@ test('every command shape the skills and phases tell the model to run is allowed
 test('documented choice: any shell text naming the state dir outside heredoc data is denied, even in a commit message', () => {
   assert.equal(decide('git commit -m "docs: explain .git/make-it-ship layout"'), 'deny');
 });
+
+// M1 round-4 residual risks R-1..R-6, folded into the matrix as new classes.
+test('R-1: node runtime flags and xargs before mis.mjs approve still ask', () => {
+  for (const c of [`node --no-warnings ${MIS} approve plan`, `node -- ${MIS} approve plan`, `node --trace-warnings --max-old-space-size 4096 ${MIS} approve plan`,
+    `echo plan | xargs node ${MIS} approve`, `xargs -n 1 node ${MIS} approve < f`]) assert.equal(decide(c), 'ask', c);
+  assert.equal(decide(`node --no-warnings ${MIS} status`), 'allow');
+});
+
+test('R-2: shell comments are not commands, and do not hide the next line', () => {
+  assert.equal(decide('npm test # done; npm install x'), 'allow');
+  assert.equal(decide("echo done # don't forget\ngit push --force origin main"), 'deny');
+  assert.equal(decide('echo a#b && git push'), 'ask', '# inside a word is not a comment');
+});
+
+test('R-3..R-6: shell options with values, HEAD on main, package-manager global flags, shell reading a heredoc', () => {
+  assert.equal(decide('bash -o pipefail -c "git push origin x"'), 'ask');
+  assert.equal(decide('bash +o errexit -e -c "git push origin x"'), 'ask');
+  assert.equal(classify({ tool_name: 'Bash', tool_input: { command: 'git push --force origin HEAD' }, cwd: REPO }, { ...ctx, currentBranch: 'main' }).decision, 'deny');
+  assert.equal(decide('git push --force origin HEAD'), 'ask', 'HEAD on a feature branch');
+  for (const c of ['npm --prefix sub install x', 'pnpm -C sub add x', 'pnpm --filter web add x', 'yarn --cwd sub add x', 'pip3 --disable-pip-version-check install x', 'npm -w pkg i x']) {
+    assert.equal(decide(c), 'ask', c);
+  }
+  assert.equal(decide('bash <<EOF\ngit push --force origin main\nEOF'), 'deny');
+  assert.equal(decide("sh -s <<'X'\ngit push origin y\nX"), 'ask');
+  assert.equal(decide("cat <<'X'\ngit push origin y\nX"), 'allow', 'cat reads data, not a script');
+});
+
+const MORE_WRAPPERS = ['xargs ', 'xargs -n 1 '];
+const MORE_CONTAINERS = [(c) => `echo start # note: careful\n${c}`, (c) => `bash -o pipefail -c '${c}'`, (c) => `bash <<'EOF'\n${c}\nEOF`];
+for (const [cmd, want] of CASES) {
+  test(`extended combinations: ${cmd} → ${want}`, () => {
+    const bad = [];
+    for (const wrap of [...CONTAINERS, ...MORE_CONTAINERS]) for (const w of [...WRAPPERS, ...MORE_WRAPPERS]) {
+      const src = wrap(w + cmd);
+      if (decide(src) !== want) bad.push(src);
+    }
+    assert.deepEqual(bad, []);
+  });
+}
