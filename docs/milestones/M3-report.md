@@ -97,3 +97,60 @@ guard: 세 실행 transcript(p1, s1/s1b, full1)에서 ask/deny는 **approve가 �
 - **실행되지 않았는데 통과로 표시된 것이 있는가?** M3-e2e의 주장(p1 VERIFIED, implementer×2 같은 메시지, 병합 뒤 check 재실행, guard 0건)은 이번 재실행(p1, s1b)에서 같은 결과로 재현됐다. 충돌을 헤드리스로 만들지 않고 통합 테스트와 NH-4로 둔 것도 문서에 그대로 적혀 있어 사실과 맞다. 다만 PROGRESS의 M3-04 행은 형식이 깨져 있다(D-2).
 - **테스트가 없는 M3 항목이 있는가?** 없다. product 리뷰 무효화의 전용 테스트만 빠져 있다(R-3).
 - **스텁·skip·빈 구현이 있는가?** 없다.
+
+## 2차 검증 (round 2)
+
+- 검증 일시: 2026-10-19 · 브랜치 `develop` (HEAD `eb430b3` "M3-fix2") · 검증자: 새 독립 검증 에이전트. 1차 검증자, 구현자, 중단된 이전 2차 검증자와 컨텍스트를 공유하지 않았다. 이전 2차 초안은 참고만 했고, 여기 적은 결과는 모두 다시 실행해 얻었다.
+- 대상: 1차 결함 D-1과 D-2, M3-fix가 함께 다룬 위험 R-2(design 노트의 planHash 바인딩)와 R-3(product 리뷰 무효화 테스트), M3-fix2가 다룬 이전 초안 위험 R2-1(product 리뷰가 코드 verdict에 섞이는 문제), 종료 기준(충돌 재현)이 여전히 성립하는지.
+
+### 실행한 명령과 결과
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | **273 / 273 pass**, fail 0, skipped 0, todo 0. 1차의 271건에 M3-fix 1건과 M3-fix2 1건이 더해졌다 |
+| `claude plugin validate .` | **✔ Validation passed** |
+| 스텁 검사(같은 grep) | 상태값 `'TODO'`와 `commands.mjs:482`의 문자열 `'continue with the next TODO task'`만 걸렸다. skip, only, FIXME, not implemented는 0건 |
+| 신규 테스트 변이 검사(저장소 밖 임시 사본) | (1) design 노트의 `planHash` 조건 제거 → `mis-plan.test.mjs` 9번 테스트 **실패**. (2) product 리뷰의 `planHash` 조건 제거 → 같은 테스트 **실패**. (3) `verdict.mjs`를 이전 필터(`kind !== 'plan-critic'`)로 되돌림 → `verdict.test.mjs` "plan-level reviews … never count" **실패**. 새 테스트 세 개는 모두 해당 수정을 실제로 잡아낸다 |
+
+### 수정 확인
+
+| 항목 | 판정 | 증거 |
+|---|---|---|
+| **D-1** approve 단독 실행과 보고 내용-상태 일치 | **FIXED** | 지시: `skills/run/SKILL.md` Hard rules에 "보고하기 전에 기록 내용을 `mis status`로 확인하라"를 추가했다. 5단계에는 "`mis approve plan`은 단독 Bash 명령으로"를 추가했다. `phases/product-review.md` 2단계에는 "approve와 묶지 말고, `mis status`에서 확인하라"를 추가했다. 실사용은 1차와 같은 Full·UI 요청을 데모 p 새 사본에서 재현했다(아래 full-a, full-b). 모델은 `mis approve plan`을 **다른 명령 없이 단독으로** 실행했다(`node …/mis.mjs approve plan`, tool_use `toolu_01LgYP8x…`). product 리뷰 기록, design 노트, plan-critic 기록은 모두 따로 실행했다. `permission_denials`에는 그 approve 1건만 있었다. 최종 메시지의 주장은 이랬다: "critic ACCEPT, product ACCEPT, 둘 다 0 blocking / 0 major", "variant A design 노트가 현재 계획 기준으로 기록됨", "모든 task가 TODO". 이 주장을 `mis status --json`과 대조했다: planHash `3c95c2e2`, product 0/0 @`3c95c2e2`, plan-critic 0/0 @`3c95c2e2`, design 노트 @`3c95c2e2`, 열린 질문 0, AWAITING_APPROVAL. **모두 일치했다.** 모델은 "approve는 실행되지 않았다"고 정확히 보고했다. 운영자 사본(`full-op`)에서 `mis approve plan`을 실행하자 **EXECUTING**이 됐다. 즉 기록된 상태만으로 모든 승인 게이트(product, design, critic, HIGH 질문)를 통과한다. Standard 실행(std-a)에서도 approve는 단독으로 실행됐다 |
+| **D-2** PROGRESS M3-04 행 | **FIXED** | `docs/PROGRESS.md:70`의 작업명은 `mis worktree add/merge <task>: …`로 끝까지 나온다. 열 수는 표 헤더와 같은 7개다(awk로 확인) |
+| R-2 design 노트의 planHash 바인딩 | **FIXED** | `commands.mjs:448`은 노트에 `planHash`를 기록하고, `:103`은 현재 planHash와 맞는 노트만 인정한다. 자동 테스트는 `mis-plan.test.mjs:151-167`이고, 변이 검사에서 실패를 확인했다. CLI 직접 확인: `plan set` 전에 기록한 노트(`planHash:null`)로는 approve가 "record the chosen design for the current plan first"로 거부된다. 실사용 full-b: 모델은 계획을 수정한 뒤 design 노트를 다시 기록했고("re-recorded against the revised plan"), 상태에는 이전 노트 `74686d4f`와 현재 노트 `3c95c2e2`가 모두 남아 있다 |
+| R-3 product 리뷰 무효화 테스트 | **FIXED** | 같은 테스트에서 plan 변경 → critic만 다시 기록 → approve 거부(`/product review/`) → product를 다시 기록 → design 때문에 거부 → design 노트를 다시 기록 → EXECUTING. 변이 (2)에서 이 테스트가 실패한다 |
+| R2-1 product 리뷰가 코드 verdict에 섞이는 문제 (M3-fix2) | **FIXED (주장 확인)** | `verdict.mjs:16-21`의 `PLAN_REVIEWS = ['plan-critic','product']`는 코드 verdict와 HUD(`render.mjs:26`, `currentReviews` 사용) 양쪽에서 제외된다. CLI로 재현했다(데모 p 사본, Full·UI). product 리뷰(BLOCKING 1)를 기록하고 계획을 바꾼 뒤 `mis verdict`와 `mis status`의 "Verdict now"를 확인했다. 결과는 **PARTIAL**(task TODO, unit 미실행, spec·quality 없음)이었다. 이전 초안이 관찰한 "FAILED – product review has 1 blocking issue(s)"는 더 이상 나오지 않는다. 변이 (3)에서 실패하는 단위 테스트가 있다. 남은 불일치는 보고서 렌더러에 있다(아래 R2-3) |
+
+### 종료 기준 유지 (충돌 재현)
+
+- 자동: `node --test tests/integration/mis-worktree.test.mjs` → 4/4 pass. "conflict: overlapping edits are detected, the merge is aborted, the run stays PARTIAL"도 여기에 포함된다.
+- 수동(데모 p 새 사본 `v2/conf`, 모델 없이 CLI만 사용): plan T1(`src/text.js`, `test/text.test.js`), T2(`src/math.js`, `test/math.test.js`) → worktree add ×2 → T1은 `src/text.js`에 줄을 추가하고, T2는 `src/math.js`와 함께 소유 밖인 `src/text.js`에도 줄을 추가한 뒤 각자 커밋하고 task done 처리 → `worktree merge T1` = `merged:true` → `worktree merge T2` = **`merged:false, conflicts:["src/text.js"]`**. `next`에는 rebase 안내가 나왔다. main의 `git status --porcelain`은 비어 있었고 `MERGE_HEAD`는 없었다. T2 worktree는 남아 있었고, main의 `src/text.js`에는 T1 내용만 있었다. 이벤트에는 `worktree-conflict`가 기록됐다. `check unit` PASS + quality 0/0 상태에서도 `mis verdict` = **PARTIAL**("task T2 worktree not merged (conflicts: src/text.js)"). **PASS**.
+- R-4(충돌 시 exit 0)는 그대로다. 1차에서 위험으로 수용했으므로 다시 따지지 않는다.
+
+### 실사용 검증 기록 (모두 `--max-turns 80 --output-format stream-json --verbose`)
+
+| 실행 | 요청 | 경과 | 결과·대조 |
+|---|---|---|---|
+| **std-a** (Standard, 데모 p) | `/make-it-ship:run Implement REQUEST.md in standard mode. The tasks are independent; run them in parallel. Proceed without asking me questions; …stop there and list it.` | interview(MED, 기본값으로 해소) → plan → critic 2라운드(최종 0/0 기록) → `mis parallel plan` = wave 1개 → **`mis approve plan` 단독 실행 → guard ask(헤드리스이므로 거부)** → 정지 | AWAITING_APPROVAL, 코드 변경 0. 최종 메시지와 상태가 일치했다. denials: approve 1건뿐 |
+| **std-b** (운영자 승인 후 재개) | 검증자가 터미널에서 `mis approve plan`(→ EXECUTING)을 실행한 뒤 `--resume`으로 "approved; you may commit .make-it-ship.json; continue in parallel" | 설정 커밋 → worktree add ×2 → implementer ×2를 **같은 assistant 메시지**(`…aU6GER`)로 디스패치 → 각 worktree에서 테스트·커밋 → merge T1, T2(`--no-ff` 2개) → 병합된 main에서 check E3 PASS → spec·quality 리뷰(각 0/0) → **VERIFIED** | denials **0**(result 4건 모두 `[]`). 검증자가 사본에서 직접 `npm test` 실행 → 4 pass / 0 fail. worktree는 정리됐다. `src/math.js`에 한 줄을 추가하자 `mis verdict` = PARTIAL("unit is stale", spec·quality missing), 원복하자 VERIFIED |
+| **full-a** (Full·UI, 1차 D-1 재현 요청) | `/make-it-ship:run Implement UI-REQUEST.md. Use full mode; this is a UI (web) project. Proceed without asking me questions; …` (1차와 같은 UI-REQUEST.md를 사본에 커밋) | explorer → interview → architect → design-explore(`design/DESIGN.md`, 시안 3개, 375/768/1440 스크린샷) → plan(`ui:true`) → critic·product **병렬**로 3라운드(매 라운드 각자 따로 기록) → 디자인을 사용자 대신 고르지 않고 **approve 전에 정지** | AWAITING_APPROVAL, design 노트 0건. 최종 메시지 "product 마지막 0/0, critic 마지막 0/1(major 1)"은 상태(planHash `74686d4f`: product 0/0, plan-critic 0/1)와 일치했다. denials 1건: critic 서브에이전트의 자체 조사 명령 `… && rm -rf /tmp/critic-esm-probe-x`가 `policy.mjs:97` ask('recursive delete outside the repository')로 거부됐다. Spec §7의 "파괴적 로컬: `rm -rf` 저장소 밖 경로 → **ask**" 행과 일치하는 올바른 판정이다. 플러그인이 지시하는 형태도 아니므로 판정 기준 (b)의 오탐이 아니다 |
+| **full-b** (사용자 역할로 재개) | `--resume`: "I choose design variant A … Record the design choice, finish the plan reviews, then ask for plan approval and stop there." | Q1 해소 → design 노트 기록 → 계획 수정(`plan set`) → **design 노트를 현재 planHash로 다시 기록** → critic·product 4라운드(각각 따로 기록, 0/0) → **`mis approve plan` 단독 실행 → ask(거부)** → 정지 | 위 D-1 행 참고. 최종 메시지와 상태가 일치했고 denials는 approve 1건뿐이다. 운영자 사본에서 approve → EXECUTING |
+
+guard: 네 실행의 ask/deny는 approve 2건(std-a, full-b)과 §7에 맞는 `rm -rf /tmp/…` ask 1건(full-a의 critic 서브에이전트)뿐이었다. 판정 기준 (a)~(c)에 해당하는 오판은 없었다. implementer의 worktree 편집(`sed -i`, heredoc), `git commit`, `mis` 호출, 시안 작성, 스크린샷은 모두 allow였다.
+
+대화형 확인 창은 이번에도 헤드리스 ask → 거부까지만 확인했다(**NEEDS_HUMAN**, NH-1 유지).
+
+### 결함 목록 (2차)
+
+없음. D-1과 D-2는 수정이 확인됐고, 새 결함은 발견하지 못했다.
+
+### 남은 위험 (2차 추가)
+
+- **R2-3 보고서 렌더러는 product 리뷰를 아직 코드 리뷰처럼 표시한다**: `render.mjs:63`은 `plan-critic`만 "현재 코드 기준"으로 예외 처리한다. 그래서 다른 트리에서 기록된 product 리뷰는 "이전 코드 기준(무효)"로 표시된다. `render.mjs:77`은 현재 트리의 product 리뷰 major>0을 "확인 필요" 결정 항목으로 올린다. M3-fix2가 주장한 범위("code verdict")는 사실이고 verdict와 HUD에는 영향이 없다. `PLAN_REVIEWS`를 쓰지 않아 `report.md` 표기만 일관되지 않을 뿐이다.
+- **R2-4 design-explore phase 문서가 planHash 바인딩을 말하지 않는다**: `phases/design-explore.md` 4단계는 노트를 기록하라고만 한다. SKILL 단계 순서(2b design-explore → 3 plan)를 그대로 따르면 노트가 `planHash:null`로 기록돼 approve에서 거부된다. 계획을 수정할 때도 노트를 다시 기록해야 한다. 거부되는 쪽으로 안전하게 동작하고, full-b의 모델도 상태를 보고 스스로 다시 기록했으므로 결함은 아니다. 다만 한 번 더 왕복하는 마찰이 생길 수 있다. 이전 초안의 R2-2(모델이 `commands.mjs`를 직접 읽음)는 이번 네 transcript에서 재현되지 않았다(`lib/commands.mjs` 언급 0건).
+- R-1, R-4~R-7은 1차 기록 그대로다(이번 수정 범위 밖).
+
+### 판정
+
+ROUND2: PASS

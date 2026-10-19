@@ -1,5 +1,5 @@
 STATUS: RUNNING
-CURRENT: M3
+CURRENT: M4
 VERIFY: PENDING
 
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -59,6 +59,7 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 | M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | DONE | `docs/milestones/M2-e2e.md` | 데모 D | d4cb653 | d1/d2 강제 종료→resume→VERIFIED; NH-2, NH-3 |
 | M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | DONE | VERIFIER_PROMPT | §11 M2 | (this) | M2-report.md 1~2차, ROUND2: PASS |
 ## M3 — 선택형 협업
+VERIFY: PASSED (2차, `docs/milestones/M3-report.md` ROUND2: PASS) — 태그 `m3-verified`. NEEDS_HUMAN: NH-1, NH-4.
 
 종료 기준(Spec §11): 충돌 재현 테스트.
 
@@ -73,7 +74,7 @@ VERIFY: PASSED (2차, `docs/milestones/M2-report.md` ROUND2: PASS) — 태그 `m
 | M3-07 | architect 에이전트 + design phase(ADR 초안) | DONE | `plugin-files.test.mjs` | §14 design | 875b944 | npm test 244/244, validate ✔ |
 | M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14 design-explore | 875b944 | npm test 244/244, validate ✔ |
 | M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | DONE | `docs/milestones/M3-e2e.md` | §11 M3 | 00f54b2 | p1 VERIFIED, implementer×2 병렬, guard 0건; 충돌은 통합 테스트; NH-4 |
-| M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
+| M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | DONE | VERIFIER_PROMPT | §11 M3 | (this) | M3-report.md 1~2차, ROUND2: PASS |
 ## M4 — 제품화
 
 종료 기준(Spec §11): 새 환경 설치 → 소형 프로젝트 완료.
