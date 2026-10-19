@@ -25,7 +25,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M1-03 | `lib/tree-hash.mjs`: 임시 인덱스 write-tree, 보고서 경로 제외 | DONE | `tests/integration/tree-hash.test.mjs` (수정/신규/ignored/제외/실제 인덱스 불변) | AC#8 | 222ba6c | npm test 20/20 |
 | M1-04 | `lib/state.mjs`: 상태 루트, 원자적 쓰기, events.jsonl, lock(O_EXCL·stale 회수), 전이표 | DONE | `tests/unit/state.test.mjs` | AC#4, AC#10(기반) | 26d1463 | npm test 26/26 |
 | M1-05 | `lib/verdict.mjs`: §6 판정 우선순위 | DONE | `tests/unit/verdict.test.mjs` (table-driven) | AC#9, AC#6 | 9a33e10 | npm test 56/56 |
-| M1-06 | `lib/policy.mjs` + `scripts/guard.mjs` + `hooks/hooks.json` | TODO | `tests/unit/policy.test.mjs`(허용/ask/deny/우회 문자열), `tests/integration/guard.test.mjs` | AC#11 | | |
+| M1-06 | `lib/policy.mjs` + `scripts/guard.mjs` + `hooks/hooks.json` | DONE | `tests/unit/policy.test.mjs`(허용/ask/deny/우회 문자열), `tests/integration/guard.test.mjs` | AC#11 | 6bd6f6c | npm test 128/128, validate ✔ |
 | M1-07 | mis: start, plan set, mode set, interview add/resolve, approve plan | TODO | `tests/integration/mis-plan.test.mjs` (스키마 오류, 위험 하향 거부, HIGH 미해결·critic 미기록 승인 거부, 미승인 전이 거부) | AC#1,#2,#4, 문제#1, P0-03 | | |
 | M1-08 | mis: task start/done/fail, check(spawn·타임아웃·BLOCKED·마스킹) | TODO | `tests/integration/mis-check.test.mjs`, `tests/unit/mask.test.mjs` (STALE 포함) | AC#5, AC#8 | | |
 | M1-09 | mis: review add(엄격 파서), verdict, status, report, block, cancel | TODO | `tests/integration/mis-report.test.mjs` (review 미기록→PARTIAL, status snapshot, 보고서 8항목) | AC#3,#6,#9 | | |
