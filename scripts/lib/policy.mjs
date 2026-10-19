@@ -29,7 +29,7 @@ function gitSub(ws) {
 function classifyPush(rest, ctx) {
   const force = rest.some((w) => /^(-f|--force|--force-with-lease)(=|$)/.test(w) || /^-[a-z]*f/.test(w));
   const refs = rest.filter((w) => !w.startsWith('-'));
-  const targets = refs.slice(1).map(branchName);
+  const targets = refs.slice(1).map(branchName).map((b) => (b === 'HEAD' ? ctx.currentBranch : b));
   const plusMain = refs.slice(1).some((r) => r.startsWith('+') && ['main', 'master'].includes(branchName(r)));
   const onMain = targets.some((t) => t === 'main' || t === 'master') || (!targets.length && ['main', 'master'].includes(ctx.currentBranch));
   if ((force && onMain) || plusMain) return deny('force push to the default branch is not allowed');
@@ -44,9 +44,18 @@ function dangerousRmTarget(t, cwd, repoRoot) {
 }
 
 /** mis subcommand of a command, if it invokes mis.mjs (node <path>/mis.mjs, the script directly, or a shell function wrapping it). */
+const NODE_VALUE_FLAGS = ['-r', '--require', '--import', '--loader', '--experimental-loader', '-C', '--conditions', '--env-file', '--title'];
 function misSub(ws, functions) {
-  if (ws[0] === 'node' && /(^|\/)mis\.mjs$/.test(ws[1] ?? '')) return ws.slice(2);
-  if (ws[0] === 'node' && /^\$\{?\w+\}?$/.test(ws[1] ?? '')) return ws.slice(2); // unresolved variable: could be mis.mjs
+  if (ws[0] === 'node') {
+    let k = 1;
+    while (ws[k]?.startsWith('-')) {
+      if (['-e', '-p', '--eval', '--print'].includes(ws[k])) return null;
+      k += NODE_VALUE_FLAGS.includes(ws[k]) || /^\d+$/.test(ws[k + 1] ?? '') ? 2 : 1;
+    }
+    if (/(^|\/)mis\.mjs$/.test(ws[k] ?? '')) return ws.slice(k + 1);
+    if (/^\$\{?\w+\}?$/.test(ws[k] ?? '')) return ws.slice(k + 1); // unresolved variable: could be mis.mjs
+    return null;
+  }
   if (/(^|\/)mis\.mjs$/.test(ws[0])) return ws.slice(1);
   if (functions.has(ws[0]) && /mis\.mjs/.test(functions.get(ws[0]))) return ws.slice(1);
   return null;
@@ -93,7 +102,13 @@ function classifyBash(cmd, ctx, cwd) {
   return verdict;
 }
 
-function isInstall(ws) {
+const PM_VALUE_FLAGS = ['--prefix', '-C', '--dir', '--filter', '-F', '--cwd', '-w', '--workspace', '--global-folder', '--registry', '--cache'];
+function isInstall(argv) {
+  const ws = [argv[0]];
+  for (let k = 1; k < argv.length; k++) {
+    if (argv[k].startsWith('-') && ws.length === 1 && ['npm', 'pnpm', 'yarn', 'pip', 'pip3'].includes(argv[0])) { if (PM_VALUE_FLAGS.includes(argv[k])) k++; continue; }
+    ws.push(argv[k]);
+  }
   const [a, b] = ws;
   if (['npm', 'pnpm'].includes(a) && ['i', 'install', 'add'].includes(b)) return true;
   if (a === 'yarn' && b === 'add') return true;

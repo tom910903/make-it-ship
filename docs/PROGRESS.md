@@ -1,5 +1,5 @@
 STATUS: RUNNING
-CURRENT: M1
+CURRENT: M2
 VERIFY: PENDING
 
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -15,6 +15,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 - Node v22.20.0은 `.ts`를 의존성 없이 실행(type stripping) → TS 데모를 의존성 0으로 구성 가능.
 
 ## M1 — 핵심 경험
+VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m1-verified`. 1~3차 결함 수정 이력은 보고서 참조. NEEDS_HUMAN: NH-1.
 
 종료 기준(Spec §11): 데모 A/B 수동 E2E 통과, unit/integration 통과.
 
@@ -33,7 +34,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M1-11 | 에이전트 4종 + run/status 스킬 + phases 7종 + 직접 명령 3종 | DONE | `tests/unit/plugin-files.test.mjs`(frontmatter·tools 허용목록·참조 경로), `claude plugin validate .` | §14 discover·interview·plan·plan-critique·implement·verify·review | 85c6253 | npm test 168/168, validate ✔ |
 | M1-12 | evals: 데모 A(TS)·B(Python) 생성 스크립트 | DONE | `tests/integration/evals.test.mjs` (생성 후 기본 테스트 실행 결과 확인) | 데모 A/B | 9c2a860 | npm test 171/171 |
 | M1-13 | E2E: 깨끗한 환경 헤드리스로 데모 A(기능 추가)·B(버그 수정) Quick 경로 → REPORTED, Standard 경로 → 승인 대기에서 정지 | DONE | `docs/milestones/M1-e2e.md` 로그. 승인 이후 대화형 구간은 NEEDS_HUMAN 절차서 | 데모 A/B, AC#12 | b535061 | a1/b1 VERIFIED, a2 정지@승인, a2b VERIFIED; NH-1 대화형 확인 창 |
-| M1-14 | 독립 검증 → `docs/milestones/M1-report.md`, `m1-verified` 태그 | TODO | 새 서브에이전트(컨텍스트 비상속) | §11 M1 | | |
+| M1-14 | 독립 검증 → `docs/milestones/M1-report.md`, `m1-verified` 태그 | DONE | 새 서브에이전트(컨텍스트 비상속) | §11 M1 | (this) | M1-report.md 1~4차, ROUND4: PASS |
 
 ### 원본 흡수 근거 (§14)
 - phase별로 읽은 원본 파일 목록과 핵심 동작 요약: `docs/research/source-absorption-m1.md` (discover·interview·plan·plan-critique·implement·debug·verify·review·simplify). 각 phase 문서 첫 줄 `Absorbs:`에 원본 기능명을 명시하고 `tests/unit/plugin-files.test.mjs`가 이를 검사한다.
@@ -53,6 +54,7 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 | M2-07 | guard: 계획 범위 밖 편집 ask + 우회 문자열 테스트 | DONE | `policy.test.mjs` 확장 | §7, AC#11 | 1739049 | npm test 211/211 (우회 변형 26건 포함) |
 | M2-08 | HUD `scripts/statusline.mjs` + `mis init` statusLine 등록 제안 | DONE | `tests/unit/statusline.test.mjs` | §14 hud | 8c48f4e | npm test 214/214 |
 | M2-09 | doctor (M1-10에서 구현됨) 재확인 | DONE | 기존 테스트 | AC#12 | 07f7a97 (M1-10), cc1f768 | mis-init-doctor.test.mjs 통과; 경고 문구 'enabled in settings' 정정 |
+| M2-07b | guard 매트릭스 밖 형태(M1 4차 R-1~R-6) 처리 + 조합 테스트 확장 | DONE | `shell.test.mjs` | §7, M2 종료 기준 | fddc253 | npm test 253/253 (조합 행렬 확장) |
 | M2-10 | 데모 D(실패 테스트 저장소) + 세션 강제 종료 후 재개 E2E | DONE | `docs/milestones/M2-e2e.md` | 데모 D | d4cb653 | d1/d2 강제 종료→resume→VERIFIED; NH-2, NH-3 |
 | M2-11 | 독립 검증 → `M2-report.md`, `m2-verified` | TODO | VERIFIER_PROMPT | §11 M2 | | |
 ## M3 — 선택형 협업
@@ -93,3 +95,4 @@ VERIFY: PASSED (3c 사용자 확인 완료) — `docs/adr/0001-host-smoke.md`
 - (M1 2차 검증) 모호성 영향도(HIGH/MED/LOW)는 모델이 분류한다. 모델이 HIGH를 MED로 낮추면 승인 게이트가 열린다. 기계로 막을 수 없는 모델 판단 영역이며, 보고서 8절에 해소된 가정을 모두 노출해 사용자가 볼 수 있게 했다.
 - guard는 습관적 셸 형태(변수·함수·서브셸·접두어·제어문·`bash -c`)까지 다루지만, 의도적 난독화(eval, base64 등)는 Spec §7 위협 모델 밖이다.
 - (M2 E2E d2) rootcause 노트 순서는 `task fail` → `retry` 경로에서만 강제된다. 같은 task 안에서 바로 고치면 노트가 수정 뒤에 올 수 있다(모델 판단 영역).
+- (M1 4차 R-1~R-6) guard의 매트릭스 밖 형태: `node --flag mis.mjs approve`, 셸 주석 `#`, `bash -o pipefail -c`, main에서 `git push --force origin HEAD`, `npm --prefix x install`, `bash <<EOF` 본문. M2 guard 우회 사례 작업(M2-07b)에서 처리.
