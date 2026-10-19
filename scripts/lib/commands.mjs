@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig, requiredChecks } from './config.mjs';
-import { createRun, loadRun, saveState, withLock, transition, setCurrent, TERMINAL } from './state.mjs';
+import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAlive, TERMINAL } from './state.mjs';
 import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
@@ -12,7 +12,7 @@ import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
@@ -294,30 +294,43 @@ function check([name], cwd) {
   const root = repoRoot(cwd);
   const cfg = loadConfig(root);
   if (cfg.errors.length) fail(`.make-it-ship.json invalid: ${cfg.errors.join('; ')}`);
-  return mutate(cwd, (run) => {
+  // 1) reserve an evidence id under the lock; 2) run the command WITHOUT the lock (parallel worktrees);
+  // 3) record under the lock. A running/<pid>.json marker lets `mis resume` detect a killed check.
+  const pre = mutate(cwd, (run) => {
     const s = run.state;
     if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
     if (pastDeadline(s)) return deadlineBlock(s);
-    const def = cfg.config?.checks[name];
-    const id = `E${s.evidence.length + 1}`;
-    const rec = { id, check: name, argv: def?.argv ?? null, exitCode: null, status: 'BLOCKED', reason: null,
-      treeHash: treeHash(root), configHash: cfg.configHash, log: `logs/${id}.log`, startedAt: new Date().toISOString(), endedAt: null };
-    let output = '';
-    if (!def) rec.reason = cfg.exists ? `check "${name}" is not defined in .make-it-ship.json` : 'no .make-it-ship.json (run `mis init`)';
-    else {
-      // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
-      const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
-        killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env } });
-      output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-      if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
-      else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
-      else if (r.error) rec.reason = `could not run: ${r.error.message}`;
-      else { rec.exitCode = r.status; rec.status = r.status === 0 ? 'PASS' : 'FAIL'; }
-    }
-    rec.endedAt = new Date().toISOString();
-    const masked = maskSecrets(`$ ${(def?.argv ?? [name]).join(' ')}\n${output}${rec.reason ? `\n[make-it-ship] BLOCKED: ${rec.reason}\n` : ''}`);
-    writeFileSync(join(run.dir, rec.log), masked);
+    s.evidenceSeq = (s.evidenceSeq ?? s.evidence.length) + 1;
+    const id = `E${s.evidenceSeq}`;
+    return { event: { type: 'check-start', id, check: name }, result: { id, dir: run.dir } };
+  });
+  if (pre.state === 'BLOCKED') return pre;
+  const { id, dir } = pre;
+  const marker = join(dir, 'running', `${process.pid}.json`);
+  mkdirSync(join(dir, 'running'), { recursive: true });
+  writeFileSync(marker, JSON.stringify({ pid: process.pid, id, check: name, startedAt: new Date().toISOString() }));
+  const def = cfg.config?.checks[name];
+  const rec = { id, check: name, argv: def?.argv ?? null, exitCode: null, status: 'BLOCKED', reason: null,
+    treeHash: treeHash(root), configHash: cfg.configHash, log: `logs/${id}.log`, startedAt: new Date().toISOString(), endedAt: null };
+  let output = '';
+  if (!def) rec.reason = cfg.exists ? `check "${name}" is not defined in .make-it-ship.json` : 'no .make-it-ship.json (run `mis init`)';
+  else {
+    // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
+      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env } });
+    output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
+    else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
+    else if (r.error) rec.reason = `could not run: ${r.error.message}`;
+    else { rec.exitCode = r.status; rec.status = r.status === 0 ? 'PASS' : 'FAIL'; }
+  }
+  rec.endedAt = new Date().toISOString();
+  const masked = maskSecrets(`$ ${(def?.argv ?? [name]).join(' ')}\n${output}${rec.reason ? `\n[make-it-ship] BLOCKED: ${rec.reason}\n` : ''}`);
+  writeFileSync(join(dir, rec.log), masked);
+  return mutate(cwd, (run) => {
+    const s = run.state;
     s.evidence.push(rec);
+    rmSync(marker, { force: true });
     const tail = masked.split('\n').slice(-40).join('\n');
     const warnings = [];
     const manifests = cfg.config?.dependencyManifests ?? [];
@@ -431,7 +444,16 @@ function resume([runId], cwd) {
     const staleEvidence = s.evidence.filter((e) => e.status !== 'BLOCKED' && evidenceStatus(e, ctx) === 'STALE').map((e) => ({ id: e.id, check: e.check, was: e.status }));
     const inProgressTasks = (s.plan?.tasks ?? []).filter((t) => t.status === 'IN_PROGRESS').map((t) => t.id);
     const openQuestions = s.interview.filter((q) => !q.answer).map((q) => `${q.id} (${q.impact}) ${q.question}`);
+    const interruptedChecks = [];
+    const runningDir = join(r.dir, 'running');
+    for (const f of existsSync(runningDir) ? readdirSync(runningDir) : []) {
+      const m = JSON.parse(readFileSync(join(runningDir, f), 'utf8'));
+      if (pidAlive(m.pid)) continue;
+      interruptedChecks.push({ id: m.id, check: m.check, startedAt: m.startedAt });
+      rmSync(join(runningDir, f), { force: true });
+    }
     const next = [];
+    for (const c of interruptedChecks) next.push(`check ${c.check} (${c.id}) was killed before finishing; its result was not recorded — re-run it`);
     if (r.reclaimedLock) next.push(`a previous mis process (pid ${r.reclaimedLock.pid}) died mid-command; its result was not recorded — re-run it`);
     if (s.state === 'BLOCKED') next.push(`blocked: ${s.blockedReason}${s.blockKind === 'limit' ? ' (user can lift with mis approve continue)' : ''}`);
     if (s.state === 'AWAITING_APPROVAL') next.push('plan approval: mis approve plan');
@@ -440,8 +462,8 @@ function resume([runId], cwd) {
     for (const t of inProgressTasks) next.push(`task ${t} was in progress: verify its state, then continue or mark it`);
     if (!next.length) next.push(TERMINAL.includes(s.state) ? `run is ${s.state}; nothing to resume` : 'continue with the next TODO task');
     return {
-      event: { type: 'resume', reclaimedLock: r.reclaimedLock ?? null, changed: changed.length },
-      result: { runId: s.runId, state: s.state, reclaimedLock: r.reclaimedLock ?? null, changedSinceLastEvent: changed, staleEvidence, inProgressTasks, openQuestions, next },
+      event: { type: 'resume', reclaimedLock: r.reclaimedLock ?? null, interrupted: interruptedChecks.length, changed: changed.length },
+      result: { runId: s.runId, state: s.state, reclaimedLock: r.reclaimedLock ?? null, interruptedChecks, changedSinceLastEvent: changed, staleEvidence, inProgressTasks, openQuestions, next },
     };
   });
 }

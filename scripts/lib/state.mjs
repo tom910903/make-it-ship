@@ -82,25 +82,30 @@ export function readEvents(run) {
   return readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 }
 
-const alive = (pid) => {
+export const pidAlive = (pid) => {
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
 };
+const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-/** O_EXCL lock with PID; a lock whose PID is dead is reclaimed. Sets run.reclaimedLock. */
-export function withLock(run, fn) {
+/**
+ * O_EXCL lock with PID. A lock whose PID is dead is reclaimed (sets run.reclaimedLock).
+ * A live holder is waited for up to waitMs (default MIS_LOCK_WAIT_MS or 30s): locks are held only for short writes.
+ */
+export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS ?? 30000) } = {}) {
   const lock = join(run.dir, 'lock');
-  for (let attempt = 0; ; attempt++) {
+  const until = Date.now() + waitMs;
+  for (;;) {
     try {
       const fd = openSync(lock, 'wx');
       writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
       closeSync(fd);
       break;
     } catch (e) {
-      if (e.code !== 'EEXIST' || attempt > 0) throw e.code === 'EEXIST' ? new Error(`run is locked by pid ${holder(lock)}`) : e;
+      if (e.code !== 'EEXIST') throw e;
       const pid = holder(lock);
-      if (pid && alive(pid)) throw new Error(`run is locked by pid ${pid}`);
-      unlinkSync(lock);
-      run.reclaimedLock = { pid };
+      if (pid && !pidAlive(pid)) { try { unlinkSync(lock); } catch { /* raced */ } run.reclaimedLock = { pid }; continue; }
+      if (Date.now() >= until) throw new Error(`run is locked by pid ${pid}`);
+      sleepMs(20 + Math.floor(Math.random() * 30));
     }
   }
   try { return fn(); } finally { try { unlinkSync(lock); } catch { /* already gone */ } }
