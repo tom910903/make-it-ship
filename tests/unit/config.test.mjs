@@ -55,3 +55,11 @@ test('config hash changes with content, "none" when absent', () => {
   assert.notEqual(hashConfigText('{"a":1}'), hashConfigText('{"a":2}'));
   assert.match(hashConfigText('{}'), /^[0-9a-f]{64}$/);
 });
+
+test('standard/full: every defined qa-* check is required (Spec §14.1 qa); quick is unaffected', () => {
+  const c = normalizeConfig({ version: 1, checks: { unit: { argv: ['x'] }, 'qa-web': { argv: ['y'] }, 'qa-cli': { argv: ['z'] } },
+    required: { quick: ['unit'], standard: ['unit'] } });
+  assert.deepEqual(requiredChecks(c, 'quick'), ['unit']);
+  assert.deepEqual(requiredChecks(c, 'standard'), ['unit', 'qa-web', 'qa-cli']);
+  assert.deepEqual(requiredChecks(c, 'full'), ['unit', 'qa-web', 'qa-cli']);
+});

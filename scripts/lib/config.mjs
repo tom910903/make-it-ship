@@ -73,10 +73,13 @@ export function normalizeConfig(cfg) {
   };
 }
 
-/** Quick → required.quick; Standard/Full → required.standard; default → every defined check. */
+/** Quick → required.quick; Standard/Full → required.standard plus every qa-* check; default → every defined check. */
 export function requiredChecks(config, mode) {
   const key = mode === 'quick' ? 'quick' : 'standard';
-  return config.required[key] ?? Object.keys(config.checks);
+  const base = config.required[key] ?? Object.keys(config.checks);
+  if (mode === 'quick') return base;
+  // Standard/Full: real-use QA checks (qa-*) are always required when defined (Spec §14.1 qa).
+  return [...base, ...Object.keys(config.checks).filter((n) => n.startsWith('qa-') && !base.includes(n))];
 }
 
 export function hashConfigText(text) {

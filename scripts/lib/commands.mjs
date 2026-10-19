@@ -19,6 +19,7 @@ import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
+import { detectQa } from './qa.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -550,6 +551,11 @@ function worktree([sub, id], cwd) {
   });
 }
 
+function qa([sub], cwd) {
+  if (sub !== 'detect') fail('usage: mis qa detect');
+  return detectQa(repoRoot(cwd));
+}
+
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
@@ -573,5 +579,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, block, cancel };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, block, cancel };
 export { requiredChecks };
