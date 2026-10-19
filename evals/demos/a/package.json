@@ -1,0 +1,10 @@
+{
+  "name": "textkit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny string helpers (TypeScript, no dependencies; Node 22.18+ runs .ts directly).",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\""
+  }
+}
