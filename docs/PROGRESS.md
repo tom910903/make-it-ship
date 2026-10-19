@@ -73,7 +73,20 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 | M3-08 | design-explore phase + `mis note design`, Full+UI 승인 게이트 | DONE | `mis-plan.test.mjs` 확장 | §14 design-explore | 875b944 | npm test 244/244, validate ✔ |
 | M3-09 | E2E: 병렬 2작업 + 충돌 시나리오 헤드리스 | DONE | `docs/milestones/M3-e2e.md` | §11 M3 | 00f54b2 | p1 VERIFIED, implementer×2 병렬, guard 0건; 충돌은 통합 테스트; NH-4 |
 | M3-10 | 독립 검증 → `M3-report.md`, `m3-verified` | TODO | VERIFIER_PROMPT | §11 M3 | | |
-## M4
+## M4 — 제품화
+
+종료 기준(Spec §11): 새 환경 설치 → 소형 프로젝트 완료.
+
+| ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
+|---|---|---|---|---|---|---|
+| M4-01 | QA 프로파일 탐지 `mis qa detect`(CLI·API·Web·iOS 시뮬레이터) + Standard/Full에서 `qa-*` check 필수화 | TODO | `tests/integration/mis-qa.test.mjs`, verdict 표 | §14 qa, §14.1 | | |
+| M4-02 | qa phase + qa-tester 에이전트 + `/make-it-ship:qa` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-03 | `mis ship`: PR 초안·체인지로그 초안·릴리스 체크리스트, VERIFIED 아니면 NOT READY | TODO | `tests/integration/mis-ship.test.mjs` | §14 ship | | |
+| M4-04 | ship·docs phase + `/make-it-ship:ship` | TODO | `plugin-files.test.mjs` | §14.3 | | |
+| M4-05 | 데모 C(md 요구사항 → 소형 앱) 픽스처 + Full 경로 E2E | TODO | `docs/milestones/M4-e2e.md` | 데모 C | | |
+| M4-06 | 파일럿 과제 8종 픽스처(PRD 13.3) + 헤드리스 실행 기록 | TODO | `docs/milestones/M4-pilots.md` | §11 M4 | | |
+| M4-07 | 새 환경 설치 검증: 새 clone + 외부 플러그인 없는 설정으로 데모 C 완료, 설치 문서 | TODO | `docs/milestones/M4-e2e.md` | §11 M4 종료 기준 | | |
+| M4-08 | 독립 검증 → `M4-report.md`, `m4-verified` | TODO | VERIFIER_PROMPT | §11 M4 | | |
 ## M5
 
 ## NEEDS_HUMAN
