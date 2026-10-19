@@ -79,7 +79,7 @@ VERIFY: PASSED (4차, `docs/milestones/M1-report.md` ROUND4: PASS) — 태그 `m
 
 | ID | 작업 | 상태 | 완료 조건 / 검증 | 추적 | 커밋 | 증거 |
 |---|---|---|---|---|---|---|
-| M4-01 | QA 프로파일 탐지 `mis qa detect`(CLI·API·Web·iOS 시뮬레이터) + Standard/Full에서 `qa-*` check 필수화 | TODO | `tests/integration/mis-qa.test.mjs`, verdict 표 | §14 qa, §14.1 | | |
+| M4-01 | QA 프로파일 탐지 `mis qa detect`(CLI·API·Web·iOS 시뮬레이터) + Standard/Full에서 `qa-*` check 필수화 | DONE | `tests/integration/mis-qa.test.mjs`, verdict 표 | §14 qa, §14.1 | 8d5d875 | npm test 274/274 |
 | M4-02 | qa phase + qa-tester 에이전트 + `/make-it-ship:qa` | TODO | `plugin-files.test.mjs` | §14.3 | | |
 | M4-03 | `mis ship`: PR 초안·체인지로그 초안·릴리스 체크리스트, VERIFIED 아니면 NOT READY | TODO | `tests/integration/mis-ship.test.mjs` | §14 ship | | |
 | M4-04 | ship·docs phase + `/make-it-ship:ship` | TODO | `plugin-files.test.mjs` | §14.3 | | |
