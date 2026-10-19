@@ -88,3 +88,15 @@ test('plan and review can be piped on stdin (no temp files in the repo)', () => 
   assert.equal(r.major, 2);
   assert.notEqual(mis(dir, ['review', 'add', 'quality', '-'], { input: 'looks good' }).code, 0);
 });
+
+test('report labels plan reviews by plan, not by code (M3 R2-3)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['review', 'add', 'product', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g2', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['review', 'add', 'plan-critic', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  const md = readFileSync(join(dir, ok(mis(dir, ['report'])).path), 'utf8');
+  assert.match(md, /product: blocking 0, major 0 — 이전 계획 기준\(무효\)/);
+  assert.match(md, /plan-critic: blocking 0, major 0 — 현재 계획 기준/);
+});
