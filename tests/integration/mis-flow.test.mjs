@@ -88,6 +88,26 @@ test('B5 secrets: redact scan finds keys planted in the tree and in history; deb
   assert.equal(ok(mis(dir, ['debt', '--json'])).total, 1);
 });
 
+test('M9 redact: personal data and legal markers (opt-in for scan), file --apply replaces values without printing them', () => {
+  const V = { email: 'kim.minsu@corp-mail.io', phone: '010-2345-6789', rrn: '900101-1234567', card: '4111 1111 1111 1111', ssn: '123-45-6789' };
+  const text = `Contact ${V.email} or ${V.phone}\nRRN ${V.rrn}\nCard ${V.card} (not a card: 4111 1111 1111 1112)\nSSN ${V.ssn}\nCONFIDENTIAL - 대외비\nbuild 2026-10-20, v1.2.3.4, ts 1717000000, test@example.com\n`;
+  const dir = makeRepo({ 'notes.md': text });
+  assert.equal(ok(mis(dir, ['redact', 'scan'])).clean, true, 'secrets only by default (the push gate never blocks on an email)');
+  const scan = mis(dir, ['redact', 'scan', '--pii', '--legal']);
+  assert.equal(scan.code, 1);
+  assert.deepEqual(scan.json.findings.map((x) => `${x.line}:${x.kind}`), ['1:email', '1:phone', '2:kr-rrn', '3:credit-card', '4:us-ssn', '5:confidential-marker', '5:confidential-marker-ko']);
+  const one = mis(dir, ['redact', 'file', 'notes.md']);
+  assert.equal(one.code, 1); assert.equal(one.json.findings.length, 7);
+  const applied = ok(mis(dir, ['redact', 'file', 'notes.md', '--apply']));
+  assert.equal(applied.redacted, 5);
+  assert.deepEqual(applied.remaining.map((x) => x.kind), ['confidential-marker', 'confidential-marker-ko'], 'legal markers stay');
+  const after = readFileSync(join(dir, 'notes.md'), 'utf8');
+  assert.match(after, /Contact \[REDACTED-EMAIL\] or \[REDACTED-PHONE\]\nRRN \[REDACTED-KR-RRN\]\nCard \[REDACTED-CREDIT-CARD\] \(not a card: 4111 1111 1111 1112\)\nSSN \[REDACTED-US-SSN\]/);
+  assert.match(after, /build 2026-10-20, v1\.2\.3\.4, ts 1717000000, test@example\.com/, 'dates, versions, timestamps and example addresses are left alone');
+  for (const r of [scan, one, applied && { out: JSON.stringify(applied), err: '' }]) for (const v of Object.values(V)) assert.ok(!r.out.includes(v) && !r.err.includes(v), `value printed: ${v}`);
+  assert.match(mis(dir, ['redact', 'file']).err, /usage/);
+});
+
 test('B5 guard: a push whose unpushed commits contain a secret asks, naming file:line (no run needed)', () => {
   const dir = makeRepo();
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'mis-home-'))); // the guard traces to its state home

@@ -214,8 +214,10 @@ export const EXTERNAL_MIS = [
 export const APPROVAL_MIS = [
   [['approve', 'proposal'], 'mis approve proposal applies a self-improve change to process or skill files'],
   [['deploy', 'setup'], 'mis deploy setup --write saves the deploy configuration (commands that land-and-deploy will run)', { when: '--write' }],
+  [['deploy', 'run'], 'mis deploy run --auto-revert merges and deploys, and if the health check fails it rolls back (the configured rollback command, or git revert of the merge and a redeploy)', { when: '--auto-revert', unless: '--dry-run' }],
   [['deploy', 'run'], 'mis deploy run merges and deploys (runs the configured deploy commands)', { unless: '--dry-run' }],
   [['canary'], 'mis canary loads your deployed site repeatedly in the browser'],
+  [['redact', 'file'], 'mis redact file --apply rewrites the file with personal data and secrets replaced', { when: '--apply' }],
   [['ios', 'sync'], 'mis ios sync --apply overwrites the debug bridge files in this project', { when: '--apply' }],
 ];
 const hit = (mis) => ([prefix, , o = {}]) => prefix.every((w, i) => mis[i] === w) && (!o.when || mis.includes(o.when)) && (!o.unless || !mis.includes(o.unless));
@@ -232,8 +234,10 @@ function misInner(mis, text, ctx, dir) {
   if (mis?.[0] === 'skill' && mis[1] === 'test' && /\bMIS_SKILL_TEST_CMD=/.test(text)) return ask('a custom skill-test agent command (MIS_SKILL_TEST_CMD) may send the skill and scenarios to another service — needs your approval');
   const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
   // M9-D: commands that mis runs for you later are classified like the same Bash command now.
+  const inline = (f) => { const i = (mis ?? []).findIndex((w) => w === f || w.startsWith(`${f}=`)); return i < 0 ? null : mis[i].startsWith(`${f}=`) ? mis[i].slice(f.length + 1) : mis[i + 1] ?? null; };
+  // mis wait auto types --text into the limit-stopped panes: in a shell pane that text runs as a command.
+  if (mis?.[0] === 'wait' && mis[1] === 'auto' && inline('--text')) { const r = classifyBash(inline('--text'), ctx, dir); if (r.decision !== 'allow') return r; }
   if (['wait', 'detach'].includes(mis?.[0]) && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
-  const inline = (f) => { const i = mis.findIndex((w) => w === f || w.startsWith(`${f}=`)); return i < 0 ? null : mis[i].startsWith(`${f}=`) ? mis[i].slice(f.length + 1) : mis[i + 1] ?? null; };
   const later = mis?.[0] === 'self-improve' && mis[1] === 'tournament' ? inline('--bench') : mis?.[0] === 'autoresearch' && mis[1] === 'init' ? inline('--eval') : null;
   if (later) return classifyBash(later, ctx, dir);
   if (mis?.[0] !== 'tty') return allow;

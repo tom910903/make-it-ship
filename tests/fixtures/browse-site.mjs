@@ -25,6 +25,10 @@ export const PAGES = {
   '/app.js': ['text/javascript', "console.log('app loaded'); console.error('boom from app');"],
   '/style.css': ['text/css', '#hover:hover { color: red }'],
   '/next': ['text/html', '<title>Next</title><h1>Next page</h1><a href="/">Home</a>'],
+  // served so the browser's favicon request is no 404 console error racing the console reads
+  '/favicon.ico': ['image/x-icon', ''],
+  // canary --discover: relative and cross-origin entries (only same-origin ones are kept)
+  '/sitemap.xml': ['application/xml', '<?xml version="1.0"?><urlset><url><loc>/frame</loc></url><url><loc>https://other.example/x</loc></url></urlset>'],
   '/frame': ['text/html', '<p id="inner">Inside frame</p><button>Frame button</button>'],
   // a site that turns itself into a blob: document / opens an about:blank popup; both keep the site's origin
   '/blob.html': ['text/html', `<title>Blob maker</title><script>localStorage.secret = 'S3CR3T';

@@ -344,8 +344,23 @@ test('M9-D canary: N checks of each page record HTTP status and console errors; 
   assert.equal(first['/next'].consoleErrors, 0); assert.equal(first['/missing'].status, 404);
   assert.deepEqual(r.json.alerts.map((a) => `${a.level} ${new URL(a.url).pathname}`).sort(), ['CRITICAL /missing', 'HIGH /']);
   ok(mis(dir, ['canary', base, '--pages', '/', '--baseline'], { env: ENV }));
-  const healthy = ok(mis(dir, ['canary', base, '--pages', '/', '--checks', '2', '--interval', '0s'], { env: ENV }));
-  assert.equal(healthy.status, 'HEALTHY', 'the error the baseline already had is not an alert');
+  const healthy = mis(dir, ['canary', base, '--pages', '/', '--checks', '2', '--interval', '0s'], { env: ENV }).json;
+  // load-time alerts (MEDIUM) depend on machine load, so only the error comparison is asserted here (unit test: mis-ops)
+  assert.deepEqual(healthy.alerts.filter((a) => a.level !== 'MEDIUM'), [], 'the error the baseline already had is not an alert');
+});
+
+test('M9 canary: every check saves a screenshot and a load time; --discover adds same-origin pages from sitemap.xml and links', () => {
+  if (!chrome) return blocked(mis(dir, ['canary', base, '--discover', '--checks', '1'], { env: ENV }));
+  const bl = ok(mis(dir, ['canary', base, '--pages', '/next', '--baseline'], { env: ENV }));
+  assert.equal(decodePng(readFileSync(bl.pages[0].screenshot)).width > 0, true);
+  assert.match(bl.pages[0].screenshot, /canary\/baseline\/next\.png$/);
+  const r = mis(dir, ['canary', base, '--discover', '--checks', '1'], { env: ENV }).json;
+  assert.deepEqual(r.pages.map((u) => new URL(u).pathname).sort(), ['/', '/frame', '/next']);
+  for (const p of r.results[0]) {
+    assert.ok(Number.isInteger(p.loadMs) && p.loadMs > 0, `${p.url} load time`);
+    assert.ok(decodePng(readFileSync(p.screenshot)).width > 0, p.screenshot);
+  }
+  assert.match(r.results[0][0].screenshot, /canary\/shots\/.+-1\.png$/);
 });
 
 test('stop shuts the daemon and the browser down; restart brings it back', async () => {

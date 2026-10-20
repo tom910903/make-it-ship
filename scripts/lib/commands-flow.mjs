@@ -3,7 +3,7 @@
 // Storage: per-repo private data (contexts, goals, questions, taste) under the state root (shared by worktrees, outside
 // the code hash); team-shared append-only ledgers (decisions, health) under docs/make-it-ship/*.jsonl.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -12,7 +12,7 @@ import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
 import { stateRoot, loadRun } from './state.mjs';
 import { loadConfig } from './config.mjs';
 import { shortcutDebt, renderDebt } from './debt.mjs';
-import { scanTree, scanHistory, scanText, describeFindings } from './redact.mjs';
+import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
 import { bumpVersion, currentVersion, nextVersion, diffScope, repoMode, LEVELS } from './release.mjs';
 import { QID, validateQuestionLog, deriveProfile } from './questions.mjs';
 import { parseMermaid, toExcalidraw, toSvg } from './diagram.mjs';
@@ -48,13 +48,32 @@ function debt(args, cwd) {
   return args.includes('--json') ? { items, total: items.length, noTrigger: items.filter((d) => !d.trigger).length } : renderDebt(items);
 }
 
+const REDACT_USAGE = 'usage: mis redact scan [--history] [--pii] [--legal] | file <path> [--apply]';
 function redact([sub, ...args], cwd) {
-  if (sub !== 'scan') fail('usage: mis redact scan [--history]');
-  const root = repoRoot(cwd);
-  const findings = [...scanTree(root).map((f) => ({ where: 'tree', ...f })), ...(args.includes('--history') ? scanHistory(root).map((f) => ({ where: 'history', ...f })) : [])];
-  const out = { clean: !findings.length, scope: args.includes('--history') ? 'working tree + git history' : 'working tree', findings,
-    ...(findings.length ? { next: 'Values are not shown. Remove the secret, rotate it (it is compromised once committed), and for history findings rewrite history only with the user\'s approval.' } : {}) };
+  if (sub === 'file') return redactFile(args, cwd);
+  if (sub !== 'scan') fail(REDACT_USAGE);
+  const root = repoRoot(cwd), kinds = kindsWith({ pii: args.includes('--pii'), legal: args.includes('--legal') });
+  const findings = [...scanTree(root, kinds).map((f) => ({ where: 'tree', ...f })), ...(args.includes('--history') ? scanHistory(root).map((f) => ({ where: 'history', ...f })) : [])];
+  const extra = [args.includes('--pii') && 'personal data', args.includes('--legal') && 'legal markers'].filter(Boolean);
+  const out = { clean: !findings.length, scope: (args.includes('--history') ? 'working tree + git history (history: secrets only)' : 'working tree') + (extra.length ? `; secrets + ${extra.join(' + ')}` : ''), findings,
+    ...(findings.length ? { next: 'Values are not shown. Remove the secret, rotate it (it is compromised once committed), and for history findings rewrite history only with the user\'s approval. Personal data: mis redact file <path> --apply replaces it.' } : {}) };
   return findings.length ? failWith(out) : out;
+}
+
+/** One file: secrets, personal data and legal markers by line (values never shown); --apply rewrites the file with
+ *  personal data and secrets replaced (the guard asks). Legal markers are reported, not removed. */
+function redactFile(args, cwd) {
+  const apply = args.includes('--apply'), [path] = args.filter((a) => a !== '--apply');
+  if (!path) fail(REDACT_USAGE);
+  const file = resolve(cwd, path);
+  if (!existsSync(file) || statSync(file).isDirectory()) fail(`no such file: ${path}`);
+  const text = readFileSync(file, 'utf8');
+  const findings = scanText(text, path, kindsWith({ pii: true, legal: true }));
+  if (!apply) return findings.length ? failWith({ clean: false, file: path, findings, next: 'Values are not shown. mis redact file <path> --apply replaces personal data and secrets (legal markers stay; decide with the user whether the document may be shared at all).' }) : { clean: true, file: path, findings };
+  const { text: out, count } = redactText(text);
+  if (count) { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, out); renameSync(tmp, file); }
+  const left = scanText(out, path, kindsWith({ pii: true, legal: true }));
+  return { file: path, redacted: count, remaining: left, ...(left.length ? { next: 'Remaining findings are legal markers or patterns that cannot be replaced safely; review them by hand.' } : {}) };
 }
 
 const WEIGHTS = [[/test/i, 30], [/type|tsc|mypy/i, 25], [/lint|eslint|ruff|clippy/i, 20], [/build|compile/i, 15]];
