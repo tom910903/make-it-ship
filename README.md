@@ -75,8 +75,17 @@ The plugin ships an MCP server (`.mcp.json`), so these tools appear as `mcp__plu
 - `ast_grep_replace` and `lsp_rename` change files only with `apply: true`; while a run is active the guard asks before they (and `lsp_code_action_resolve`) rewrite files, and freeze applies to them.
 - Note: Claude Code does not load a plugin's MCP server when started with `--strict-mcp-config`.
 
+## Browser (built in, no Playwright)
+`mis browse <command>` drives a real headless Chrome, Chromium or Edge already on the machine through the DevTools Protocol. Nothing is installed. One daemon runs per worktree; its state lives in `.git/make-it-ship/browse/`, or `~/.make-it-ship/browse/` outside a repo. It starts on the first command and stops after 30 idle minutes. If no browser is found, commands print `BLOCKED`.
+- **Commands:** `goto`, `snapshot -i` (`@e` refs for `click`/`fill`/…), `text`, `console --errors`, `network`, `perf`, `screenshot`, `responsive`, `pdf`, `diff`, tabs and frames, `chain`, and `handoff`/`resume` (a visible window for CAPTCHA or MFA, then back to headless with the cookies kept). `mis browse` lists them all; see `skills/browse/SKILL.md`.
+- **Guard:** `storage`, `js` and `eval` run freely on local pages (localhost, `file:`). On real sites they need `--remote`, and the guard asks you. Raw `mis browse cdp` always asks.
+- `mis pdf <file.md> [-o out.pdf]` makes a print-ready PDF from markdown (remote images blocked unless `--allow-network`).
+- `mis visual-verdict <shot.png> <ref.png>` compares two screenshots pixel by pixel: JSON with a 0–100 score (90 or more passes; otherwise exit 1) and a diff image.
+- Web QA (`/make-it-ship:qa`) uses this browser when the project has no Playwright. That covers report-only QA, a design-review loop with live screenshots, and page benchmarks.
+- Cookie import, connecting to your own Chrome, downloads and scraping are not included yet.
+
 ## `mis` CLI
-You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`.
+You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`.
 
 ## Configuration: `.make-it-ship.json`
 ```json

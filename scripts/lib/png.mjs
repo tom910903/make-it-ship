@@ -1,0 +1,107 @@
+// Minimal PNG codec (node:zlib only) and pixel comparison for `mis visual-verdict` (absorbs OMC visual-verdict).
+import { inflateSync, deflateSync } from 'node:zlib';
+
+const SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+export function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** @returns {{width:number, height:number, data:Uint8Array}} RGBA, 8 bits per channel */
+export function decodePng(buf) {
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(SIG)) throw new Error('not a PNG file');
+  let pos = 8, hdr = null, plte = null, trns = null;
+  const idat = [];
+  while (pos + 8 <= buf.length) {
+    const len = buf.readUInt32BE(pos), type = buf.toString('latin1', pos + 4, pos + 8), data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === 'IHDR') hdr = { width: data.readUInt32BE(0), height: data.readUInt32BE(4), depth: data[8], color: data[9], interlace: data[12] };
+    else if (type === 'PLTE') plte = data;
+    else if (type === 'tRNS') trns = data;
+    else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+    pos += 12 + len;
+  }
+  if (!hdr) throw new Error('PNG without IHDR');
+  // shortcut: Adam7 interlacing is not decoded; browser screenshots are never interlaced. Add the 7-pass walk if needed.
+  if (hdr.interlace) throw new Error('interlaced PNG is not supported (re-save it without interlacing)');
+  const { width: w, height: h, depth, color } = hdr;
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[color];
+  if (!channels) throw new Error(`unsupported PNG color type ${color}`);
+  const bits = channels * depth, bpp = Math.max(1, bits >> 3), stride = Math.ceil((w * bits) / 8);
+  const raw = inflateSync(Buffer.concat(idat));
+  const px = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++) {
+    const ft = raw[y * (stride + 1)], src = y * (stride + 1) + 1, row = y * stride, up = row - stride;
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? px[row + i - bpp] : 0, b = y ? px[up + i] : 0, c = y && i >= bpp ? px[up + i - bpp] : 0;
+      let pred = 0;
+      if (ft === 1) pred = a; else if (ft === 2) pred = b; else if (ft === 3) pred = (a + b) >> 1;
+      else if (ft === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      else if (ft !== 0) throw new Error(`bad PNG filter ${ft}`);
+      px[row + i] = (raw[src + i] + pred) & 255;
+    }
+  }
+  const max = (1 << depth) - 1;
+  const sample = (row, idx) => { // idx-th sample of the row, scaled to 8 bits
+    if (depth === 8) return px[row + idx];
+    if (depth === 16) return px[row + idx * 2];
+    const bit = idx * depth, v = (px[row + (bit >> 3)] >> (8 - depth - (bit & 7))) & max;
+    return color === 3 ? v : Math.round((v * 255) / max);
+  };
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const o = (y * w + x) * 4, r = y * stride, s = x * channels;
+    if (color === 3) {
+      const i = sample(r, x);
+      out.set([plte[i * 3], plte[i * 3 + 1], plte[i * 3 + 2], trns && i < trns.length ? trns[i] : 255], o);
+    } else if (color === 0 || color === 4) {
+      const g = sample(r, s);
+      out.set([g, g, g, color === 4 ? sample(r, s + 1) : 255], o);
+    } else out.set([sample(r, s), sample(r, s + 1), sample(r, s + 2), color === 6 ? sample(r, s + 3) : 255], o);
+  }
+  return { width: w, height: h, data: out };
+}
+
+export function encodePng({ width, height, data }) {
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) Buffer.from(data.buffer, data.byteOffset + y * width * 4, width * 4).copy(raw, y * (width * 4 + 1) + 1);
+  const chunk = (type, d) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(d.length);
+    const td = Buffer.concat([Buffer.from(type, 'latin1'), d]), crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([SIG, chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+/**
+ * Pixel diff over the union of both canvases (area only one image covers counts as different).
+ * A pixel differs when any channel, composited over white, differs by more than `tolerance` (0-255).
+ * @returns {{score:number, diffPixels:number, totalPixels:number, sizeMatch:boolean, hotspots:object[], diff:object}}
+ */
+export function compareImages(a, b, { tolerance = 16, grid = 8 } = {}) {
+  const W = Math.max(a.width, b.width), H = Math.max(a.height, b.height), total = W * H;
+  const diff = { width: W, height: H, data: new Uint8Array(total * 4) };
+  const cw = Math.ceil(W / grid), ch = Math.ceil(H / grid), cells = new Array(grid * grid).fill(0);
+  const over = (img, o, k) => 255 - ((255 - img.data[o + k]) * img.data[o + 3]) / 255;
+  let n = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const o = (y * W + x) * 4, inA = x < a.width && y < a.height, inB = x < b.width && y < b.height;
+    const oa = (y * a.width + x) * 4, ob = (y * b.width + x) * 4;
+    let differs = !inA || !inB;
+    if (!differs) for (let k = 0; k < 3 && !differs; k++) differs = Math.abs(over(a, oa, k) - over(b, ob, k)) > tolerance;
+    if (differs) { n++; cells[Math.floor(y / ch) * grid + Math.floor(x / cw)]++; diff.data.set([255, 0, 0, 255], o); }
+    else { const g = 200 + Math.round((0.3 * over(b, ob, 0) + 0.59 * over(b, ob, 1) + 0.11 * over(b, ob, 2)) * 55 / 255); diff.data.set([g, g, g, 255], o); }
+  }
+  let score = Math.floor(((total - n) * 100) / total);
+  if (n && score === 100) score = 99;
+  const hotspots = cells.map((c, i) => {
+    const x = (i % grid) * cw, y = Math.floor(i / grid) * ch, w = Math.min(cw, W - x), h = Math.min(ch, H - y);
+    return { x, y, width: w, height: h, diffPixels: c, percent: Math.round((c * 1000) / Math.max(1, w * h)) / 10 };
+  }).filter((c) => c.diffPixels > 0).sort((p, q) => q.diffPixels - p.diffPixels).slice(0, 5);
+  return { score, diffPixels: n, totalPixels: total, sizeMatch: a.width === b.width && a.height === b.height, hotspots, diff };
+}

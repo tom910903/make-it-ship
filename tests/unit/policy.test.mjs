@@ -201,3 +201,18 @@ test('M6 D8: unstaging is not a discard', () => {
   assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
   assert.equal(d(bash('git restore -S .')), 'allow');
 });
+
+test('M8 browse: raw CDP and --remote storage/JS on real sites ask, with or without a run; other browse commands pass', () => {
+  const idle = { ...ctx, activeRun: false };
+  const MIS = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
+  for (const c of [`${MIS} browse cdp Network.getAllCookies`, 'node "$MIS" browse cdp Page.getLayoutMetrics', 'node /p/scripts/mis.mjs browse cdp X.y',
+    `${MIS} browse storage --remote`, `${MIS} browse js document.cookie --remote`, `${MIS} browse --remote eval x.js`,
+    `${MIS} browse chain '[["storage"]]' --remote`, 'mis() { node /p/scripts/mis.mjs "$@"; }; mis browse cdp X.y']) {
+    for (const c2 of [ctx, idle]) assert.equal(d(bash(c), c2), 'ask', c);
+  }
+  assert.match(classify(bash(`${MIS} browse cdp X.y`), idle).reason, /cookies/);
+  for (const c of [`${MIS} browse goto http://localhost:3000`, `${MIS} browse storage`, `${MIS} browse js document.title`,
+    `${MIS} browse snapshot -i`, `${MIS} browse click @e3`, `${MIS} browse screenshot /tmp/a.png`, 'echo browse cdp']) {
+    assert.equal(d(bash(c), idle), 'allow', c);
+  }
+});
