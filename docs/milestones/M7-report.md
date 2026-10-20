@@ -345,3 +345,121 @@ ROUND2: DEFECTS FOUND
 - N8의 lost update 경로(5초 넘게 멈추는 상황을 만들지 않았다), N5 `'exit'`/stdio 순서 경쟁의 실제 발생.
 
 ROUND3: DEFECTS FOUND
+
+## 4차 검증 (round 4)
+
+- 대상: 브랜치 `m7-wip`, HEAD 4decb41 (3차 이후 수정 커밋 1개: N2 나머지·N7·N8, 5개 파일). 커밋 메시지의 수정 주장은 근거로 쓰지 않고 재현으로 판정했다.
+- 검증자: 독립 검증 에이전트(구현 미참여). 임시 디렉터리는 모두 저장소 밖(`$TMPDIR`, scratchpad `r4/`). 비교용 옛 코드는 `git archive 9b35d38`/`23a2307`로 scratchpad에 풀어 썼다.
+
+### 기본 확인
+- `claude plugin validate .`: ✔ Validation passed
+- `npm test` (순차 실행): 1회 420/420 (133초), 2회 420/420 (106초), **3회 419/420 실패 1건** (68초), 추가 4회 420/420 (96초). 1~3회는 내 N7·N8 probe·스트레스 smoke와 시간이 겹쳤다.
+  - 실패한 것: `tests/unit/lsp-client.test.mjs` "LspClient against the fake server…" — `hover 한글 1:2 cfg=none`이 `/cfg=\[null\]/`와 맞지 않음. 이 파일은 a51d38f(M7-04) 이후 바뀌지 않았으므로 4decb41의 회귀는 아니다.
+  - 이 파일만 반복 실행: 스트레스 부하 중 0/30 실패, 유휴 상태 2/30 실패, 추가 40회 안에서 다시 같은 메시지로 실패를 잡았다.
+  - 원인(코드 확인): `LspClient.onServerRequest`는 `workspace/configuration`에 바로 응답한다(클라이언트 순서는 문제없음). 그런데 fake server(`tests/fixtures/fake-lsp.mjs:60`)는 응답을 `.then`(microtask)에서 `configResult`에 넣는다. 설정 응답과 hover 요청이 같은 stdin chunk로 도착하면 동기 파싱 루프가 hover를 먼저 처리해 `cfg=none`을 돌려준다. **테스트 fixture의 경쟁이고 제품 결함은 아니다.** 다만 필수 검사 `npm test`가 약 5% 확률로 실패한다.
+
+### N2 나머지 (저장소 밖 PostToolUse 학습)
+
+| 시험 | 결과 |
+|---|---|
+| 비저장소 A(Cargo.toml)에서 PostToolUse Bash `cargo test`, `npm test`, `pytest`, `make test`, `node --test` 각 1회, 그리고 A/sub에서 `cargo test` | 전역 `MIS_STATE_HOME/memory/project.json` **생성 안 됨**(`sessions/`, `trace.jsonl`만 생김). 모두 exit 0 |
+| 이어서 빈 비저장소 B의 SessionStart | `## Project` 0회 (주입 없음) |
+| 저장소 R의 하위 디렉터리 `R/sub`에서 PostToolUse `pytest` | `R/.git/make-it-ship/memory/project.json`에 `testCommand: "pytest"` 학습됨. 이후 R SessionStart에 ``## Project / test: `pytest` `` 주입 |
+| 새 저장소 R2: 루트 SessionStart → `R2/sub`에서 PostToolUse `pytest` | `projectRoot` = R2, languages JavaScript 유지, `testCommand: "pytest"` 학습 |
+
+판정: **FIXED**. 추가된 테스트 "M7 N2 (rest)"도 같은 경로를 본다.
+
+정보(기존 동작, 판정과 무관):
+- SessionStart 없이 저장소 하위 디렉터리에서 PostToolUse가 먼저 오면 `projectRoot`가 `R/sub`, languages `[]`로 기록된다. 이후 루트 SessionStart도 고치지 않는다. 9b35d38·23a2307에서도 같다.
+- 저장소 밖 SessionStart는 git의 `fatal: not a git repository…`를 stderr로 내보낸다(exit 0, 주입 내용 정상). 9b35d38·23a2307에서도 같다.
+
+### N7 (빈/깨진 lock 회수, fd 누수)
+
+`withLock`을 직접 호출하는 probe:
+
+| lock 내용 | 나이 | 결과 |
+|---|---|---|
+| `''`, `garbage`, `{"pid":`, `null`, `{"x":1}`, `{"pid":0}`, `"  \n"` | 10초 | 모두 회수 후 실행(113~205ms), lock·`.reclaim` 남지 않음 |
+| `''` | 새로 만듦 | `waitMs 1500` → `run is locked by pid ` 오류, lock은 그대로(빈 내용). 빼앗지 않음 |
+| `''` | 3초 | `waitMs 8000` → 2127ms에 회수(5초가 될 때까지 기다린 뒤 회수) |
+| `garbage` | 새로 만듦 | `waitMs 1000` → 대기 후 오류, lock 그대로 |
+
+**fd 누수**: `fs.writeFileSync`를 ENOSPC를 던지게 바꾸고(`syncBuiltinESMExports`) `withLock` 500회를 호출했다.
+- 4decb41: 500회 모두 ENOSPC, `/dev/fd` 12→12, lock 남지 않음, 이어진 정상 lock은 2ms에 성공.
+- 대조군 9b35d38: fd 12→13(누수), 빈 lock이 남아 이후 499회가 `run is locked by pid `로 실패, 정상 lock도 실패.
+
+판정: 위 기준(오래된 빈/깨진 lock 회수, 새 lock 대기, fd 누수 없음)은 **충족**. 그러나 아래 결함 N9를 찾았다.
+
+**N9 (새 결함, N7 수정이 만든 경로): 오래된 빈 lock을 회수할 때 막 생긴 새 lock을 지울 수 있다.**
+- 원인: `reclaimLock`은 "판단 당시 내용과 지금 내용이 같은가"만 비교한다. 그런데 `''`는 모든 새 lock이 `openSync('wx')`와 `writeFileSync` 사이에 잠깐 갖는 내용과 같다. 또 `.reclaim`을 잡은 뒤 lock의 나이를 다시 보지 않는다.
+- 사고 순서: waiter A와 B가 같은 오래된 빈 lock을 orphan으로 판정 → B가 회수 → writer W가 새 lock을 만들고 아직 내용을 쓰기 전 → A가 `.reclaim`을 잡고 `readLock === ''`이므로 W의 lock을 지움 → W는 lock을 쥐었다고 믿고, X도 새 lock을 잡는다. 두 writer가 동시에 들어가 lost update가 난다.
+- 결정적 재현(한 프로세스에서 순서를 그대로 실행): A의 `reclaimLock(lock, '')`가 0ms 된 W의 lock을 지우고 `true`를 반환했다. 이어서 X의 `openSync('wx')`도 성공했다.
+- 창을 넓힌 재현: HEAD 사본에서 `openSync`와 `writeFileSync` 사이에 30ms, orphan 판정과 `reclaimLock` 사이에 0~300ms sleep을 넣고, 아래 스트레스 하네스로 실프로세스 writer 10개를 돌렸다.
+  - `empty` 시나리오 15회: **lost update 19건(5회)**. 유실이 난 회차는 모두 lock 내용이 `''`인 홀수 회차였고, `{"pid":` 회차에서는 없었다.
+  - 대조 `dead`(dead-pid lock) 10회: 0건.
+  - 넓히지 않은 실제 코드에서는 재현되지 않았다(아래 표 `empty` 25회, `empty-kill` 20회 모두 0건).
+- 범위와 위험: dead-pid lock과 내용이 있는 깨진 lock은 해당 없다(내용에 pid+ms 시각이 들어 있어 유일하다). 전제는 두 가지다. 먼저 생성과 기록 사이의 크래시로 빈 lock이 남아 있어야 하고, waiter 하나가 판정과 회수 사이에서 µs~ms 동안 선점돼야 한다. 5초 넘는 정지는 필요 없다. 4decb41 전에는 빈 lock을 아예 회수하지 않았으므로 이 경로가 없었다.
+- 수정 방향(참고): `.reclaim`을 잡은 뒤 lock의 나이(mtime > 5초)나 inode를 다시 확인하고 나서 지운다.
+
+**정보**: `closeSync`가 기록 후 EIO를 던지는 경우를 모의하면 자기(살아 있는) pid가 담긴 lock이 남는다. 같은 프로세스의 다음 `withLock`은 `run is locked by pid <자기 pid>`로 실패한다(fd 누수는 없다). 로컬 파일에서 close가 실패하는 일은 거의 없고, 의미가 있는 것은 MCP 서버처럼 오래 사는 프로세스뿐이다.
+
+### N8 (회수 대기 중 바쁜 대기, RISKS 기록)
+
+**CPU 측정**: dead-pid lock과 방금 만든 `.reclaim`을 둔 상태에서 `withLock` 1회 호출(`process.cpuUsage`).
+
+| 코드 | 벽시계 | CPU | 결과 |
+|---|---|---|---|
+| 4decb41 | 5073ms | 49ms (**1%**) | 5초 뒤 `.reclaim` 회수 → 성공, 잔존 없음 |
+| 9b35d38 (대조) | 5038ms | 3825ms (76%) | 같음 |
+
+바쁜 대기는 **FIXED**. `.reclaim`이 사용 중이면 `reclaimLock`이 `false`를 반환하고 waiter는 `sleepMs`로 간다. 아무것도 회수하지 않았을 때 `run.reclaimedLock`이 설정되던 사소한 문제도 사라졌다.
+
+**RISKS 기록**(`docs/PROGRESS.md` "(M7 N8)") 정확성: **부분적으로만 정확하다.**
+- 맞는 부분: 오래된 `.reclaim`의 stat→unlink가 원자적이지 않아 reclaimer 둘이 겹칠 수 있다는 점, 겹쳐도 lost update까지 가려면 µs 창이 더 필요해 실사용 위험이 낮다는 점.
+- 틀리거나 빠진 부분:
+  1. 전제를 "reclaimer가 5초 넘게 멈추면(SIGSTOP)"으로만 적었다. **`.reclaim`을 쥔 채 죽는 경우(SIGKILL, 크래시)**도 같은 전제를 만들고, 이쪽이 더 흔하다. 이번 스트레스에서도 160회 중 2회 죽은 reclaimer의 `.reclaim`이 남았다(5초 뒤 자가 회복). 3차에서도 1회 관찰됐다.
+  2. 근거로 든 "230회 동시성 스트레스에서 유실 0건(M7 3차)"은 9b35d38(이번 수정 전 코드)에서 잰 값이다. 또 그 스트레스는 이 경쟁을 일부러 만들지 않았으므로 이 위험의 근거가 되지 않는다.
+  3. 위 N9(빈 lock 회수 ABA)는 5초 정지 없이 µs 선점만으로 생기는데 RISKS에 없다. 코드의 `shortcut:` 주석도 같은 내용만 적고 있다.
+
+**스트레스 (4decb41)**
+- 각 회차마다 새 저장소와 `mis start --input x`로 새 run을 만들고, `mis interview add` writer N개를 동시에 실행했다.
+- 판정 기준: exit 0인 writer의 질문이 `state.json`에 없으면 lost update. id 중복, `state.json` 파싱 실패, lock·`.reclaim` 잔존도 함께 검사했다.
+- 하네스 자체 검증: lock을 끈 사본(`R4_NOLOCK`)으로 5회×8개를 돌려 **35건 유실을 검출**했다.
+- 부하: load average 22~37(다른 worktree 작업과 내 LSP 반복 실행이 겹침).
+
+| 시나리오 | 반복 | N | exit 0 | SIGKILL | lost update | 기타 |
+|---|---|---|---|---|---|---|
+| plain | 30 | 8 | 240 | 0 | **0** | 없음 (최대 9.2초) |
+| dead-pid lock 미리 둠 | 30 | 12 | 360 | 0 | **0** | 없음 |
+| dead-pid lock + writer 1/4을 40~160ms에 SIGKILL | 30 | 10 | 210 | 90 | **0** | 없음 |
+| 10초 된 빈/깨진 lock(`''`·`{"pid":` 번갈아) | 25 | 10 | 250 | 0 | **0** | 없음 |
+| 위 + writer 1/4 SIGKILL | 20 | 12 | 180 | 60 | **0** | 1회 `.reclaim` 잔존 |
+| dead-pid lock + writer 1/2을 5~200ms에 SIGKILL | 25 | 12 | 150 | 150 | **0** | 1회 `.reclaim` 잔존 |
+| 합계 | **160** | | **1390** | 300 | **0** | 실패(exit≠0) 0, id 중복 0, state 손상 0, lock 잔존 0 |
+
+`.reclaim` 잔존 2회는 죽은 reclaimer가 남긴 것이고, 다음 writer가 5초 뒤 지운다. 바로 RISKS 경쟁의 전제 조건이다.
+
+### 이전 수정 spot-check (MCP stdio + 훅 직접 실행)
+- N1: `wiki_ingest`가 `.GIT/config`, `.Git/HEAD`, `sub/../.GIT/config`, 절대 경로 `<repo>/.GIT/config`를 모두 `git internals are not wiki material`로 거부 — 유지.
+- N5: `open(f,'a').write('x\n'); os._exit(1)` → `python process exited while running this code (it was not retried)`, 파일 1줄, 다음 호출 `7\n` — 유지.
+- N3: priority 메모가 있는 저장소에서 `source=compact`·`resume` 모두 `## Project` 1회, priority 1회, test 명령 포함 — 유지.
+
+### 4차 결함 목록
+
+| ID | 심각도 | 출처 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|---|
+| N9 | 낮음 | N7 수정(4decb41) | 오래된 빈 lock을 회수할 때 내용(`''`)만 비교하고 나이를 다시 보지 않는다. 그래서 다른 waiter가 먼저 회수한 뒤 생긴 새 lock(생성~기록 사이)을 지울 수 있고, 두 writer가 동시에 들어간다. "새 빈 lock은 빼앗지 않는다"는 N7 기준에 어긋난다. RISKS에도 없다. | 순서 재현 probe: 0ms 된 새 lock 삭제 후 두 번째 `wx` 성공. 창을 넓힌 사본: `empty` 15회 중 19건 유실. 실제 코드 무부하 재현은 안 됨 | `scripts/lib/state.mjs` `reclaimLock`(`readLock(lock) === seen`), `withLock` orphan 분기 |
+| N10 | 낮음 | M7-04 테스트 fixture (회귀 아님) | `lsp-client.test.mjs`가 fake server의 `workspace/configuration` 응답 처리(`.then`)와 hover 처리 순서 경쟁으로 가끔 실패한다(유휴 2/30, `npm test` 4회 중 1회). 필수 검사가 flaky하다. | 그 파일만 30~40회 반복 | `tests/fixtures/fake-lsp.mjs:60`, `tests/unit/lsp-client.test.mjs:72` |
+| N8-doc | 낮음 (문서) | N8 RISKS 기록 | 위험 전제가 "5초 넘게 멈춤"만 적혀 있다. `.reclaim`을 쥔 채 죽는 경우가 빠졌고, 근거 수치는 수정 전 코드의 값이다. N9도 누락됐다. | 위 RISKS 절 | `docs/PROGRESS.md` RISKS, `state.mjs` `shortcut:` 주석 |
+
+3차 결함 최종:
+- N2: **FIXED** (저장소 밖 PostToolUse에서 전역 기록 없음, 저장소 안 학습 유지).
+- N7: **FIXED** (오래된 빈/깨진 lock 회수, 새 lock 대기, fd 누수 없음은 대조군으로 확인). 단, 수정이 새 경쟁 N9를 만들었다.
+- N8: **바쁜 대기 FIXED** (CPU 76%→1%). 남은 경쟁의 RISKS 기록은 불완전하다(N8-doc).
+- 스트레스 160회·1390 쓰기에서 lost update 0. validate 통과. npm test는 4회 중 3회 통과(실패 1회는 N10 fixture 경쟁).
+
+### 4차 미검증
+- 대화형 세션, Linux(대소문자 구분 FS), headless dogfood(이번 수정은 훅·lock 경로뿐이라 직접 실행으로 대체).
+- N9를 넓히지 않은 실제 코드에서 재현하는 것, RISKS 경쟁(죽거나 멈춘 reclaimer 뒤 이중 회수)의 실제 lost update.
+
+ROUND4: DEFECTS FOUND
