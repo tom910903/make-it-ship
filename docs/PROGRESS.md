@@ -124,7 +124,7 @@ VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아
 | M6-05 | 지속 모드(loop: ralph/autopilot/ultrawork) `mis loop start/status/cancel` + Stop 훅(증거 기반 종료, 반복 상한) + 컨텍스트 경고 | DONE | `tests/integration/loop.test.mjs` | gap §2.3 persistent-mode·context-guard | (이 커밋) | npm test 338 |
 | M6-06 | statusLine 통합: run 없이도 스타일·모드·브랜치·모델·컨텍스트 표시 + run 정보 | DONE | `tests/unit/statusline.test.mjs` 확장 | gap §6.2 | (이 커밋) | npm test |
 | M6-07 | run 밖 guard 정책(careful 상시: main force push 거부, 파괴 명령 ask) + freeze/unfreeze 경계 + README 정정 | DONE | `tests/integration/guard.test.mjs` 확장 | gap §5.2, §6.3 | (이 커밋) | npm test |
-| M6-08 | PostToolUse: 규칙 파일 주입(세션당 1회), 편집 후 검증 알림, 반복 도구 실패 시 근본 원인 안내 | TODO | `tests/integration/hooks-posttool.test.mjs` | gap §2.3 rules-injector·verifier·failure | | |
+| M6-08 | PostToolUse: 규칙 파일 주입(세션당 1회), 편집 후 검증 알림, 반복 도구 실패 시 근본 원인 안내 | DONE | `tests/integration/hooks-posttool.test.mjs` | gap §2.3 rules-injector·verifier·failure | (이 커밋) | npm test 344 |
 | M6-09 | 새 스킬(loop, cancel, style) + hooks.json 연결 + THIRD_PARTY_NOTICES + README 상시 계층 절 | TODO | `tests/unit/plugin-files.test.mjs` | ADR-0003 | | |
 | M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | TODO | — | VERIFIER_PROMPT | | |
 

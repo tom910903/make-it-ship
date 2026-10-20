@@ -23,6 +23,7 @@ const handlers = {
         parts.push(`There is an active Make It Ship run ${run.state.runId} (state ${run.state.state}). To continue it, invoke /make-it-ship:resume; to drop it, run mis cancel.`);
       }
     } catch { /* not a git repo */ }
+    try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
     parts.push(buildCodeMap(cwd));
     return context('SessionStart', parts.filter(Boolean).join('\n\n'));
@@ -60,6 +61,42 @@ const handlers = {
     }
     const pct = contextPercent(input.transcript_path);
     return pct >= 75 ? { systemMessage: `Context is about ${pct}% full. Consider /compact or a fresh session; run state is kept (mis status / /make-it-ship:resume).` } : null;
+  },
+  async PostToolUse(input) {
+    const { readSession, writeSession, matchingRules, isTestCommand, EDIT_REMINDER_EVERY } = await import('./lib/posttool.mjs');
+    const sess = readSession(input.session_id);
+    const ti = input.tool_input ?? {};
+    const out = [];
+    const file = ti.file_path ?? ti.notebook_path ?? ti.path;
+    if (file) {
+      try {
+        const { resolve } = await import('node:path');
+        const { repoRoot } = await import('./lib/tree-hash.mjs');
+        const abs = resolve(input.cwd || process.cwd(), String(file));
+        const seen = new Set(sess.rules ?? []);
+        const fresh = matchingRules(repoRoot(dirname(abs)), abs).filter((r) => !seen.has(r.hash));
+        for (const r of fresh) { seen.add(r.hash); out.push(`Project rule (${r.path}):\n${r.body}`); }
+        sess.rules = [...seen];
+      } catch { /* outside a repo or unreadable rules */ }
+    }
+    if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(input.tool_name)) {
+      sess.edits = (sess.edits ?? 0) + 1;
+      if (sess.edits % EDIT_REMINDER_EVERY === 0) out.push(`${sess.edits} edits since the last test run: run the tests (or mis check) and read the output before claiming progress.`);
+    }
+    if (input.tool_name === 'Bash' && isTestCommand(ti.command)) { sess.edits = 0; sess.failures = {}; }
+    writeSession(input.session_id, sess);
+    return context('PostToolUse', out.join('\n\n'));
+  },
+  async PostToolUseFailure(input) {
+    const { readSession, writeSession } = await import('./lib/posttool.mjs');
+    const sess = readSession(input.session_id);
+    const key = `${input.tool_name}:${String(input.tool_input?.command ?? input.tool_input?.file_path ?? '').slice(0, 200)}`;
+    sess.failures = { ...sess.failures, [key]: (sess.failures?.[key] ?? 0) + 1 };
+    writeSession(input.session_id, sess);
+    const n = sess.failures[key];
+    return n >= 3 && n % 3 === 0
+      ? context('PostToolUseFailure', `This exact ${input.tool_name} call has failed ${n} times. Stop retrying it: find the root cause first (reproduce, read the full error, test one hypothesis at a time; /make-it-ship:debug).`)
+      : null;
   },
   SubagentStart(input) {
     const rules = styleRules(currentStyle());

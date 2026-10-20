@@ -2,7 +2,7 @@
 // Run state stays in <git-common-dir>/make-it-ship and is written only by mis.mjs; this is a separate tree.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 export const homeDir = () => process.env.MIS_STATE_HOME || join(homedir(), '.make-it-ship');
 
@@ -13,9 +13,8 @@ export function readHome(name, fallback = null) {
 }
 
 export function writeHome(name, value) {
-  const dir = homeDir();
-  mkdirSync(dir, { recursive: true });
-  const p = join(dir, name), tmp = `${p}.${process.pid}.tmp`;
+  const p = join(homeDir(), name), tmp = `${p}.${process.pid}.tmp`;
+  mkdirSync(dirname(p), { recursive: true });
   if (value === null) { rmSync(p, { force: true }); return; }
   writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n');
   renameSync(tmp, p);
