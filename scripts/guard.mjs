@@ -22,8 +22,9 @@ function context(cwd) {
     const inScope = ['PLANNING', 'AWAITING_APPROVAL', 'EXECUTING', 'VERIFYING', 'BLOCKED'].includes(run?.state.state);
     const wt = currentBranch?.match(/^mis\/([^/]+)\/(.+)$/);
     const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
-    const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? [])
-      : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
+    // Plan scope = top-level plannedFiles plus every task's files (a plan with only task files is scoped too).
+    const planFiles = [...(plan?.plannedFiles ?? []), ...(plan?.tasks ?? []).flatMap((t) => t.files ?? [])];
+    const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? []) : planFiles.length ? planFiles : null;
     // A team worker (MIS_TEAM_ID, set by `mis team` for its worker processes) gets run-level rules: push/PR/install ask.
     return { repoRoot, inRepo: true, activeRun: (!!run && run.state.state !== 'CANCELLED') || TEAM_WORKER, currentBranch, plannedFiles };
   } catch {
@@ -35,7 +36,7 @@ try {
   let raw = '';
   for await (const chunk of process.stdin) raw += chunk;
   const input = JSON.parse(raw);
-  const cwd = input.cwd || process.cwd();
+  const cwd = (typeof input.cwd === 'string' && input.cwd) || process.cwd();
   // A file edit is scoped by the worktree that holds the file, not by the session cwd (main session editing a task worktree)
   const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
   let at = file ? resolve(cwd, String(file)) : cwd;
@@ -43,12 +44,13 @@ try {
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
   // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
   const ctx = context(at);
-  let freezeDir = null, debugScope = null;
+  let freezeDir = null, debugScope = null, sessionRoot = cwd; // the session's repository (CLAUDE.md outside it asks)
   try {
     const f = (await import('./lib/home.mjs')).readHome('freeze.json');
     const { realpathSync } = await import('node:fs');
     // Scope by the session's repository (cwd), not the target file's: a frozen session may not write anywhere else.
     const sessionCtx = context(cwd);
+    sessionRoot = sessionCtx.repoRoot;
     const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
     const s = (await import('./lib/home.mjs')).readHome('debug-scope.json');
@@ -62,7 +64,7 @@ try {
       && (await import('./lib/shell.mjs')).commandsOf(String(input.tool_input.command)).commands.some(isPush)) {
     try { pushScan = (await import('./lib/redact.mjs')).prePushScan(ctx.repoRoot); } catch (e) { pushScan = { error: e.message.split('\n')[0].slice(0, 120) }; }
   }
-  const r = classify(input, { ...ctx, freezeDir, debugScope, pushScan });
+  const r = classify(input, { ...ctx, freezeDir, debugScope, pushScan, sessionRoot });
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {

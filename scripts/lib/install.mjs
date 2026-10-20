@@ -14,12 +14,14 @@ export const statusLineCommand = () => `node "${join(PLUGIN_ROOT, 'scripts', 'st
 export const isOurStatusLine = (cmd) => typeof cmd === 'string' && /make-it-ship[^"]*\/scripts\/statusline\.mjs/.test(cmd);
 
 const START = '<!-- MIS:START -->', END = '<!-- MIS:END -->';
+// The CLI path is absolute: Claude Code substitutes CLAUDE_PLUGIN_ROOT only in plugin content (skills, hooks, MCP config),
+// not in the user's own CLAUDE.md (M9 r1 D12; same as the statusLine command).
 export const MIS_BLOCK = `${START}
 # Make It Ship
 
 Make It Ship is the one installed workflow plugin (it replaces oh-my-claudecode, Superpowers, Ponytail and gstack).
 - Skills: \`/make-it-ship:<name>\` (run, status, loop, style, review, qa, ship, team, session, browse, setup, cancel, ...). When one applies, invoke it before answering.
-- CLI: \`node "\${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <command>\`. Only \`mis check\` records evidence and only \`mis verdict\` decides done.
+- CLI: \`node "${join(PLUGIN_ROOT, 'scripts', 'mis.mjs')}" <command>\` (the installed plugin's path; \`mis setup\` updates it after an upgrade). Only \`mis check\` records evidence and only \`mis verdict\` decides done.
 - Tools: MCP server \`mcp__plugin_make-it-ship_mis__*\` (notepad, project memory, state, wiki, LSP, ast-grep, python_repl, trace).
 - Keywords: ralph:, ulw, ralplan, deep interview, tdd, code review, security review, deslop, cancelomc (\`mis test-prompt "<text>"\` shows what a prompt triggers).
 - Memory: \`<remember>...</remember>\` (7 days), \`<remember priority>...</remember>\` (permanent).

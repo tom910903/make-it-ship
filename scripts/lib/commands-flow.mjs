@@ -287,7 +287,8 @@ function designBoard([d = 'design', ...args], cwd) {
   const dir = resolve(cwd, d);
   if (!existsSync(dir)) fail(`no directory ${d}`);
   const out = flag(args, '--out') ?? 'board.html';
-  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html').sort();
+  // <name>.html next to <name>.excalidraw is a diagram that mis diagram wrote, not a design variant.
+  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html' && !existsSync(join(dir, f.replace(/\.html?$/i, '.excalidraw')))).sort();
   if (variants.length < 2) fail(`a board needs at least 2 HTML variants in ${d} (found ${variants.length})`);
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const cards = variants.map((v) => `<figure><iframe src="${encodeURI(v)}" title="${esc(v)}" loading="lazy"></iframe>

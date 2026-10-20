@@ -114,7 +114,7 @@ export function simplifyDecision(cfg, sess) {
   if (sess.simplified === key) return null;
   return {
     key,
-    reason: `[MAKE IT SHIP SIMPLIFY] You edited these files this session:\n${files.map((f) => `- ${f}`).join('\n')}\nHand them to the make-it-ship:code-simplifier agent (same behavior, less code, tests before and after), then stop. This runs once per set of edited files; turn it off with simplifier.enabled=false in ~/.make-it-ship/config.json.`,
+    reason: `[MAKE IT SHIP SIMPLIFY] You edited these files this session:\n${files.map((f) => `- ${f}`).join('\n')}\nHand them to the make-it-ship:code-simplifier agent (same behavior, less code, tests before and after), then stop. This runs once per set of edited files; turn it off with mis config set simplifier.enabled false.`,
   };
 }
 

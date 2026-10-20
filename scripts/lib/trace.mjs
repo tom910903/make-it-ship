@@ -13,7 +13,8 @@ export function appendTrace(event) {
     const f = traceFile();
     mkdirSync(homeDir(), { recursive: true });
     if (existsSync(f) && statSync(f).size > MAX_BYTES) renameSync(f, join(homeDir(), 'trace.1.jsonl'));
-    appendFileSync(f, JSON.stringify({ at: new Date().toISOString(), cwd: process.cwd(), ...event }) + '\n');
+    // cwd is always a string (a hook's malformed input must not break readers such as mis doctor session)
+    appendFileSync(f, JSON.stringify({ at: new Date().toISOString(), ...event, cwd: typeof event.cwd === 'string' ? event.cwd : process.cwd() }) + '\n');
   } catch { /* fail-open */ }
 }
 
