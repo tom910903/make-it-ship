@@ -4,6 +4,7 @@ const MODULES = [
   './tools/skills.mjs',
   './tools/memory.mjs',
   './tools/knowledge.mjs',
+  './tools/code.mjs',
 ];
 
 export async function loadTools() {
