@@ -115,3 +115,17 @@ test('M6 R5 (user decision): only prefix forms start the loop; every other menti
   for (const p of ['stop mis-labelling the axes', 'stop the loop in parser.js and add a test first'])
     assert.ok(!names(p).includes('cancel'), p);
 });
+
+test('M6 R6 (same principle as the loop): cancel only when the whole prompt is a short off-request; everything else with ralph is a hint', () => {
+  for (const p of ['turn off ralph', 'disable ralph', 'ralph stop', 'ralph off', 'ralph cancel', 'end ralph', 'stop the ralph loop', 'ralph: stop', 'ralph: stop please',
+    'ralph: cancel the loop', 'ralph: turn off', '/ralph off', '/ralph cancel', 'ralph mode: off', '랄프 꺼줘', '랄프: 꺼줘', '랄프: 그만해', '랄프: 중지', 'ralph 그만',
+    '랄프 모드로 진행: 그만', 'ラルフを止めて', 'ラルフ: やめて', 'ラルフ：停止', 'cancelomc', 'Ralph, stop.'])
+    assert.deepEqual(names(p), ['cancel'], p);
+  for (const p of ["don’t stop ralph", "please don't ever stop ralph", "I didn't stop ralph, it stopped by itself", '랄프 그만두지 마', '랄프 취소하지 마세요', 'ラルフを止めないで',
+    'add a button to stop ralph', '랄프 취소 버튼 만들어줘', 'ラルフを止めるボタンを追加して', 'disable Ralph’s account', 'In the end Ralph fixed it himself', 'cancel mis.json load when offline',
+    'https://ci.example.com/job/42 ralph: why is this red?', '`npm test` ralph: flaky', '/ralph-lauren.png is broken, replace it'])
+    assert.ok(!names(p).includes('cancel') && !names(p).includes('loop'), `${p}: ${names(p)}`);
+  for (const p of ["ralph: don’t stop ralph until tests pass", "ralph: please don't ever stop ralph", '랄프: 끝날 때까지 랄프 그만두지 마', 'ラルフ: ラルフを止めないで、テストが通るまで'])
+    assert.deepEqual(names(p), ['loop'], p);
+  assert.match(detectKeywords('add a button to stop ralph')[0].context, /mis loop cancel/);
+});

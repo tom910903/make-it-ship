@@ -798,3 +798,173 @@ ROUND4: DEFECTS FOUND
   - 슬래시로 시작하는 `/ralph …`가 훅까지 오는지
 
 ROUND5: DEFECTS FOUND
+
+## 6차 검증 (round 6)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD c8947d7)
+- 검증자: 독립 verifier (구현에 참여하지 않음).
+- 기준: PROGRESS.md SPEC_CHANGES의 최신 사용자 결정.
+  - 접두형(`ralph:`, `/ralph`, `ralph mode:`, `랄프:`·`랄프 모드로 진행:`, `ラルフ:`)만 loop를 시작한다.
+  - 그 밖의 언급은 모두 `loop-hint`다.
+  - 명확한 끄기 요청은 cancel이다 (접두형으로 쓴 끄기 요청도 포함).
+- 결함 정의:
+  - 접두형이 loop가 아니다 (접두형 뒤에 끄기 말만 있으면 cancel이 맞다).
+  - 비접두형 언급이 loop가 된다.
+  - 끄기 요청이 loop가 된다.
+  - 코딩 문장이나 부정된 끄기(`don't stop ralph`)가 cancel이 된다.
+- 실험은 모두 저장소 밖 scratchpad에서 했다. `MIS_STATE_HOME`은 임시 디렉터리로 지정했다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 키워드 판정은 `detectKeywords`로 했다. 대표 10문장은 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했고, 모두 같은 결과였다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` ×3 | 3회 모두 tests 369 · pass 369 · fail 0 · skipped 0 · todo 0 (안정) |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 5차 문장 30개 재실행 + 새 문장 85개 (분류 71개, sanitize 탐색 10개, R5-4 추가 확인 4개) |
+
+- 테스트 수가 5차의 370에서 369로 줄었다. `keywords.test.mjs`에서 R3·R4 테스트 2개가 R5 테스트 1개로 합쳐졌기 때문이다. 삭제된 검사는 없다.
+
+### 5차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R5-1 도움말 질문 → loop | FIXED | `how do I use ralph?`, `why use ralph?`, `why did you start ralph?` → `[]`.<br>`should I use ralph?`, `랄프로 해도 될까?`, `ラルフで大丈夫かな？` → hint. |
+| R5-2 부정 요청 → loop | FIXED | `we stopped using ralph …`, `we won't use ralph …`, `you shouldn't run ralph …`, `랄프 시작 안 해도 돼`, `ラルフ起動禁止`, `Use ralph? No thanks.`, `Run ralph. Actually no, don't.`, `랄프로 할까? 아니, 하지 마.` → 모두 hint. 비접두형은 이제 loop가 될 수 없다. |
+| R5-3 접두형 끄기 → loop | **PARTIAL** | 5차 7문장(`ralph: stop`, `/ralph off`, `랄프 모드로 진행: 그만` 등)은 모두 cancel이다.<br>같은 종류의 다른 형태는 loop다. 아래 R6-1. |
+| R5-4 접두형 과제 속 "don't stop ralph" → cancel | **PARTIAL** | 5차 3문장은 loop다.<br>아래 4문장은 여전히 **cancel**이다:<br>- `ralph: don’t stop ralph until tests pass` (둥근 따옴표)<br>- `ralph: please don't ever stop ralph`<br>- `랄프: 끝날 때까지 랄프 그만두지 마`<br>- `ラルフ: ラルフを止めないで、テストが通るまで`<br>아래 R6-2. |
+| R5-5 이름·브랜드·조사·소유격 → loop | FIXED (loop 기준) | `Use Ralph’s patch …`, `Use the Ralph Lauren logo …`, `랄프로선 할 만큼 했어`, `ラルフでさえ解けなかったバグ` → 모두 hint.<br>다만 이름이 들어간 문장이 cancel이 되는 경우가 있다 (R6-5). sanitize와 파일명을 거쳐 loop가 되는 경우도 있다 (R6-3, R6-4). |
+| R5-6 `stop mis-…` → cancel | PARTIAL | `stop mis-labelling the axes` → `[]`. 고쳐졌다.<br>`cancel mis.json load when offline` → cancel. `(?![\w-])`가 `.`을 막지 않는다.<br>`stop-mis` 단독은 cancel 명령 형태이므로 결함으로 세지 않는다. |
+
+### 새 문장 대조 (계약 기준)
+
+| 분류 | 문장 수 | 결함 | 내용 |
+|---|---|---|---|
+| 접두형 + 과제 속 질문·부정어·끄기 단어 (`ralph: stop the server from crashing…`, `ralph: cancel button does nothing…`, `ralph: off-by-one…`, `랄프: 취소 버튼이…`, `ラルフ: 停止ボタンが…` 등) | 15 | 0 | 모두 loop |
+| 접두형 끄기 요청 | 10 | 8 | 아래 R6-1 |
+| 비접두형 호출 (`use ralph …`, `랄프로 고쳐줘`, `ラルフで直して`, `please use ralph: …`, `hey, /ralph fix it`, `ralph mode please` 등) | 10 | 0 | 모두 hint |
+| 이름·브랜드·소유격 (둥근 따옴표 포함) | 12 | 6 | loop는 0건. cancel 6건: 아래 R6-5 |
+| 거부·부정된 끄기 | 12 | 9 | 거부(`don't use ralph`, `랄프 쓰지 마`, `ラルフは使わないで`)는 hint다. 부정된 끄기 9건은 cancel이다. 아래 R6-2 |
+| stop/cancel/mis가 들어간 코딩 문장 | 12 | 5 | 아래 R6-5 |
+| sanitize 앞부분 제거 탐색 | 10 | 7 | 아래 R6-3·R6-4 (`Ralph: can you look …?` 1건은 계약상 접두형이므로 결함 아님) |
+
+### 헤드리스 확인 (모델 판단)
+
+- 준비: `node evals/setup-demo.mjs a <scratchpad>/demo1|demo2`, 실행마다 `MIS_STATE_HOME`을 따로 지정. 지정된 플래그 그대로 실행했고 둘 다 exit 0이었다.
+- `mis test-prompt`는 두 프롬프트를 모두 `["loop-hint"]`로 분류한다.
+
+| 프롬프트 | 결과 |
+|---|---|
+| `use ralph to fix capitalize for empty strings; keep going until the tests pass` | **모델이 loop를 시작했다** (계약상 어느 쪽이든 허용).<br>순서:<br>1. 첫 도구 호출이 `Skill make-it-ship:loop`<br>2. `mis loop start --max 20 …`<br>3. `Skill make-it-ship:run` → `mis start`<br>4. `mis block`<br>데모 a에서는 `capitalize('')`가 이미 `''`를 돌려주고 테스트도 통과한다. 그래서 모델은 고칠 것이 없다고 보고 run을 BLOCKED로 두었다.<br>`loop.json`: `active: true`, 세션 묶임, `iteration 1`. BLOCKED이라 일시정지 상태로 남는다. 설계대로다. 12턴. |
+| `Ralph from QA says capitalize breaks on empty strings; fix it` | **loop를 시작하지 않았다** (통과). loop 스킬 호출이 없고 `loop.json`도 없다. 모델은 재현을 시도한 뒤 재현할 수 없다고 보고했다. 4턴. |
+
+- 미검증: stream-json에는 UserPromptSubmit 주입문이 남지 않는다. 그래서 run1에서 모델이 `loop-hint` 문구를 보고 판단했는지, 스킬 설명만 보고 판단했는지 구분할 수 없다. Stop 훅이 실행된 것은 확인했다 (`iteration`과 `sig`가 기록됨).
+
+### 새 결함
+
+**R6-1 · MEDIUM · 접두형 끄기 요청이 loop를 시작한다 (R5-3 잔여, 일부는 회귀)**
+- 재현 → **loop**:
+  - 영어: `ralph: stop please`, `ralph: cancel the loop`, `ralph: turn off`
+  - 한국어: `랄프: 꺼줘`, `랄프: 그만해`, `랄프: 중지`
+  - 일본어: `ラルフ: やめて`, `ラルフ：停止`
+- 회귀: `랄프: 꺼줘`와 `ラルフ: やめて`는 b48d6a6에서 `loop-hint`였는데, 이제는 `loop`다. 5차에서 `랄프:`·`ラルフ:` 접두형을 추가했지만 그에 맞는 끄기 분기를 두지 않았다.
+- 원인 (`scripts/lib/keywords.mjs` cancel 정규식):
+  - 영어 분기는 끄기 단어 하나만 받는다: `^\s*\/?ralph(?:\s+mode)?\s*[:：]?\s*(stop|off|cancel)\s*[.!]?\s*$`
+  - 한국어 분기는 `(그만|멈춰|취소|꺼)` 바로 뒤에 `\s*$`가 온다. 그래서 `꺼줘`·`그만해`가 빠지고 `중지`는 목록에 없다.
+  - 일본어에는 접두형 끄기 분기가 없다. `ラルフを?(止め|やめ)`는 콜론이 끼면 일치하지 않는다.
+- 영향: 끄려는 사용자에게 loop와 "do not stop early"가 주입된다. 과제의 결함 정의 "끄기 요청이 loop를 만든다"에 해당한다.
+- 고칠 방향: 접두형 뒤에 "끄기 말만 있는" 닫힌 목록을 둔다. 예: `stop|off|cancel|turn off|quit` + `please`/`the loop`/`now`, `그만(해|하자)?|멈춰|취소|꺼(줘)?|중지`, `やめて|止めて|停止|キャンセル`. 느슨하게 맞추면 `ralph: stop the server from crashing`이 cancel이 되므로 안 된다 (지금은 loop이고 이것이 맞다).
+
+**R6-2 · MEDIUM · 부정된 끄기가 cancel이 된다 (R5-4 잔여, 이전부터 있던 문제)**
+- 재현 → **cancel**:
+  - 영어:
+    - `don’t stop ralph` (과제가 든 예시 그대로, 둥근 따옴표만 다르다. macOS가 자동으로 바꿀 수 있다)
+    - `please don't ever stop ralph`, `do not ever cancel ralph`
+    - `I didn't stop ralph, it stopped by itself`
+  - 한국어: `랄프 그만두지 마`, `랄프 취소하지 마세요`, `랄프 중지하지 마`
+  - 일본어: `ラルフを止めないで`, `ラルフをやめないで`
+  - 접두형 안: 위 R5-4 4문장
+- 원인:
+  - 영어 lookbehind `(?<!\b(?:don'?t|do\s+not|never|not)\s+)`의 한계:
+    - 곧은 따옴표만 받는다.
+    - 부정어와 동사 사이에 다른 단어(`ever`)가 오면 놓친다.
+    - `didn't`가 없다.
+  - 한국어 `(ralph|랄프)\s?(…그만|취소|중지…)`와 일본어 `ラルフを?(止め|やめ)`에는 부정 검사가 없다. 그래서 `그만두지 마`, `취소하지 마`, `止めないで`가 그대로 cancel이 된다.
+- c8947d7 커밋 메시지는 "negated cancels … do not"이라고 말하지만, 위 형태들에서는 성립하지 않는다.
+- b48d6a6에서도 결과가 같았다. 회귀가 아니라 5차에서 시험하지 않은 형태다.
+- 영향: cancel은 다른 키워드를 모두 지운다. 그리고 실행 중인 loop를 끄라는 지시(`mis loop cancel`)를 주입한다. 계속하라는 사용자의 loop가 꺼진다.
+
+**R6-3 · LOW-MEDIUM · sanitize가 앞부분을 지우면 비접두형 언급이 loop가 된다**
+- 재현 → **loop**:
+  - `https://ci.example.com/job/42 ralph: why is this red?`
+  - `` `npm test` ralph: flaky ``
+  - `"the bug" ralph: says it is fixed`
+  - `> fix this` 다음 줄에 `ralph: from QA here, it still breaks`
+  - `src/lib/ ralph: owner of this folder`
+  - `<note>x</note> ralph: hi`
+- 대조: `see above.\n\nralph: fix it` → hint.
+- 원인: `explicitLoop`를 `sanitize`한 텍스트에 적용한다. URL·코드·따옴표·경로·태그·인용줄이 지워지면 `ralph:`가 문장 맨 앞이 된다.
+- 영향: 사용자가 쓴 문장 맨 앞이 접두형이 아닌데 loop가 된다. 과제의 결함 정의 "비접두형 언급이 loop가 된다"에 해당한다.
+- 고칠 방향: 접두형 검사는 원문(trim한 prompt)에 대해 한다.
+
+**R6-4 · LOW · `/ralph-…` 파일명이 loop를 시작한다**
+- 재현: `/ralph-lauren.png is broken, replace it` → loop.
+- 원인: `^\s*\/ralph\b`에서 `-` 앞에 단어 경계가 생긴다. sanitize는 디렉터리 구분자가 두 개 이상인 경로만 지운다.
+- 대조: `/ralphs-notes.md: update it` → `[]`.
+
+**R6-5 · LOW · 코딩 문장과 이름 문장이 cancel이 된다 (이전부터 있던 문제)**
+- 재현 → **cancel**:
+  - 이 기능을 개발하는 문장:
+    - `add a button to stop ralph`
+    - `write a test that checks stop ralph clears state`
+    - `랄프 취소 버튼 만들어줘`
+    - `ラルフを止めるボタンを追加して`
+  - 사람 이름 Ralph:
+    - `disable Ralph’s account in the admin panel` (곧은 따옴표도 같다)
+    - `kill Ralph’s stale process on the build box`
+    - `end Ralph’s session when the token expires`
+    - `In the end Ralph fixed it himself`
+  - 기타: `there is no more ralph in the codebase after the rename`, `cancel mis.json load when offline`
+- 원인:
+  - `\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b`가 소유격(`’s`)도 문장 속 위치(`In the end`)도 보지 않는다.
+  - 한국어·일본어 분기는 뒤따르는 명사(`버튼`, `ボタン`)를 보지 않는다.
+- b48d6a6에서도 결과가 같았다. 회귀가 아니다.
+- 영향: 코딩 요청이 다른 키워드를 잃는다. loop가 실행 중이면 끄라는 지시가 주입된다. 이 기능 자체를 개발하는 문장은 애매하다. 그래서 LOW로 둔다. 다만 이름 문장 4건은 분명한 오탐이다.
+
+**참고 (결함으로 세지 않음)**
+- `Ralph: can you look at the login bug? (Ralph from QA)` → loop. 사람 Ralph를 부르는 문장도 접두형이면 loop가 된다. 계약의 결과이므로 결함이 아니다. 접두형만 자동으로 정한 결정에 남는 위험으로 기록한다.
+- 저장소 밖 cwd에서 `mis test-prompt`나 UserPromptSubmit를 실행하면 stderr에 `fatal: not a git repository`가 찍힌다 (5차 참고와 같다). exit 0이고 판정에는 영향이 없다.
+
+### 이전 결함 수동 확인 (자동 테스트와 별도로 5건)
+
+| ID | 결과 |
+|---|---|
+| D1 loop 세션 묶기 | 저장소 F에서 세션 A로 `loop start`했다.<br>- Stop A → block<br>- Stop B(같은 저장소) → 출력 없음<br>- 다른 저장소 R7의 세션 C → 출력 없음<br>- 세션 B의 `mis loop cancel` → "belongs to another session (A)" 오류<br>유지 |
+| 새 증거로만 종료 | `loopDecision`:<br>- REPORTED+VERIFIED, `fresh=false` → iterate (끝나지 않음)<br>- `fresh=true` → `end: verified`<br>`freshEvidence`:<br>- loop 시작 전 check + 시작 후 report → false<br>- 시작 후 check + report → true<br>유지 |
+| R3-4 freeze 범위 | F에서 `freeze src`, cwd F:<br>- `F/src/a.js` allow<br>- `F/other.js`, `R7/a.js`, 저장소 밖 `NR1/a.js` → deny<br>cwd R7의 `R7/a.js` → allow<br>유지 |
+| R2-4 statusline 체인 재귀 | `statusLine.chain`이 MIS statusline 자신을 가리킨 상태로 1회 실행했다. 1초 안에 `MIS ▸ idle … \| MIS ▸ idle …`을 한 번만 출력했다. 2초 뒤 `pgrep` 0개. 유지 |
+| 세션별 스타일 | 세션 X에 `ponytail lite` 프롬프트 → "Style level is now lite".<br>`currentStyle('X')` = lite, `currentStyle('Y')` = full<br>유지 |
+
+### 판정
+
+**DEFECTS FOUND**
+- 5차 결함 6건:
+  - FIXED 3건: R5-1, R5-2, R5-5 (loop 기준)
+  - PARTIAL 3건: R5-3, R5-4, R5-6
+- 새 결함:
+  - MEDIUM 2건: R6-1, R6-2
+  - LOW-MEDIUM 1건: R6-3
+  - LOW 2건: R6-4, R6-5
+- 판정을 정하는 근거 (과제가 결함으로 명시한 종류다):
+  - R6-1: 접두형 끄기 요청 `랄프: 꺼줘`, `ラルフ: やめて`가 loop가 된다. 5차까지는 hint였으므로 회귀다.
+  - R6-2: 부정된 끄기 `don’t stop ralph`, `랄프 그만두지 마`, `ラルフを止めないで`가 cancel이 된다.
+- 나머지 결과:
+  - 비접두형 호출은 모두 hint다. 계약의 핵심은 성립한다. R6-3·R6-4는 예외다.
+  - 헤드리스: 호출형 프롬프트에서는 모델이 loop를 시작했다. 이름 프롬프트에서는 시작하지 않았다.
+  - 테스트 3회 안정, validate 통과, 이전 결함 수동 확인 5건 모두 유지.
+- 미검증:
+  - 대화형 세션과 Linux
+  - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
+  - 헤드리스 run1에서 모델이 hint 문구를 보고 판단했는지
+
+ROUND6: DEFECTS FOUND

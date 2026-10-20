@@ -6,12 +6,12 @@ import { join } from 'node:path';
 const K = (name, re, context) => ({ name, re, context });
 // Priority order: earlier wins in conflict resolution.
 const KEYWORDS = [
-  K('cancel', /\b(cancelomc|stopomc)\b|\b(?:cancel|stop)[\s-]?mis\b(?![\w-])|(?<!\b(?:don'?t|do\s+not|never|not)\s+)\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b|^\s*\/?ralph(?:\s+mode)?\s*[:：]?\s*(stop|off|cancel)\s*[.!]?\s*$|^\s*랄프[^:：\n]*[:：]\s*(그만|멈춰|취소|꺼)\s*$|(ralph|랄프)\s?(멈춰|그만|취소|꺼줘|꺼(?:\s|$)|끄(?:기|자|고)|중지)|ラルフを?(止め|やめ)/i,
+  K('cancel', null,
     'Cancel active Make It Ship modes: run `mis loop cancel`. If the user also wants to drop the current run, run `mis cancel`.'),
   K('loop', /\bralph\b|랄프|ラルフ/i,
     "Invoke /make-it-ship:loop with the user's task. It keeps working (plan → implement → verify) until `mis verdict` is VERIFIED or the iteration limit is reached; do not stop early."),
   K('loop-hint', null,
-    'The prompt mentions "ralph". Only if the user is asking you to keep working until the result is verified, invoke /make-it-ship:loop. If it is a name, a complaint, or a request not to use or to stop it, ignore this note.'),
+    'The prompt mentions "ralph". Only if the user is asking you to keep working until the result is verified, invoke /make-it-ship:loop. If they are asking to stop or cancel an active loop, run `mis loop cancel`. If it is a name, a complaint, code, or a request not to use it, ignore this note.'),
   K('run', /\b(autopilot|auto[\s-]pilot|full auto)\b|오토파일럿|オートパイロット|\b(build|create|make)\s+me\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bi\s+want\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bhandle\s+it\s+all\b|\bend\s+to\s+end\b|\be2e\s+this\b/i,
     "Invoke /make-it-ship:run with the user's request: plan, approval, test-first implementation, checks, reviews, and an honest report."),
   K('ultragoal', /\bultragoal\b/i,
@@ -47,8 +47,20 @@ const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abst
 // mention becomes a hint the model judges, since names, complaints and "don't use ralph" read the same to a regex.
 // Only prefix forms start the loop (user decision after five rounds of regex heuristics); every other mention of
 // ralph — "use ralph", "랄프로", names, questions, refusals — is a hint the model judges in context.
-const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
-const explicitLoop = (text) => LOOP_PREFIX.some((r) => r.test(text));
+const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph(?:\s|$)/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
+// Checked on the raw prompt: text removed by sanitize (URLs, code) must not turn a later "ralph:" into a prefix.
+const explicitLoop = (raw) => LOOP_PREFIX.some((r) => r.test(raw));
+// Cancel likewise only when the whole prompt is a short off-request; anything longer is left to the model (loop-hint).
+const OFF_ONLY = [
+  /^(?:stop|cancel|disable|end|turn\s+off|kill|halt|no\s+more)\s+(?:the\s+)?ralph(?:\s+(?:loop|mode))?$/i,
+  /^\/?ralph(?:\s+mode)?\s*[:,：]?\s*(?:stop|off|cancel|turn\s+off|end|halt)(?:\s+(?:the\s+)?(?:loop|ralph))?$/i,
+  /^(?:ralph|랄프|루프)(?:\s?모드로\s?진행)?\s*[:：]?\s*(?:꺼|꺼줘|꺼\s줘|그만|그만해|멈춰|중지|취소|끄기)$/i,
+  /^ラルフ\s*(?:を)?\s*[:：]?\s*(?:止めて|やめて|停止|止めろ)$/,
+];
+const cancelOnly = (raw) => {
+  const t = String(raw).trim().replace(/[.!。！]+$/, '').replace(/^please\s+|\s+please$/gi, '').trim();
+  return OFF_ONLY.some((r) => r.test(t)) || /\b(?:cancelomc|stopomc)\b/i.test(t);
+};
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 
 const HELP_QUERY = /\b(what\s+is|what's|how\s+(do\s+i|to)\s+use|explain|describe|tell\s+me\s+about|why)\b|사용법|뭐야|뭐지|무엇|설명|왜/i;
@@ -69,11 +81,12 @@ export function sanitize(text) {
 }
 
 export function detectKeywords(prompt, { disabled = [] } = {}) {
-  const text = sanitize(prompt);
-  if (HELP_QUERY.test(text) && /[?？]/.test(text) && !DIRECTIVE.test(text) && !explicitLoop(text)) return [];
+  const raw = String(prompt ?? ''), text = sanitize(raw);
+  if (HELP_QUERY.test(text) && /[?？]/.test(text) && !DIRECTIVE.test(text) && !explicitLoop(raw) && !cancelOnly(raw)) return [];
   let hits = KEYWORDS.filter((k) => k.name === 'simplify'
     ? SLOP_EXPLICIT.test(text) || (SLOP_ACTION.test(text) && SLOP_SMELL.test(text))
-    : k.name === 'loop' ? explicitLoop(text)
+    : k.name === 'cancel' ? cancelOnly(raw)
+    : k.name === 'loop' ? explicitLoop(raw) && !cancelOnly(raw)
     : k.name === 'loop-hint' ? mentionsRalph(text)
     : k.re.test(text));
   hits = hits.filter((k) => !disabled.includes(k.name));
