@@ -129,7 +129,7 @@ VERIFY: PASSED (11차, `docs/milestones/M6-report.md` ROUND11: PASS) — 태그 
 | M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | DONE — 11차 PASS(`M6-report.md`) | — | VERIFIER_PROMPT | | |
 
 ## M7 — MCP 도구 서버
-VERIFY: PENDING — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서버 cwd=세션 cwd, `CLAUDE_PROJECT_DIR`·`CLAUDE_PLUGIN_DATA` 제공(2026-10-20 probe). `--strict-mcp-config`에서는 로드 안 됨(ADR-0003).
+VERIFY: PASSED (6차, `docs/milestones/M7-report.md` ROUND6: PASS) — 태그 `m7-verified` — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서버 cwd=세션 cwd, `CLAUDE_PROJECT_DIR`·`CLAUDE_PLUGIN_DATA` 제공(2026-10-20 probe). `--strict-mcp-config`에서는 로드 안 됨(ADR-0003).
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
 | M7-01 | MCP 서버 골격(stdio JSON-RPC, registry), `.mcp.json`, 스킬 도구 3개(list_skills, load_skills_local/global), guard: 자체 MCP 도구 허용·파일 재작성 도구 ask/freeze | DONE | `tests/integration/mcp-server.test.mjs`, `tests/unit/policy.test.mjs` | gap §2.4 skills, §6.3 | (이 커밋) | npm test 352 |
