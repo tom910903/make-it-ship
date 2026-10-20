@@ -558,3 +558,117 @@ ROUND4: DEFECTS FOUND
 - 대화형 세션, headless dogfood(이번 수정은 lock 경로와 테스트 fixture뿐이라 직접 실행으로 대체).
 
 ROUND5: DEFECTS FOUND
+
+## 6차 검증 (round 6)
+
+- 대상: 브랜치 `m7-wip`, HEAD fc0ad07. 5차 이후 코드 변경은 `scripts/lib/state.mjs`, `tests/unit/state.test.mjs`, `docs/PROGRESS.md` 3개 파일이다. 커밋 메시지의 주장은 근거로 쓰지 않고 재현으로 판정했다.
+- 검증자: 독립 검증 에이전트(구현 미참여). 임시 파일은 모두 저장소 밖(scratchpad `m7r6/`, `TMPDIR=m7r6/tmp`)에 두었다. 대조용 옛 코드는 `git archive e30ce81`로 풀었다. 내가 띄운 프로세스만 다뤘고, 끝난 뒤 남은 프로세스는 0개였다.
+- 부하: load average 5~15. 다른 worktree 작업이 계속 돌고 있었다.
+
+### 기본 확인
+- `claude plugin validate .`: ✔ Validation passed
+- `npm test` 3회 순차 실행: 422/422 (36초), 422/422 (34초), 422/422 (39초). 실패 0, skip 0.
+
+### N9-fs (inode를 재사용하는 FS에서 빈 lock 회수)
+
+**수정 확인(코드):** `reclaimLock`은 pid 없는 lock이면 `.reclaim`을 잡은 뒤 `stat`을 다시 하고, mtime이 여전히 `ORPHAN_LOCK_MS`(5초)보다 오래됐을 때만 지운다. pid가 있는 lock(죽은 owner)은 나이를 보지 않으므로 바로 회수된다. `reclaimLock`을 부르는 곳은 `withLock` 한 곳뿐이다(`state.mjs:112`).
+
+**5차의 inode 재사용 흉내 probe** (`aba2.mjs`, `SIM_REUSE=1`이면 A가 본 inode를 W의 새 inode로 바꿔 넣는다. 각 200회):
+
+| 코드 | 조건 | W lock 삭제 | 두 번째 writer `wx` 성공 |
+|---|---|---|---|
+| fc0ad07 | 실제 inode (APFS) | **0/200** | **0/200** |
+| fc0ad07 | inode 재사용 흉내 | **0/200** | **0/200** |
+| e30ce81 (대조) | inode 재사용 흉내 | 200/200 | 200/200 |
+
+**단위 테스트 'M7 N9-fs':** HEAD 테스트 파일을 e30ce81 코드에 넣어 돌리면 실패한다(`not ok`, 오류 문구 `'a lock younger than the orphan age is never removed'`). HEAD에서는 통과한다. 'M7 N9'는 두 코드에서 모두 통과한다.
+
+**실제 프로세스로 확인 (창을 넓히고 inode 확인을 끈 사본):** 5차와 같은 방법으로 사본을 만들었다. `openSync`와 `writeFileSync` 사이에 30ms, orphan 판정과 `reclaimLock` 사이에 0~300ms sleep을 넣었다. 그리고 inode 비교를 `true`로 바꿔 inode가 늘 같다고 보게 했다. 이것으로 ext4의 inode 재사용을 흉내 냈다.
+
+| 사본 | 시나리오 | 반복×N | exit 0 | SIGKILL | lost update |
+|---|---|---|---|---|---|
+| e30ce81 넓힘 + inode 확인 끔 (대조) | empty | 15×10 | 150 | 0 | **30건 (5회)** |
+| fc0ad07 넓힘 + inode 확인 끔 | empty | 20×10 | 200 | 0 | **0** |
+| fc0ad07 넓힘 + inode 확인 끔 | empty-kill | 20×12 | 180 | 60 | **0** |
+| fc0ad07 넓힘 (inode 확인 유지) | empty | 20×10 | 200 | 0 | **0** |
+| fc0ad07 넓힘 (inode 확인 유지) | empty-kill | 20×12 | 180 | 60 | **0** |
+
+대조군에서 유실이 나므로 하네스는 차이를 잡는다. 따라서 0건은 근거가 된다. 실제 Linux에서는 여전히 측정하지 못했다(아래 미검증).
+
+**정말 버려진 빈 lock의 회수 시간 (deadlock·timeout 회귀 확인, `withLock`을 직접 호출, waitMs 15초):**
+
+| lock | fc0ad07 | e30ce81 |
+|---|---|---|
+| `''`, 방금 생성 | 5023ms 회수 | 5028ms |
+| `{"pid":`, 방금 생성 | 5029ms | 5037ms |
+| `''`, 10초 됨 | 8ms | 8ms |
+| `{"pid":`, 10초 됨 | 5ms | 14ms |
+| `''`, 4초 됨 | 1030ms | 1052ms |
+| 죽은 pid lock, 방금 생성 | 8ms | 14ms |
+| 10초 된 `''` + 죽은 회수자가 남긴 새 `.reclaim` | 5041ms 회수 | (측정 안 함) |
+
+모든 경우에 회수됐고 lock과 `.reclaim`이 남지 않았다. 두 코드의 회수 시간이 같으므로 회귀는 없다.
+
+판정: **N9-fs FIXED** (흉내 probe 0/200, 단위 테스트가 수정 전 코드에서 실패하고 HEAD에서 통과, 실제 프로세스 흉내 80회 0건 대 대조 30건).
+
+참고(결함 아님): `reclaimLock`은 `stat` 다음에 `read`를 한다. 그 사이에 옛 lock이 지워지고 새 빈 lock이 생기면, 옛 파일의 mtime으로 새 lock을 지울 수 있다. 하지만 `.reclaim`으로 직렬화된 상태에서 pid 없는 lock을 지울 수 있는 것은 두 경우뿐이다. 겹친 다른 회수자, 또는 생성과 기록 사이에서 5초 넘게 멈춘 writer다. 둘 다 이미 받아들인 "5초 넘게 멈춤" 전제에 속하고, 창의 길이는 마이크로초 단위다.
+
+### 전체 동시성 스트레스 (fc0ad07, 작업 트리 그대로)
+
+하네스와 판정 기준은 4·5차와 같다(`stress.mjs`). exit 0인 writer의 질문이 `state.json`에 없으면 lost update로 센다. id 중복, state 손상, lock·`.reclaim` 잔존도 검사한다.
+
+| 시나리오 | 반복 | N | exit 0 | SIGKILL | lost update | 기타 |
+|---|---|---|---|---|---|---|
+| plain | 30 | 8 | 240 | 0 | **0** | 없음 |
+| dead-pid lock | 30 | 12 | 360 | 0 | **0** | 없음 |
+| dead-pid + writer 1/4 SIGKILL | 30 | 10 | 215 | 85 | **0** | 없음 |
+| 10초 된 빈/깨진 lock | 25 | 10 | 250 | 0 | **0** | 없음 |
+| 위 + writer 1/4 SIGKILL | 20 | 12 | 181 | 59 | **0** | `.reclaim` 잔존 1회 |
+| dead-pid + writer 1/2 SIGKILL | 25 | 12 | 150 | 150 | **0** | `.reclaim` 잔존 1회 |
+| 합계 | **160** | | **1396** | **294** | **0** | 실패(exit≠0) 0, id 중복 0, state 손상 0, **lock 잔존 0** |
+
+- SIGKILL이 들어간 회차는 HEAD 그대로에서 75회(30+20+25)다. 넓힌 사본의 empty-kill 40회를 더하면 115회다. 전체 반복은 HEAD 160회와 사본 95회다.
+- `.reclaim` 잔존 2회의 원인은 회수자가 표식을 쥔 채 SIGKILL된 것이다(5차와 같은 현상). lock 자체는 남지 않았다. 다음 회수가 필요할 때 5초 뒤 스스로 풀린다(위 표의 5041ms). 회수가 필요 없으면 쓰기를 막지 않는다. RISKS의 "죽으면" 전제에 해당한다.
+
+### N8-doc (RISKS 기록과 `shortcut:` 주석)
+
+`docs/PROGRESS.md` RISKS "(M7 N8·N9)":
+- 동작 설명(내용과 inode를 비교하고, pid 없는 lock은 지우기 직전에 mtime을 다시 확인)이 코드와 맞는다. 언급한 테스트(`state.test.mjs` N9-fs)도 있다.
+- 5차가 지적한 "(빈 lock도 구분)" 일반화는 삭제됐다. ext4의 inode 재사용이 mtime 재확인으로 보완된다는 서술은 위 측정과 맞는다.
+- 측정 수치에는 **"e30ce81 기준"**이라고 출처가 명시돼 있다. 5차 보고서의 수치(160회, 성공 1398건, SIGKILL 292건, 0건 / 순서 재현 200회 0건)와 일치한다. 5차의 문제는 출처 없이 수정 전 코드의 수치를 쓴 것이었으므로 이번에는 정확하다. fc0ad07의 근거는 이번 6차 수치다(160회 0건, 흉내 80회 0건). 문서를 고쳐야 하는 것은 아니다.
+- "실제 Linux에서는 측정하지 않았다": 사실이다.
+
+`state.mjs`의 `shortcut:` 주석은 이제 "멈추거나(SIGSTOP) 죽으면"을 포함한다. inode 재사용은 코드가 막으므로 한계 목록에 없어도 맞다. 판정: **N8-doc FIXED**.
+
+### 이전 결함 회귀 점검 (spot-check, 직접 실행)
+
+| ID | 결과 | 확인 내용 |
+|---|---|---|
+| D1 | 유지 | 다른 저장소 `workingDirectory`를 주면 세션 저장소에 기록되고, 다른 저장소는 null이다. 없는 경로는 `isError`. 전역 memory는 생성되지 않는다. |
+| D2 | 유지 | Agent prompt의 태그는 무시된다. 결과의 `R6 "q"\nl2`는 원문 그대로 1건만 저장되고, 같은 결과를 다시 넣어도 중복이 없다. |
+| D3 | 유지 | `guard.mjs`가 Bash와 MCP 도구 각각에 `decision: allow`를 trace에 기록한다. |
+| D4/N1 | 유지 | `.git/config`, `.GIT/config`, `sub/../.GIT/config`, `.git`를 가리키는 링크 `lnk/config`, 절대경로 `.Git/HEAD`, `.GIT//config`는 모두 거부된다. `notes.git.md`는 정상 수집된다. |
+| D5 | 유지 | C 파일만 있는 저장소에서 `success:false, filesChecked:0`. |
+| D6/N5 | 유지 | `os._exit` 코드는 1회만 실행되고(파일 1줄) "not retried"라고 안내한다. 다음 호출은 `42`. SIGINT를 무시하는 무한 루프는 3004ms에 kill되고, 다음 호출은 `restarted:true`로 `42`. |
+| D7/N3 | 유지 | `source=compact`에서 priority가 1회 주입되고 test 명령도 들어간다. |
+| D8/N4 | 유지 | 첫 SessionStart에서 `Project memory`가 주입된다. 범위를 좁힌 `pytest … -k slow`는 학습되지 않는다. |
+| D9 | 유지 | 저장소 밖에서 `stateRoot`는 throw하고 stderr는 빈 문자열이다. |
+| N2 | 유지 | 양성 대조로 같은 응답 형태의 PostToolUse `pytest`를 저장소 안에서 보내면 `testCommand: "pytest"`가 학습된다. 같은 호출을 비저장소 A에서 보내면 전역 `project.json`이 생성되지 않고 B에도 주입되지 않는다. |
+| N6–N9 | 유지 | 위 스트레스, timing, probe 결과. |
+| N10 | 유지 | 스트레스와 동시에 `lsp-client.test.mjs`를 30회 순차 실행: 실패 0/30. |
+
+이번 커밋은 lock 경로만 바꿨다. 나머지 결함은 `npm test` 3회 통과(각 M7 D/N 회귀 테스트 포함)와 위 직접 실행으로 확인했다.
+
+### 6차 결함 목록
+
+새로 발견한 결함 없음.
+
+5차 결함의 최종 상태:
+- N9-fs: **FIXED** (inode 재사용 흉내 0/200, 대조 200/200, 실제 프로세스 흉내 80회 0건, 대조 30건, 테스트가 수정 전 코드에서 실패함)
+- N8-doc: **FIXED**
+
+### 6차 미검증
+- 실제 Linux(ext4 등) 커널에서 inode 재사용 재현. VM과 설치를 쓸 수 없어서 inode 비교를 끈 사본으로 대신했다.
+- 대화형 세션과 headless dogfood. 이번 수정은 lock 경로와 테스트뿐이라 직접 실행으로 대체했다.
+
+ROUND6: PASS
