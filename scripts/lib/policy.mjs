@@ -144,7 +144,7 @@ function careful(ws, ctx, dir, functions) {
       return ask(`mis browse ${sub} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
     }
   }
-  if (browse?.[0] === 'setup' && browse.includes('--write')) return ask(`mis setup ${browse[1] ?? ''} --write changes your instruction or settings files; check the dry-run diff first`);
+  if (browse?.[0] === 'setup' && browse[1] === 'routing' && browse.includes('--write')) return ask('mis setup routing --write changes the project CLAUDE.md; check the dry-run diff first — needs your approval');
   const g = gitSub(ws);
   if (g?.sub === 'push') {
     const r = classifyPush(g.rest, ctx);
