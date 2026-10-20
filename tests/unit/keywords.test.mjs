@@ -112,3 +112,13 @@ test('M6 R3 (user decision): explicit forms start the loop, off-requests cancel,
   assert.ok(names('stop the loop in parser.js and add a test first').includes('tdd'), 'a coding sentence about a loop is not a cancel');
   assert.ok(!names('stop the loop in parser.js and add a test first').includes('cancel'));
 });
+
+test('M6 R4: refusals in the same clause demote a verb form to a hint; questions inside an explicit form keep the loop; particles/brands/possessives are not invocations', () => {
+  for (const p of ['stop using ralph', "don't ever use ralph again", "I don't want to use ralph", 'fix it without using ralph', 'no need to use ralph here', "I didn't ask you to use ralph",
+    '랄프로 하지마', '랄프 켜지 마', '랄프 시작하지 말고 그냥 고쳐', 'ラルフではなく手で直して', 'ラルフで直すのはやめて', 'ラルフ起動しないで',
+    '랄프로렌 셔츠 상품 페이지 고쳐줘', '랄프로부터 받은 패치 적용해줘', '랄프로 인해 빌드가 깨졌어', 'ラルフでしたっけ', "Use Ralph's patch", "Run Ralph's migration script"])
+    assert.ok(!names(p).includes('loop'), `${p}: ${names(p)}`);
+  for (const p of ['ralph: why does login fail on Safari? make the e2e suite pass', 'use ralph — why do the uploads time out? keep going until green',
+    '랄프 모드로 진행: 로그인이 왜 깨져? 테스트 통과할 때까지', "ralph: don't break the public API while fixing the parser"])
+    assert.ok(names(p).includes('loop'), `${p}: ${names(p)}`);
+});
