@@ -487,7 +487,9 @@ test('M9 fix1 D6: external-transfer asks name the destination and what goes ther
     const why = (cmd) => classify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: r }, { ...ctx, repoRoot: r, activeRun: false }).reason;
     assert.match(why(`${M9F} telemetry sync`), /telemetry\.example\/v1/);
     assert.match(why(`${M9F} gbrain sync`), /brain\.example[\s\S]*\/r\/docs\/a\.md[\s\S]*\/r\/docs\/b\.md/);
-    assert.match(why(`${M9F} gbrain ingest`), /wiki\/w\.md/);
+    // the ask's file list caps each entry at 160 chars: under a long TMPDIR the file shows as its leading part
+    const wiki = pj(r, '.make-it-ship', 'wiki', 'w.md'), ingest = why(`${M9F} gbrain ingest`);
+    assert.ok(/wiki\/w\.md/.test(ingest) || (wiki.length > 160 && ingest.includes(wiki.slice(0, 150))), ingest);
     assert.match(why(`${M9F} canary https://shop.example --pages /,/cart`), /https:\/\/shop\.example\/cart/);
     assert.match(why(`${M9F} design generate "a logo"`), /api\.openai\.com/);
     assert.match(why(`MIS_OPENAI_BASE_URL=https://proxy.example ${M9F} design generate "a logo"`), /proxy\.example/);

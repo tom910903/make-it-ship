@@ -2,6 +2,9 @@
 // (quotes, separators, subshells/groups, $( ) and backticks, heredocs) so the policy sees real commands, and
 // heredoc bodies — data such as plans and reviews — are never treated as commands.
 
+// Redirection operator in argv: a value no word can equal, so a quoted '>' stays a literal word (M9 r2 D1).
+const REDIR = Symbol('redirect');
+
 /**
  * @returns {{commands: {argv: string[]}[], text: string, functions: Map<string,string>, vars: Map<string,string>}}
  *   text = the source without heredoc bodies (for path-pattern checks)
@@ -12,8 +15,9 @@ export function parseShell(src, depth = 0) {
   let text = '';
   let argv = [];
   let word = null; // null = no word started
+  let quoted = false; // the current word has quoted or escaped text (so `'2'>f` is not an fd number)
   const pendingHeredocs = [];
-  const endWord = () => { if (word !== null) { argv.push(word); word = null; } };
+  const endWord = () => { if (word !== null) { argv.push(word); word = null; } quoted = false; };
   const endCmd = () => { endWord(); if (argv.length) commands.push({ argv }); argv = []; };
   const nested = (inner) => {
     if (depth > 8) return;
@@ -72,11 +76,23 @@ export function parseShell(src, depth = 0) {
     }
     text += c;
     if (c === ' ' || c === '\t') { endWord(); continue; }
-    if (c === '\\') { word = (word ?? '') + (src[i + 1] ?? ''); text += src[i + 1] ?? ''; i++; continue; }
+    if (c === '\\') { word = (word ?? '') + (src[i + 1] ?? ''); quoted = true; text += src[i + 1] ?? ''; i++; continue; }
+    if (c === '$' && src[i + 1] === '"') continue; // $"…" (locale string) is a double-quoted string
+    if (c === '$' && src[i + 1] === "'") { // $'…' (ANSI-C): \' does not end it
+      let j = i + 2;
+      while (j < src.length && src[j] !== "'") j += src[j] === '\\' ? 2 : 1;
+      const esc = { n: '\n', t: '\t', r: '\r', e: '\x1b', a: '\x07', b: '\b', f: '\f', v: '\v' };
+      word = (word ?? '') + src.slice(i + 2, j).replace(/\\(.)/g, (_, x) => esc[x] ?? x);
+      quoted = true;
+      text += src.slice(i + 1, j + 1);
+      i = j;
+      continue;
+    }
     if (c === "'") {
       const j = src.indexOf("'", i + 1);
       const end = j < 0 ? src.length : j;
       word = (word ?? '') + src.slice(i + 1, end);
+      quoted = true;
       text += src.slice(i + 1, end + 1);
       i = end;
       continue;
@@ -86,6 +102,7 @@ export function parseShell(src, depth = 0) {
       const body = src.slice(i + 1, end);
       for (const m of body.matchAll(/\$\(([^]*?)\)|`([^`]*)`/g)) nested(m[1] ?? m[2]);
       word = (word ?? '') + body.replace(/\\(["\\$`])/g, '$1');
+      quoted = true;
       text += src.slice(i + 1, end + 1);
       i = end;
       continue;
@@ -117,16 +134,19 @@ export function parseShell(src, depth = 0) {
       if (m) { pendingHeredocs.push({ delim: m[2], strip, argvRef: argv }); text += src.slice(i + 1, j + m[0].length); i = j + m[0].length - 1; }
       continue;
     }
-    if (c === '>' || c === '<') {
-      // redirection operator (with optional fd dup like 2>&1); the target stays a word
-      if (word !== null && /^\d+$/.test(word)) word = null;
+    if (c === '>' || c === '<' || (c === '&' && src[i + 1] === '>')) {
+      // redirection operator: > >> >| &> &>> < <> <<< N> N>&M >&- …; the target stays the next word unless it is an fd dup
+      if (word !== null && !quoted && /^\d+$/.test(word)) word = null;
       endWord();
       let j = i + 1;
-      while (src[j] === '>' || src[j] === '&') j++;
-      while (/[0-9-]/.test(src[j] ?? '') && src[j - 1] === '&') j++;
+      while (src[j] === '>' || src[j] === '<') j++;
+      if (src[j] === '|') j++;
+      const dup = src[j] === '&' && /^[0-9-]/.test(src[j + 1] ?? '');
+      if (src[j] === '&') j++;
+      if (dup) while (/[0-9-]/.test(src[j] ?? '')) j++;
       text += src.slice(i + 1, j);
       i = j - 1;
-      argv.push('>');
+      if (!dup) argv.push(REDIR);
       continue;
     }
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
@@ -137,11 +157,11 @@ export function parseShell(src, depth = 0) {
     word = (word ?? '') + c;
   }
   endCmd();
-  // `>` placeholders separate redirection targets from argv; drop the operator and its target
+  // REDIR markers separate redirection targets from argv; drop the operator and its target
   for (const cmd of commands) {
     const out = [];
     for (let k = 0; k < cmd.argv.length; k++) {
-      if (cmd.argv[k] === '>') { cmd.redirects ??= []; if (cmd.argv[k + 1] !== undefined) cmd.redirects.push(cmd.argv[++k]); continue; }
+      if (cmd.argv[k] === REDIR) { cmd.redirects ??= []; if (typeof cmd.argv[k + 1] === 'string') cmd.redirects.push(cmd.argv[++k]); continue; }
       out.push(cmd.argv[k]);
     }
     cmd.argv = out;
@@ -266,7 +286,8 @@ export function commandsOf(src, depth = 0, known = new Map()) {
       text += ` ${inner.text} `;
       for (const [k, v] of inner.functions) functions.set(k, v);
     }
-    if (!n.argv.length) continue;
+    // `exec 3> f` and a bare `> f` still write f: keep the redirects as a no-op command (`:`)
+    if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects }); continue; }
     out.push({ argv: n.argv, redirects: c.redirects ?? [] });
     if (functions.has(n.argv[0]) && depth < 5) {
       for (const ic of commandsOf(functions.get(n.argv[0]), depth + 1, functions).commands) {

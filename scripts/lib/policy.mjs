@@ -1,7 +1,8 @@
 // Guard policy (Spec §7): pure classification of a PreToolUse call.
 // Threat model: careless/habitual mistakes, not an adversarial model (obfuscation is out of scope).
 import { resolve, sep, dirname, basename, join } from 'node:path';
-import { existsSync, lstatSync, readlinkSync, realpathSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync, realpathSync, readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 
 const R = 'make-it-ship';
@@ -348,8 +349,12 @@ function misInner(mis, text, ctx, dir) {
 // tmux send-keys types a word that is not a key name literally, so `keys` is classified as the text it types (M9 r1 D2).
 const TMUX_KEY = /^(?:(?:[CMS]-)+(?:.|[A-Z]\w*)|\^.|Enter|Escape|Tab|BTab|Space|BSpace|Up|Down|Left|Right|Home|End|PageUp|PgUp|PPage|PageDown|PgDn|NPage|Insert|IC|Delete|DC|F\d{1,2}|KP\w+)$/;
 const NEWLINE_KEY = /^(?:Enter|KPEnter|C-[mj]|\^[MJ])$/;
-function ttyKeys(ks, ctx, dir) {
-  if (ks.some((k) => k.startsWith('-'))) return ask('mis tty keys passes words starting with "-" to tmux as options (hex input, another pane) — needs your approval');
+// A word tmux may take as a send-keys option (flags c:FHKlMN:Rt:X); `-1` is not one. tmux may permute options, so any such
+// word before `--` asks; after `--` every word is a key or text.
+const TMUX_OPTION = /^-[FHKlMRX]*(?:[FHKlMRX]|[cNt].*)$/;
+function ttyKeys(words, ctx, dir) {
+  const dd = words.indexOf('--'), ks = dd < 0 ? words : [...words.slice(0, dd), ...words.slice(dd + 1)];
+  if (words.slice(0, dd < 0 ? words.length : dd).some((k) => TMUX_OPTION.test(k))) return ask('mis tty keys passes words starting with "-" to tmux as options (hex input, another pane) — needs your approval');
   // Other key names (C-c, Up, ...) type nothing; text on both sides of them is joined, which can only make this stricter.
   const typed = ks.map((k) => (k === 'Space' ? ' ' : NEWLINE_KEY.test(k) ? '\n' : TMUX_KEY.test(k) ? '' : k)).join('');
   return classifyBash(typed, ctx, dir);
@@ -376,36 +381,83 @@ export const NON_SENSITIVE_CONFIG = ['style.default', 'keywords.disabled', 'suba
   'telemetry.enabled', 'simplifier.enabled', 'simplifier.maxFiles', 'proactive'];
 const CLAUDE_CHANGES = { mcp: ['add', 'add-json', 'add-from-claude-desktop', 'remove', 'reset-project-choices'], plugin: ['install', 'i', 'uninstall', 'remove', 'update', 'enable', 'disable'],
   'plugin marketplace': ['add', 'remove', 'rm', 'update'], config: ['set', 'add', 'remove'] };
-const BYPASS = (m) => m.some((w, i) => ['--dangerously-skip-permissions', '--allow-dangerously-skip-permissions', '--permission-mode=bypassPermissions'].includes(w)
+// --settings (a file or JSON) can set permissions.defaultMode: any --settings on launch asks (M9 r2 D3)
+const BYPASS = (m) => m.some((w, i) => /^--(?:allow-)?dangerously-skip-permissions(?:=|$)|^--permission-mode=bypassPermissions$|^--settings(?:=|$)/.test(w)
   || (w === '--permission-mode' && m[i + 1] === 'bypassPermissions'));
+/** argv after the `claude` program: direct, or run from the package by npx/bunx/pnpm dlx/yarn dlx/npm exec; else null. */
+function claudeArgs(ws) {
+  if (ws[0] === 'claude') return ws.slice(1);
+  if (!['npx', 'bunx', 'pnpm', 'yarn', 'npm'].includes(ws[0])) return null;
+  const k = ws.findIndex((w) => /^@anthropic-ai\/claude-code(?:@[^/]*)?$/.test(w));
+  if (k < 0) return null;
+  const rest = ws.slice(k + 1);
+  if (rest[0] === '--') rest.shift();
+  if (rest[0] === 'claude') rest.shift(); // npx -p @anthropic-ai/claude-code claude …
+  return rest;
+}
 const expandHome = (p) => p.replace(/^~(?=\/|$)/, homedir()).replace(/^\$\{?HOME\}?(?=\/|$)/, homedir());
 const under = (p, d) => (p + sep).startsWith(d + sep);
 
 /** Why writing `abs` is a lasting change to Claude Code or Make It Ship configuration, or null. */
+// shortcut: paths compare case-insensitively everywhere (macOS APFS default), so a case-sensitive volume over-asks for
+// odd-case names like ~/.claude/Settings.json; detect the volume's case rule if that ever matters.
+const lc = (p) => p.toLowerCase();
+const CLAUDE_MD = /^claude(?:\.local)?\.md$/;
 function protectedFile(abs, repoRoot) {
-  const home = homedir(), mh = homeDir(), cds = [claudeDir(), join(home, '.claude')];
-  for (const p of new Set([abs, realish(abs)])) {
+  const home = lc(homedir()), mh = lc(homeDir()), cds = [...new Set([claudeDir(), join(homedir(), '.claude')].flatMap((c) => [lc(c), lc(realish(c))]))];
+  for (const p of new Set([lc(abs), lc(realish(abs))])) {
     const name = basename(p), d = dirname(p);
-    if (cds.some((c) => d === c || d === realish(c)) && (/^settings.*\.json$/.test(name) || name === 'CLAUDE.md')) return `${p} is your Claude Code configuration (used by every session)`;
-    if (p === join(home, '.claude.json')) return `${p} holds your Claude Code MCP servers and project settings`;
+    if (cds.includes(d) && (/^settings.*\.json$/.test(name) || name === 'claude.md')) return `${p} is your Claude Code configuration (used by every session)`;
+    // skills, agents, commands and rules are instructions in every session; hooks scripts run in every session
+    if (cds.some((c) => ['skills', 'agents', 'commands', 'rules', 'hooks'].some((x) => under(p, join(c, x))))) return `${p} is in your Claude Code configuration (skills, agents, commands, rules or hooks used by every session)`;
+    if (p === join(home, '.claude.json') || cds.some((c) => p === join(c, '.claude.json'))) return `${p} holds your Claude Code MCP servers and project settings`;
     if (basename(d) === '.claude' && /^settings.*\.json$/.test(name)) return `${p} is Claude Code settings (permissions and hooks that run commands)`;
-    if (name === 'CLAUDE.md' && !under(p, realish(repoRoot))) return `${p} is a CLAUDE.md outside this repository (instructions for other sessions)`;
+    if (CLAUDE_MD.test(name) && !under(p, lc(realish(repoRoot)))) return `${p} is a ${name} outside this repository (instructions for other sessions)`;
     if (p === join(mh, 'config.json') || under(p, join(mh, 'skills')) || p === join(mh, 'trusted-repos.json')) return `${p} is Make It Ship user configuration (applies to every repository)`;
   }
   return null;
 }
 
+// M9 r2 D4: MCP tools that may write a file, by a verb in the name (`set`/`put` only as a word: not settings, input).
+const MCP_WRITER = (name) => /write|edit|create|update|patch|insert|move|copy|rename|replace|delete|remove|append|save|upload/i.test(name)
+  || /(?:^|[_\-.])(?:set|put)(?=$|[_\-.]|[A-Z0-9])|(?:^|[_\-.])(?:Set|Put)/.test(name);
+/** Path-like strings anywhere in an MCP tool input (nested objects/arrays, bounded); `file:` URLs become paths. */
+function mcpPathsDeep(input) {
+  const out = [];
+  let budget = 500;
+  const walk = (v, keyed, depth) => {
+    if (--budget < 0 || depth > 6) return;
+    if (typeof v === 'string') {
+      if (!keyed) return;
+      if (/^file:/i.test(v)) { try { out.push(fileURLToPath(v)); } catch { /* not a local file URL */ } } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) out.push(v);
+    } else if (Array.isArray(v)) for (const x of v) walk(x, keyed, depth + 1);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, /path|file|dest|target|uri|url/i.test(k), depth + 1);
+  };
+  walk(input, false, 0);
+  return out;
+}
+
 /** Files a shell command writes, moves or deletes (redirects, tee, cp/mv/ln/install/rsync destinations, sed/perl -i, dd of=, rm). */
-function shellTargets(ws, redirects) {
+function shellTargets(ws, redirects, dir) {
   const [n, ...rest] = ws, args = rest.filter((w) => !w.startsWith('-'));
   const t = [...redirects];
   const ti = rest.findIndex((w) => w === '-t' || w.startsWith('--target-directory'));
-  if (n === 'tee' || n === 'mv' || n === 'rm' || n === 'truncate') t.push(...args);
+  // a copy or move into a directory writes dest/<basename of each source>
+  const intoDir = (dest, srcs) => {
+    let isDir = dest.endsWith('/');
+    try { isDir ||= statSync(resolve(dir, expandHome(dest))).isDirectory(); } catch { /* not there: a file name */ }
+    return isDir ? srcs.map((a) => join(dest, basename(a))) : [];
+  };
+  const valueOf = (short, long) => rest.flatMap((w, i) => (new RegExp(`^-[a-zA-Z]*${short}$`).test(w) ? [rest[i + 1]] : w === long ? [rest[i + 1]] : w.startsWith(`${long}=`) ? [w.slice(long.length + 1)] : []));
+  if (n === 'tee' || n === 'mv' || n === 'rm' || n === 'truncate') t.push(...args, ...(n === 'mv' && args.length > 1 ? intoDir(args.at(-1), args.slice(0, -1)) : []));
   else if (['cp', 'install', 'ln', 'rsync', 'scp'].includes(n)) {
     if (ti >= 0) { const dirArg = rest[ti].includes('=') ? rest[ti].split('=')[1] : rest[ti + 1]; t.push(dirArg, ...args.filter((a) => a !== dirArg).map((a) => join(dirArg, basename(a)))); }
-    else if (args.length) t.push(args.at(-1));
+    else if (args.length) t.push(args.at(-1), ...intoDir(args.at(-1), args.slice(0, -1)));
   } else if ((n === 'sed' || n === 'perl') && rest.some((w) => /^-[a-zA-Z]*i|^--in-place/.test(w))) t.push(...args);
   else if (n === 'dd') t.push(...rest.filter((w) => w.startsWith('of=')).map((w) => w.slice(3)));
+  else if (n === 'curl') t.push(...valueOf('o', '--output'));
+  else if (n === 'wget') t.push(...valueOf('O', '--output-document'));
+  else if (n === 'patch') t.push(...args);
   return t.filter(Boolean);
 }
 
@@ -420,12 +472,14 @@ function lastingChange(ws, m, text, redirects, dir, ctx) {
       if (sub === 'skill' && a === 'trust' && !has('--remove')) return 'mis skill trust lets this repository\'s .make-it-ship/skills be followed as instructions';
       if (sub === 'launch' && BYPASS(m)) return 'mis launch starts Claude Code without permission prompts in a detached tmux session nobody watches';
     }
-    if (ws[0] === 'claude') {
-      const key = ws[1] === 'plugin' && ws[2] === 'marketplace' ? 'plugin marketplace' : ws[1];
-      const verb = key === 'plugin marketplace' ? ws[3] : ws[2];
+    const cl = claudeArgs(ws);
+    // global flags may come first and some take an optional value (--debug [filter]): look for the subcommand anywhere
+    for (let i = 0; cl && i < cl.length; i++) {
+      const key = cl[i] === 'plugin' && cl[i + 1] === 'marketplace' ? 'plugin marketplace' : cl[i];
+      const verb = key === 'plugin marketplace' ? cl[i + 2] : cl[i + 1];
       if (CLAUDE_CHANGES[key]?.includes(verb)) return `claude ${key} ${verb} changes your Claude Code configuration for every session`;
     }
-    for (const p of shellTargets(ws, redirects ?? [])) { const w = protectedFile(resolve(dir, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (w) return w; }
+    for (const p of shellTargets(ws, redirects ?? [], dir)) { const w = protectedFile(resolve(dir, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (w) return w; }
     return null;
   })();
   return why ? ask(`${why} — a lasting change outside this repository; needs your approval`) : allow;
@@ -504,9 +558,8 @@ export function classify(input, ctx) {
     }
     return allow;
   }
-  if (tool.startsWith('mcp__') && /write|edit|create|update|move|copy|rename|replace|delete|append|save|put/i.test(tool.split('__').slice(2).join('__'))) {
-    const paths = Object.entries(ti).filter(([k]) => /path|file|dest|target/i.test(k)).flatMap(([, v]) => [].concat(v)).filter((v) => typeof v === 'string');
-    for (const p of paths) { const pf = protectedFile(resolve(cwd, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (pf) return ask(`${pf} — a lasting configuration change (${tool}); needs your approval`); }
+  if (tool.startsWith('mcp__') && MCP_WRITER(tool.split('__').slice(2).join('__'))) {
+    for (const p of mcpPathsDeep(ti)) { const pf = protectedFile(resolve(cwd, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (pf) return ask(`${pf} — a lasting configuration change (${tool}); needs your approval`); }
   }
   if (tool.startsWith(OWN_MCP)) {
     const name = tool.slice(OWN_MCP.length);

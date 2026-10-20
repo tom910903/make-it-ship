@@ -5,6 +5,9 @@ import { join, dirname } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// A developer shell's CLAUDE_CONFIG_DIR would point every spawned mis at a real config dir: tests set it or use HOME/.claude.
+delete process.env.CLAUDE_CONFIG_DIR;
+
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MIS = join(ROOT, 'scripts', 'mis.mjs');
 export const GUARD = join(ROOT, 'scripts', 'guard.mjs');
