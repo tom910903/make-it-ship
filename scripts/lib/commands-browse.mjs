@@ -1,9 +1,14 @@
 // mis commands of the built-in browser (M8-A): browse (gstack browse), pdf (gstack make-pdf), visual-verdict (OMC visual-verdict).
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { browseDir, send, status, stop, ensureDaemon } from './browse/client.mjs';
+import { alwaysAskIn } from './browse/util.mjs';
+import { EXTENSION_DIR } from './browse/actions.mjs';
+import { listCookieDomains, readBrowserCookies } from './browse/cookies.mjs';
+import { browserSkill, skillify, domainSkill } from './browse/skills.mjs';
 import { markdownToHtml } from './markdown.mjs';
 import { decodePng, encodePng, compareImages } from './png.mjs';
 
@@ -17,10 +22,45 @@ const USAGE = `usage: mis browse <command> [args] [--remote]
               scroll [sel] | viewport [WxH] [--scale n] | upload <sel> <file...> | dialog-accept [text] | dialog-dismiss
   visual      screenshot [--viewport|--selector css|--clip x,y,w,h] [sel|@ref] [path] | responsive [prefix]
               pdf [path] [--format letter|a4|legal] [--margins 0.5in] [--landscape] | diff <url1> <url2>
-  snapshot    snapshot [-i] [-c] [-d N] [-s sel] [-D] [-a] [-o path]   (@e refs for click/fill/...)
-  tabs        tabs | tab <id> | newtab [url] | closetab [id] | frame <sel|@ref|--name n|--url part|main>
-  meta        chain '<json>'|<file>|- | handoff [reason] | resume
+              media [--images|--videos|--audio] [sel] | inspect [sel] [--all] | ux-audit
+  style       style <sel> <prop> <value> | style --undo [N] | cleanup [--ads|--cookies|--sticky|--social|--all]
+              prettyscreenshot [--scroll-to sel|text] [--cleanup] [--hide sel]... [--width px] [path]
+  snapshot    snapshot [-i] [-c] [-C] [-d N] [-s sel] [-D] [-a] [-o path] | snapshot -H '{"@e1":"green"}' [-o path]
+              (@e refs, and @c refs from -C, for click/fill/...)
+  tabs        tabs | tab <id> | newtab [url] | closetab [id] | tab-each <command> [args] | frame <sel|@ref|--name n|--url part|main>
+  meta        chain '<json>'|<file>|- | handoff [reason] | resume | watch [--interval s] | watch stop | history [--clear]
+  headed      connect [--profile-dir d] [--no-extension] | disconnect | focus [sel] | inbox [--clear] | extension | memory
+  ask always  cookies | cookie <name>=<value> | cookie-import <file.json> | cookie-import-browser [chrome|chromium|edge|brave|arc]
+              [--domain host]... [--profile Default|--profile-dir d] | header <name>:<value>|--clear | useragent <ua>
+              state save|load <name> | download <url|sel> [path] | scrape <images|videos|media> [--dir d] [--limit N] | archive [path]
+  skills      skill list|show|run|test|rm <name> [--arg inputN=v] | skillify <name> [--steps N] [--expect text] [--global]
+              domain-skill save|list|show|edit|promote-to-global|rollback|rm [host]
   --remote    allow storage/js/eval/upload on a non-local page (the guard asks the user)`;
+
+function take1(args, name) { const i = args.indexOf(name); if (i < 0) return undefined; if (args[i + 1] === undefined) throw new Error(`${name} needs a value`); return args.splice(i, 2)[1]; }
+
+/** cookie-import-browser: list the store's domains, or decrypt the named domains' cookies (in this process) for the daemon. */
+async function browserCookies(a) {
+  const args = [...a];
+  const domains = [];
+  for (let d = take1(args, '--domain'); d !== undefined; d = take1(args, '--domain')) domains.push(d);
+  const opts = { browser: args.find((w) => !w.startsWith('-')) ?? 'chrome', profile: take1(args, '--profile') ?? 'Default', profileDir: take1(args, '--profile-dir'), domains };
+  if (!domains.length) return { domains: await listCookieDomains(opts), note: 'nothing imported; rerun with --domain <host> for the sites you need (values are never printed)' };
+  return readBrowserCookies(opts);
+}
+
+function cookieFile(file, cwd) {
+  if (!file) throw new Error('usage: mis browse cookie-import <cookies.json> (an array of {name, value, domain, path?, secure?, httpOnly?, sameSite?, expires?})');
+  const j = JSON.parse(readFileSync(resolve(cwd, file), 'utf8'));
+  const cookies = Array.isArray(j) ? j : j.cookies;
+  if (!Array.isArray(cookies) || !cookies.every((c) => c?.name && c.value !== undefined && (c.domain || c.url))) throw new Error('cookie-import: expected an array of cookies with name, value and domain');
+  return { cookies: cookies.map(({ url, ...c }) => ({ ...c, domain: c.domain ?? new URL(url).hostname })), source: file };
+}
+
+const EXTENSION_HELP = () => ({ path: EXTENSION_DIR,
+  automatic: '`mis browse connect` starts a visible Chrome with this extension loaded (its own profile); the toolbar icon opens the side panel.',
+  manual: ['Open chrome://extensions in your Chrome', 'Turn on Developer mode', `Click "Load unpacked" and pick ${EXTENSION_DIR}`, 'Pin "Make It Ship" and click it to open the side panel'],
+  sidePanel: 'Notes to the agent (read with `mis browse inbox`) and an element picker that sends the CSS selector of the element you click. No terminal (see README).' });
 
 function readChain(arg, cwd) {
   const text = arg === undefined || arg === '-' ? readFileSync(0, 'utf8') : existsSync(resolve(cwd, arg)) ? readFileSync(resolve(cwd, arg), 'utf8') : arg;
@@ -31,7 +71,21 @@ async function browse(args, cwd) {
   const remote = args.includes('--remote');
   const [sub, ...a] = args.filter((x) => x !== '--remote');
   if (!sub || sub === 'help' || sub === '--help') return USAGE;
+  // the guard cannot see what a `mis check` QA script runs, so the always-ask commands only run where it can ask
+  if (process.env.MIS_CLI && alwaysAskIn([sub, ...a]).length) throw new Error(`mis browse ${alwaysAskIn([sub, ...a])[0]} cannot run inside a check script (MIS_CLI is set); run it yourself so the guard can ask`);
   const dir = browseDir(cwd);
+  const to = (body) => send(dir, { cwd, remote, ...body });
+  if (sub === 'extension') return EXTENSION_HELP();
+  if (sub === 'skill') return browserSkill(a, cwd, to);
+  if (sub === 'skillify') return skillify(a, cwd, to);
+  if (sub === 'domain-skill') return domainSkill(a, cwd, to);
+  if (sub === 'cookie-import') return to({ cmd: sub, args: a, data: cookieFile(a[0], cwd) });
+  if (sub === 'cookie-import-browser') {
+    const r = await browserCookies(a);
+    if (!r.cookies) return r;
+    const done = await to({ cmd: sub, args: [], data: { cookies: r.cookies, source: r.source } });
+    return { ...done, ...(r.skipped.length ? { skipped: r.skipped } : {}) };
+  }
   if (sub === 'status') return status(dir);
   if (sub === 'stop') return stop(dir);
   if (sub === 'restart') { await stop(dir); await ensureDaemon(dir); return status(dir); }
@@ -100,4 +154,21 @@ function visualVerdict(argv, cwd) {
     diffImage, width: Math.max(a.width, b.width), height: Math.max(a.height, b.height), sizeMatch: r.sizeMatch, diffPixels: r.diffPixels, contentPixels: r.contentPixels, totalPixels: r.totalPixels, tolerance, hotspots: r.hotspots };
 }
 
-export const browseCommands = { browse, pdf, 'visual-verdict': visualVerdict };
+/** mis open-url <url|file.html>: open a page in the user's default browser (gstack gstack-open-url). argv only, never a shell. */
+function openUrl([target, ...rest], cwd) {
+  if (!target || rest.length) throw new Error('usage: mis open-url <http(s)-url | file.html>');
+  let url;
+  if (/^https?:\/\//i.test(target)) url = new URL(target).href;
+  else {
+    const p = resolve(cwd, target.replace(/^file:\/\//, ''));
+    if (!/\.html?$/i.test(p) || !existsSync(p) || !statSync(p).isFile()) throw new Error('open-url opens http(s) URLs and existing local .html files only');
+    url = pathToFileURL(p).href;
+  }
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [url]] : process.platform === 'win32' ? ['explorer.exe', [url]] : ['xdg-open', [url]];
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  child.on('error', () => {});
+  child.unref();
+  return { opened: url, with: cmd };
+}
+
+export const browseCommands = { browse, pdf, 'visual-verdict': visualVerdict, 'open-url': openUrl };

@@ -1,9 +1,26 @@
 // `mis browse <command>` handlers, run inside the daemon. Each gets (browser, tab, args, ctx{cwd, remote, inChain}).
-import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, mkdirSync } from 'node:fs';
-import { resolve, dirname, extname, sep } from 'node:path';
-import { tmpdir } from 'node:os';
-import { pathToFileURL } from 'node:url';
-import { toUrl, lineDiff, toInches } from './util.mjs';
+import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, mkdirSync, lstatSync, readlinkSync } from 'node:fs';
+import { resolve, dirname, extname, sep, join, basename } from 'node:path';
+import { tmpdir, hostname } from 'node:os';
+import { browserDataDirs } from './cookies.mjs';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { toUrl, lineDiff, toInches, BROWSE_ALWAYS_ASK } from './util.mjs';
+
+export const EXTENSION_DIR = fileURLToPath(new URL('../../../extension', import.meta.url));
+const mb = (n) => Math.round(n / 1048576 * 10) / 10;
+
+const realish = (p) => { let base = p, rest = ''; while (!existsSync(base) && dirname(base) !== base) { rest = join(basename(base), rest); base = dirname(base); } try { return join(realpathSync(base), rest).replace(/\/$/, ''); } catch { return p; } };
+
+/** A profile a running browser holds: SingletonLock is a symlink to "<host>-<pid>" (a dead pid on this host is a stale lock). */
+function profileInUse(dir) {
+  if (existsSync(join(dir, 'lockfile'))) return true; // Windows
+  let target;
+  try { if (!lstatSync(join(dir, 'SingletonLock')).isSymbolicLink()) return true; target = readlinkSync(join(dir, 'SingletonLock')); } catch { return false; }
+  const m = /^(.*)-(\d+)$/.exec(target);
+  if (!m || m[1] !== hostname()) return true;
+  try { process.kill(Number(m[2]), 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
 
 const INTERACTIVE = new Set(['button', 'link', 'textbox', 'checkbox', 'radio', 'combobox', 'listbox', 'menuitem', 'menuitemcheckbox',
   'menuitemradio', 'option', 'searchbox', 'slider', 'spinbutton', 'switch', 'tab', 'treeitem']);
@@ -83,17 +100,17 @@ async function axTree(b, tab, { interactive, compact, depth, scope, refs = true,
   return { text: lines.join('\n'), refs: shownRefs };
 }
 
-async function annotate(b, tab, refs, file) {
+async function annotate(b, tab, refs, file, colors = {}) {
   const boxes = [];
   for (const r of refs) {
-    const q = (await b.send(tab, 'DOM.getContentQuads', { backendNodeId: tab.refs.get(r) }).catch(() => ({ quads: [] }))).quads?.[0];
-    if (q) boxes.push({ r, x: Math.min(q[0], q[6]), y: Math.min(q[1], q[3]), w: Math.max(q[2], q[4]) - Math.min(q[0], q[6]), h: Math.max(q[5], q[7]) - Math.min(q[1], q[3]) });
+    const q = (await b.send(tab, 'DOM.getContentQuads', { backendNodeId: backendOf(tab, r) }).catch(() => ({ quads: [] }))).quads?.[0];
+    if (q) boxes.push({ r, c: HEAT[colors[r]] ?? '#e00', fill: !!colors[r], x: Math.min(q[0], q[6]), y: Math.min(q[1], q[3]), w: Math.max(q[2], q[4]) - Math.min(q[0], q[6]), h: Math.max(q[5], q[7]) - Math.min(q[1], q[3]) });
   }
   const frame = tab.frameId; tab.frameId = null; // overlays go into the top document
   try {
     await b.evaluate(tab, `(() => { const c = document.createElement('div'); c.id = '__mis_annotate'; c.style.cssText = 'position:absolute;left:0;top:0;z-index:2147483647;pointer-events:none';
-      for (const o of ${JSON.stringify(boxes)}) { const d = document.createElement('div'); d.style.cssText = 'position:absolute;border:2px solid #e00;box-sizing:border-box;left:' + (o.x + scrollX) + 'px;top:' + (o.y + scrollY) + 'px;width:' + o.w + 'px;height:' + o.h + 'px';
-        const l = document.createElement('span'); l.textContent = o.r; l.style.cssText = 'position:absolute;left:0;top:-14px;background:#e00;color:#fff;font:10px/12px monospace;padding:0 2px'; d.append(l); c.append(d); }
+      for (const o of ${JSON.stringify(boxes)}) { const d = document.createElement('div'); d.style.cssText = 'position:absolute;border:2px solid ' + o.c + ';' + (o.fill ? 'background:' + o.c + '40;' : '') + 'box-sizing:border-box;left:' + (o.x + scrollX) + 'px;top:' + (o.y + scrollY) + 'px;width:' + o.w + 'px;height:' + o.h + 'px';
+        const l = document.createElement('span'); l.textContent = o.r; l.style.cssText = 'position:absolute;left:0;top:-14px;background:' + o.c + ';color:#fff;font:10px/12px monospace;padding:0 2px'; d.append(l); c.append(d); }
       document.documentElement.append(c); })()`);
     writeFileSync(file, await capture(b, tab, {}));
   } finally {
@@ -174,6 +191,51 @@ const JS = {
     return { title: document.title, jsonld, og, twitter, meta }; })()`,
   storage: `(() => { const dump = (s) => Object.fromEntries(Array.from({ length: s.length }, (_, i) => [s.key(i), s.getItem(s.key(i))]));
     return { localStorage: dump(localStorage), sessionStorage: dump(sessionStorage) }; })()`,
+  media: (scope) => `(() => { const root = ${JSON.stringify(scope ?? null)} ? document.querySelector(${JSON.stringify(scope ?? '')}) : document;
+    if (!root) throw new Error(${JSON.stringify(`no element matches ${scope}`)});
+    const abs = (u) => { try { return u ? new URL(u, document.baseURI).href : null; } catch { return null; } };
+    const box = (e) => ({ width: e.clientWidth || null, height: e.clientHeight || null });
+    return { images: [...root.querySelectorAll('img')].map(e => ({ src: abs(e.currentSrc || e.src), alt: e.alt, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight, ...box(e), loading: e.loading || null })),
+      videos: [...root.querySelectorAll('video')].map(e => ({ src: abs(e.currentSrc || e.src || e.querySelector('source')?.src), poster: abs(e.poster), duration: Number.isFinite(e.duration) ? e.duration : null,
+        sources: [...e.querySelectorAll('source')].map(x => ({ src: abs(x.src), type: x.type || null })), ...box(e) })),
+      audio: [...root.querySelectorAll('audio')].map(e => ({ src: abs(e.currentSrc || e.src || e.querySelector('source')?.src), duration: Number.isFinite(e.duration) ? e.duration : null })) }; })()`,
+  uxAudit: `(() => { const t = (e) => (e.innerText || e.textContent || '').replace(/\\s+/g, ' ').trim();
+    const vis = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+    const navs = [...document.querySelectorAll('nav, header, [role=navigation]')];
+    const links = [...new Set(navs.flatMap(n => [...n.querySelectorAll('a[href]')]))].filter(vis).slice(0, 40).map(a => ({ text: t(a).slice(0, 80), href: a.href }));
+    const inter = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [onclick]')].filter(vis);
+    return { site: { title: document.title, url: location.href, host: location.host, lang: document.documentElement.lang || null,
+        description: document.querySelector('meta[name=description]')?.content || null, viewportMeta: document.querySelector('meta[name=viewport]')?.content || null },
+      landmarks: Object.fromEntries(['header', 'nav', 'main', 'footer', 'aside'].map(k => [k, document.querySelectorAll(k + ', [role=' + ({ header: 'banner', nav: 'navigation', main: 'main', footer: 'contentinfo', aside: 'complementary' })[k] + ']').length])),
+      navigation: links,
+      headings: [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(vis).slice(0, 60).map(h => ({ level: Number(h.tagName[1]), text: t(h).slice(0, 120) })),
+      textBlocks: [...document.querySelectorAll('p, li, blockquote')].filter(vis).map(t).filter(x => x.length >= 40).slice(0, 20).map(x => x.slice(0, 240)),
+      interactive: { count: inter.length, items: inter.slice(0, 60).map(e => ({ tag: e.tagName.toLowerCase(), type: e.type || null, text: (t(e) || e.getAttribute('aria-label') || e.placeholder || e.name || '').slice(0, 80), ...(e.href ? { href: e.href } : {}) })) },
+      forms: [...document.forms].map(f => ({ action: f.action, method: (f.method || 'get').toUpperCase(), fields: [...f.elements].filter(e => e.name).map(e => e.name) })),
+      issues: { imagesWithoutAlt: [...document.images].filter(i => !i.hasAttribute('alt')).length,
+        inputsWithoutLabel: [...document.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea')].filter(e => !e.labels?.length && !e.getAttribute('aria-label') && !e.placeholder).length,
+        h1Count: document.querySelectorAll('h1').length } }; })()`,
+  cleanup: (kinds) => `(() => { const SEL = ${JSON.stringify(CLEANUP)}; const kinds = ${JSON.stringify(kinds)}, removed = {};
+    const hide = (e) => { e.style.setProperty('display', 'none', 'important'); };
+    for (const k of kinds) {
+      if (k === 'sticky') { const els = [...document.querySelectorAll('body *')].filter(e => ['fixed', 'sticky'].includes(getComputedStyle(e).position) && e.getBoundingClientRect().height > 0);
+        els.forEach(hide); removed.sticky = els.length; continue; }
+      const els = new Set(); for (const s of SEL[k]) for (const e of document.querySelectorAll(s)) if (e !== document.body && e !== document.documentElement && !e.querySelector('main, article, h1')) els.add(e);
+      els.forEach(hide); removed[k] = els.size; }
+    return removed; })()`,
+  cursor: `(() => { const native = 'a[href],button,input,select,textarea,summary,option,label,[role=button],[role=link],[role=checkbox],[role=tab],[role=menuitem],[role=option],[contenteditable=true]';
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (out.length >= 50) break;
+      if (el.closest(native) || el.querySelector(native)) continue;
+      const s = getComputedStyle(el), why = [];
+      if (s.cursor === 'pointer' && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer')) why.push('cursor:pointer');
+      if (el.hasAttribute('onclick')) why.push('onclick');
+      if (el.hasAttribute('tabindex') && el.tabIndex >= 0) why.push('tabindex');
+      const r = el.getBoundingClientRect();
+      if (why.length && r.width > 0 && r.height > 0 && s.visibility !== 'hidden') { el.__misWhy = why; out.push(el); }
+    }
+    return out; })()`,
   perf: `(async () => { const nav = performance.getEntriesByType('navigation')[0] || {}, res = performance.getEntriesByType('resource');
     const fcp = performance.getEntriesByName('first-contentful-paint')[0];
     const lcp = await new Promise(r => { try { new PerformanceObserver(l => r(l.getEntries().at(-1)?.startTime)).observe({ type: 'largest-contentful-paint', buffered: true }); } catch { r(undefined); } setTimeout(() => r(undefined), 300); });
@@ -182,6 +244,83 @@ const JS = {
       loadMs: ms(nav.loadEventEnd), fcpMs: ms(fcp?.startTime), lcpMs: ms(lcp), documentBytes: nav.transferSize ?? null,
       resources: res.map(r => ({ name: r.name, type: r.initiatorType, size: r.transferSize, ms: Math.round(r.duration) })) }; })()`,
 };
+
+// gstack-style clutter selectors (cleanup); sticky/fixed elements are found by computed style
+const CLEANUP = {
+  ads: ['ins.adsbygoogle', '[id^="google_ads"]', '[id^="div-gpt-ad"]', 'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]',
+    '[class*="ad-banner"]', '[class*="ad-wrapper"]', '[class*="ad-container"]', '[class*="ad-slot"]', '[class*="ad-unit"]', '[id*="ad-banner"]',
+    '[id*="ad-container"]', '[data-ad]', '[data-ad-slot]', '[class*="sponsored"]', '.ad', '.ads', '.advert', '.advertisement', '#ad', '#ads'],
+  cookies: ['[class*="cookie-consent"]', '[class*="cookie-banner"]', '[class*="cookie-notice"]', '[id*="cookie-consent"]', '[id*="cookie-banner"]',
+    '[id*="cookie-notice"]', '[class*="consent-banner"]', '[class*="consent-modal"]', '[class*="gdpr"]', '[id*="gdpr"]', '#onetrust-consent-sdk',
+    '#onetrust-banner-sdk', '#CybotCookiebotDialog', '.qc-cmp2-container', '[class*="cc-banner"]', '[class*="cc-window"]', '[class*="privacy-banner"]'],
+  social: ['[class*="social-share"]', '[class*="share-buttons"]', '[class*="share-bar"]', '[class*="social-widget"]', '[class*="social-icons"]',
+    'iframe[src*="facebook.com/plugins"]', 'iframe[src*="platform.twitter"]', '[class*="addthis"]', '[class*="sharethis"]', '[class*="follow-us"]'],
+};
+
+/** Cookies through Storage (browser-wide), then read back: Chrome silently drops some (e.g. SameSite=None without Secure). */
+async function setCookies(b, cookies) {
+  const key = (c) => `${c.name}\u0000${(c.domain ?? (c.url ? new URL(c.url).hostname : '')).replace(/^\./, '')}`;
+  await b.cdp.send('Storage.setCookies', { cookies });
+  const have = new Set((await b.cdp.send('Storage.getCookies')).cookies.map(key));
+  const set = cookies.filter((c) => have.has(key(c))).length;
+  return { set, rejected: cookies.length - set };
+}
+
+/** cookie-import / cookie-import-browser: the CLI reads (and decrypts) the cookies and sends them as data; values are never echoed. */
+async function importCookies(b, ctx) {
+  const list = ctx.data?.cookies;
+  if (!Array.isArray(list)) throw new Error('no cookies to import (run it as `mis browse cookie-import <file.json>` or `cookie-import-browser`)');
+  const r = await setCookies(b, list.map((c) => ({ name: String(c.name), value: String(c.value), domain: c.domain, path: c.path ?? '/', secure: !!c.secure,
+    httpOnly: !!c.httpOnly, ...(c.sameSite ? { sameSite: c.sameSite } : {}), ...(c.expires > 0 ? { expires: c.expires } : {}) })));
+  const domains = [...new Set(list.map((c) => String(c.domain ?? '').replace(/^\./, '')))];
+  return { imported: r.set, rejected: r.rejected, domains, ...(ctx.data.source ? { source: ctx.data.source } : {}) };
+}
+
+/** GET a URL the way the page would (its cookies; not limited by CORS) through the browser's network stack. */
+async function fetchResource(b, tab, url) {
+  const { resource: r } = await b.send(tab, 'Network.loadNetworkResource', { frameId: tab.mainFrameId, url, options: { disableCache: false, includeCredentials: true } }, 120000);
+  if (!r.success) throw new Error(`cannot download ${url}: ${r.netErrorName ?? 'failed'}${r.httpStatusCode ? ` (HTTP ${r.httpStatusCode})` : ''}`);
+  if (r.httpStatusCode >= 400) { if (r.stream) await b.send(tab, 'IO.close', { handle: r.stream }).catch(() => {}); throw new Error(`cannot download ${url}: HTTP ${r.httpStatusCode}`); }
+  const parts = [];
+  for (;;) {
+    const c = await b.send(tab, 'IO.read', { handle: r.stream, size: 1 << 20 });
+    parts.push(Buffer.from(c.data, c.base64Encoded ? 'base64' : 'utf8'));
+    if (c.eof) break;
+  }
+  await b.send(tab, 'IO.close', { handle: r.stream }).catch(() => {});
+  return { body: Buffer.concat(parts), status: r.httpStatusCode };
+}
+
+/** RSS of the browser and its helper processes (ps; empty where ps is missing). */
+function browserRss(pid) {
+  if (!pid) return null;
+  try {
+    const rows = execFileSync('ps', ['-axo', 'pid=,ppid=,rss='], { encoding: 'utf8' }).trim().split('\n').map((l) => l.trim().split(/\s+/).map(Number));
+    const ids = new Set([pid]);
+    for (let grew = true; grew;) { grew = false; for (const [p, pp] of rows) if (ids.has(pp) && !ids.has(p)) { ids.add(p); grew = true; } }
+    const procs = rows.filter(([p]) => ids.has(p));
+    return { processes: procs.length, rssMB: mb(procs.reduce((s, r) => s + r[2] * 1024, 0)) };
+  } catch { return null; }
+}
+
+/** -C: elements that act like controls (cursor:pointer, onclick, tabindex) but are not in the accessibility tree as one; @c refs. */
+async function cursorScan(b, tab) {
+  const arr = await b.evaluate(tab, JS.cursor, { byValue: false });
+  const info = await b.callOn(tab, arr.objectId, function () { return this.map((e) => ({ tag: e.tagName.toLowerCase(), text: (e.innerText || e.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 60), why: e.__misWhy })); });
+  const { result } = await b.send(tab, 'Runtime.getProperties', { objectId: arr.objectId, ownProperties: true });
+  const lines = [];
+  for (const [i, x] of info.entries()) {
+    const objectId = result.find((p) => p.name === String(i))?.value?.objectId;
+    const { node } = await b.send(tab, 'DOM.describeNode', { objectId });
+    let ref = [...tab.crefs].find(([, id]) => id === node.backendNodeId)?.[0];
+    if (!ref) { ref = `@c${++tab.crefSeq}`; tab.crefs.set(ref, node.backendNodeId); }
+    lines.push(`${ref} [${x.tag}]${x.text ? ` "${x.text}"` : ''} (${x.why.join(', ')})`);
+  }
+  return lines;
+}
+
+const HEAT = { green: '#16a34a', yellow: '#eab308', red: '#dc2626', blue: '#2563eb', orange: '#ea580c', gray: '#6b7280' };
+const backendOf = (tab, ref) => (ref[1] === 'c' ? tab.crefs : tab.refs).get(ref);
 
 const HANDLERS = {
   // ── navigation
@@ -440,8 +579,26 @@ const HANDLERS = {
 
   // ── snapshot
   async snapshot(b, tab, args, ctx) {
-    const [o] = flags(args, { '-i': true, '-c': true, '-d': 1, '-s': 1, '-D': true, '-a': true, '-o': 1 });
-    const { text, refs } = await axTree(b, tab, { interactive: o['-i'], compact: o['-c'], depth: o['-d'] !== undefined ? Number(o['-d']) : undefined, scope: o['-s'] });
+    const [o] = flags(args, { '-i': true, '-c': true, '-d': 1, '-s': 1, '-D': true, '-a': true, '-o': 1, '-C': true, '-H': 1 });
+    let heat = null;
+    if (o['-H']) {
+      try { heat = JSON.parse(o['-H']); } catch { throw new Error('-H takes a JSON map of refs to colors, e.g. \'{"@e1":"green","@c2":"red"}\''); }
+      if (!heat || typeof heat !== 'object' || Array.isArray(heat)) throw new Error('-H takes a JSON object of refs to colors');
+      for (const [r, c] of Object.entries(heat)) {
+        if (!HEAT[c]) throw new Error(`-H: unknown color "${c}" for ${r} (${Object.keys(HEAT).join(', ')})`);
+        if (!backendOf(tab, r)) throw new Error(`-H: unknown ref ${r}; take a snapshot (with -C for @c refs) first`);
+      }
+      const file = out(ctx, o['-o'], tmpName('heatmap.png'));
+      await annotate(b, tab, Object.keys(heat), file, heat);
+      return `[heatmap screenshot: ${file}]`;
+    }
+    const tree = await axTree(b, tab, { interactive: o['-i'], compact: o['-c'], depth: o['-d'] !== undefined ? Number(o['-d']) : undefined, scope: o['-s'] });
+    let { text } = tree;
+    const refs = [...tree.refs];
+    if (o['-C']) {
+      const lines = await cursorScan(b, tab);
+      if (lines.length) { text += `${text ? '\n' : ''}── cursor-interactive (not in the accessibility tree) ──\n${lines.join('\n')}`; refs.push(...lines.map((l) => l.split(' ')[0])); }
+    }
     let result = text || '(empty: no matching elements)';
     if (o['-D']) {
       const prev = tab.lastSnapshot;
@@ -508,9 +665,280 @@ const HANDLERS = {
     return `Switched to frame ${tab.frameUrl}`;
   },
 
+  // ── M9-E: reading, inspection, style and cleanup
+  async media(b, tab, args) {
+    const [o, [scope]] = flags(args, { '--images': true, '--videos': true, '--audio': true });
+    const all = await b.evaluate(tab, JS.media(scope));
+    const kinds = ['images', 'videos', 'audio'].filter((k) => o[`--${k}`]);
+    return kinds.length ? Object.fromEntries(kinds.map((k) => [k, all[k]])) : all;
+  },
+  async inspect(b, tab, args) {
+    const [o, [sel = 'body']] = flags(args, { '--all': true });
+    await b.send(tab, 'CSS.enable').catch(() => {}); // lazily: the CSS domain costs on every style change once enabled
+    await b.send(tab, 'DOM.getDocument', { depth: 0 }); // requestNode needs the document pushed first
+    const { nodeId } = await b.send(tab, 'DOM.requestNode', { objectId: await b.element(tab, sel) });
+    const [matched, { computedStyle }, box] = await Promise.all([b.send(tab, 'CSS.getMatchedStylesForNode', { nodeId }),
+      b.send(tab, 'CSS.getComputedStyleForNode', { nodeId }), b.send(tab, 'DOM.getBoxModel', { nodeId }).catch(() => null)]);
+    // only what the author wrote (shorthand expansions carry no text)
+    const decls = (style) => (style?.cssProperties ?? []).filter((p) => !p.disabled && (p.text || p.range))
+      .map((p) => ({ name: p.name, value: p.value, ...(p.important ? { important: true } : {}) }));
+    const rules = (matched.matchedCSSRules ?? []).reverse().map(({ rule }) => ({
+      selector: rule.selectorList.text, origin: rule.origin,
+      source: rule.styleSheetId ? `${tab.sheets.get(rule.styleSheetId) || 'inline <style>'}${rule.style.range ? `:${rule.style.range.startLine + 1}` : ''}` : null,
+      properties: decls(rule.style) }));
+    const KEY = ['display', 'position', 'top', 'left', 'width', 'height', 'box-sizing', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+      'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'color', 'background-color', 'font-family', 'font-size', 'font-weight',
+      'line-height', 'text-align', 'z-index', 'opacity', 'visibility', 'overflow', 'flex-direction', 'justify-content', 'align-items', 'gap'];
+    const computed = Object.fromEntries(computedStyle.filter((p) => o['--all'] || KEY.includes(p.name)).map((p) => [p.name, p.value]));
+    const side = (q) => q && { width: Math.round(q[2] - q[0]), height: Math.round(q[5] - q[1]) };
+    const m = box?.model;
+    return { selector: sel, inline: decls(matched.inlineStyle), rules, computed,
+      boxModel: m ? { content: side(m.content), padding: side(m.padding), border: side(m.border), margin: side(m.margin) } : null };
+  },
+  async 'ux-audit'(b, tab) { return b.evaluate(tab, JS.uxAudit); },
+  async style(b, tab, args) {
+    if (args[0] === '--undo') {
+      const n = Number(args[1] ?? 1);
+      if (!(n >= 1)) throw USAGE_ERR('style --undo [N]');
+      const undone = tab.styleUndo.splice(-n).reverse();
+      if (!undone.length) throw new Error('nothing to undo (style changes reset on navigation)');
+      for (const u of undone) {
+        const id = await b.element(tab, u.ref ?? u.sel, 0).catch(() => null);
+        if (id) await b.callOn(tab, id, function (p, v, pr) { if (v) this.style.setProperty(p, v, pr); else this.style.removeProperty(p); }, u.prop, u.value, u.priority);
+      }
+      return `Undid ${undone.length} style change(s)`;
+    }
+    const [sel, prop, ...v] = args;
+    if (!sel || !prop || !v.length) throw USAGE_ERR('style <selector|@ref> <property> <value> | style --undo [N]');
+    const id = await b.element(tab, sel);
+    const prev = await b.callOn(tab, id, function (p, val) {
+      const old = { value: this.style.getPropertyValue(p), priority: this.style.getPropertyPriority(p) };
+      this.style.setProperty(p, val.replace(/\s*!important$/, ''), /!important$/.test(val) ? 'important' : '');
+      return old;
+    }, prop, v.join(' '));
+    tab.styleUndo.push({ sel, prop, ...prev });
+    return `Set ${prop} on ${sel} (undo: style --undo)`;
+  },
+  async cleanup(b, tab, args) {
+    const [o] = flags(args, { '--ads': true, '--cookies': true, '--sticky': true, '--social': true, '--all': true });
+    const pick = ['ads', 'cookies', 'sticky', 'social'].filter((k) => o[`--${k}`] || o['--all']);
+    return b.evaluate(tab, JS.cleanup(pick.length ? pick : ['ads', 'cookies', 'sticky', 'social']));
+  },
+  async prettyscreenshot(b, tab, args, ctx) {
+    const hide = [];
+    for (let i = args.indexOf('--hide'); i >= 0; i = args.indexOf('--hide')) hide.push(...args.splice(i, 2).slice(1));
+    const [o, [path]] = flags(args, { '--scroll-to': 1, '--cleanup': true, '--width': 1 });
+    const saved = { ...b.viewport };
+    const file = out(ctx, path, tmpName('pretty.png'));
+    try {
+      if (o['--cleanup']) await HANDLERS.cleanup(b, tab, ['--all']);
+      if (hide.length) await b.evaluate(tab, `for (const s of ${JSON.stringify(hide)}) for (const e of document.querySelectorAll(s)) { e.dataset.misHidden = e.style.visibility; e.style.visibility = 'hidden'; }`);
+      if (o['--width']) { b.viewport = { ...b.viewport, width: Number(o['--width']) }; await b.applyViewport(tab); await sleep(150); }
+      const to = o['--scroll-to'];
+      if (to) {
+        const found = await b.evaluate(tab, `(() => { let e; try { e = document.querySelector(${JSON.stringify(to)}); } catch {}
+          e ??= [...document.querySelectorAll('body *')].find((x) => !x.children.length && x.textContent.includes(${JSON.stringify(to)}));
+          if (!e) return false; e.scrollIntoView({ block: 'start', behavior: 'instant' }); return true; })()`);
+        if (!found) throw new Error(`--scroll-to: nothing matches ${to}`);
+      }
+      writeFileSync(file, await capture(b, tab, { viewport: !!to }));
+    } finally {
+      if (hide.length) await b.evaluate(tab, `for (const e of document.querySelectorAll('[data-mis-hidden]')) { e.style.visibility = e.dataset.misHidden; delete e.dataset.misHidden; }`).catch(() => {});
+      if (o['--width']) { b.viewport = saved; await b.applyViewport(tab); }
+    }
+    return file;
+  },
+
+  // ── M9-E: credentials and request identity (the guard asks for each of these every time)
+  async cookies(b) { return (await b.cdp.send('Storage.getCookies')).cookies; },
+  async cookie(b, tab, [pair]) {
+    const i = pair?.indexOf('=') ?? -1;
+    if (i < 1) throw USAGE_ERR('cookie <name>=<value>');
+    const url = tab.url;
+    if (!/^https?:/.test(url)) throw new Error('cookie sets a cookie for the current page; open an http(s) page first');
+    const r = await setCookies(b, [{ name: pair.slice(0, i), value: pair.slice(i + 1), url }]);
+    return `Cookie ${pair.slice(0, i)} set for ${new URL(url).hostname}${r.set ? '' : ' (the browser rejected it)'}`;
+  },
+  async 'cookie-import'(b, tab, args, ctx) { return importCookies(b, ctx); },
+  async 'cookie-import-browser'(b, tab, args, ctx) { return importCookies(b, ctx); },
+  async header(b, tab, args) {
+    if (args[0] === '--clear') b.headers = {};
+    else {
+      const i = args.join(' ').indexOf(':');
+      if (i < 1) throw USAGE_ERR('header <name>:<value> | header --clear');
+      const line = args.join(' ');
+      b.headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    }
+    for (const t of b.tabs.values()) await b.applyNetwork(t);
+    return `Extra request headers: ${Object.keys(b.headers).join(', ') || '(none)'} (values hidden)`;
+  },
+  async useragent(b, tab, args) {
+    if (!args.length) throw USAGE_ERR('useragent <string>');
+    b.userAgent = args.join(' ');
+    for (const t of b.tabs.values()) await b.applyNetwork(t);
+    return `User agent set (new requests use it): ${b.userAgent}`;
+  },
+  async state(b, tab, [op, name], ctx) {
+    if (!['save', 'load'].includes(op) || !/^[\w.-]{1,64}$/.test(name ?? '') || /^\.+$/.test(name)) throw USAGE_ERR('state save|load <name> (letters, digits, . _ -)');
+    const dir = join(ctx.stateDir, 'states'), file = join(dir, `${name}.json`);
+    if (op === 'save') {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const s = { savedAt: new Date().toISOString(), urls: (await b.tabUrls()).filter((u) => /^(https?|file):/.test(u)), cookies: (await b.cdp.send('Storage.getCookies')).cookies };
+      writeFileSync(file, JSON.stringify(s, null, 2), { mode: 0o600 });
+      return `Saved ${s.cookies.length} cookies and ${s.urls.length} page(s) to ${file}`;
+    }
+    if (!existsSync(file)) throw new Error(`no saved state "${name}"`);
+    const s = JSON.parse(readFileSync(file, 'utf8'));
+    await b.cdp.send('Storage.setCookies', { cookies: s.cookies });
+    const [first, ...rest] = s.urls;
+    if (first) await b.navigate(b.current(), first);
+    for (const u of rest) await b.newTab(u);
+    if (first) b.active = [...b.tabs.values()].find((t) => t.url === first)?.id ?? b.active;
+    return `Loaded ${s.cookies.length} cookies and ${s.urls.length} page(s) from ${name}`;
+  },
+
+  // ── M9-E: extraction (asks every time)
+  async download(b, tab, [target, path], ctx) {
+    if (!target) throw USAGE_ERR('download <url|selector|@ref> [path]');
+    const url = looksLikeSelector(target) ? await b.callOn(tab, await b.element(tab, target), function () { return this.currentSrc || this.src || this.href || ''; })
+      : new URL(target, tab.url).href;
+    if (!url) throw new Error(`${target} has no src or href`);
+    const data = await fetchResource(b, tab, url);
+    const file = out(ctx, path, tmpName(basename(new URL(url).pathname) || 'download'));
+    writeFileSync(file, data.body);
+    return { path: file, url, bytes: data.body.length, status: data.status };
+  },
+  async scrape(b, tab, args, ctx) {
+    const [o, [kind]] = flags(args, { '--selector': 1, '--dir': 1, '--limit': 1 });
+    if (!['images', 'videos', 'media'].includes(kind)) throw USAGE_ERR('scrape <images|videos|media> [--selector sel] [--dir path] [--limit N]');
+    const m = await b.evaluate(tab, JS.media(o['--selector']));
+    const items = [...(kind !== 'videos' ? m.images : []), ...(kind !== 'images' ? [...m.videos, ...m.audio] : [])];
+    const urls = [...new Set(items.flatMap((x) => x.src ? [x.src] : []).filter((u) => /^(https?|file):/.test(u)))].slice(0, Number(o['--limit'] ?? 50));
+    const dir = out(ctx, o['--dir'], tmpName('scrape'));
+    mkdirSync(dir, { recursive: true });
+    const manifest = [];
+    for (const [i, url] of urls.entries()) {
+      const file = join(dir, `${String(i + 1).padStart(3, '0')}-${(basename(new URL(url).pathname) || 'file').replace(/[^\w.-]/g, '_').slice(0, 80)}`);
+      try { const d = await fetchResource(b, tab, url); writeFileSync(file, d.body); manifest.push({ url, file, bytes: d.body.length }); }
+      catch (e) { manifest.push({ url, error: e.message }); }
+    }
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    return { dir, saved: manifest.filter((x) => x.file).length, failed: manifest.filter((x) => x.error).length, manifest: join(dir, 'manifest.json') };
+  },
+  async archive(b, tab, [path], ctx) {
+    const { data } = await b.send(tab, 'Page.captureSnapshot', { format: 'mhtml' }, 120000);
+    const file = out(ctx, path, tmpName('page.mhtml'));
+    writeFileSync(file, data);
+    return { path: file, bytes: Buffer.byteLength(data) };
+  },
+
+  // ── M9-E: tabs, headed browser and observation
+  async 'tab-each'(b, tab, [cmd, ...args], ctx) {
+    if (!cmd || ['tab-each', 'chain', 'tab', 'newtab', 'closetab'].includes(cmd)) throw USAGE_ERR('tab-each <command> [args...] (not chain, tab-each or tab commands)');
+    const results = [];
+    for (const t of [...b.tabs.values()]) {
+      b.active = t.id;
+      try { results.push({ tab: t.id, url: t.url, result: await runCommand(b, cmd, args, { ...ctx, inChain: true }) }); }
+      catch (e) { results.push({ tab: t.id, url: t.url, error: e.message }); }
+    }
+    b.active = tab.id;
+    return results;
+  },
+  async connect(b, tab, args, ctx) {
+    const [o] = flags(args, { '--profile-dir': 1, '--no-extension': true });
+    if (b.handoff) throw new Error('a handoff is in progress; run `mis browse resume` first');
+    const profile = resolve(ctx.cwd, o['--profile-dir'] ?? join(ctx.home, 'chrome-profile'));
+    // never the user's own browser data (Chrome 136+ refuses DevTools there, and its logins must not be driven from here);
+    // to use those sessions, import one site's cookies with cookie-import-browser
+    const real = realish(profile);
+    const own = browserDataDirs().map(realish).find((d) => real === d || real.startsWith(d + sep));
+    if (own) throw new Error(`${profile} is inside your browser's own data (${own}); connect uses its own profile. Pick another --profile-dir, or import a site's cookies with cookie-import-browser`);
+    // a running browser owns its profile (a second instance just hands the URL to it)
+    if (profileInUse(profile)) throw new Error(`${profile} is in use by a running browser; quit it or pick another --profile-dir`);
+    mkdirSync(profile, { recursive: true, mode: 0o700 });
+    const urls = await b.tabUrls();
+    b.connected = { profile, extension: o['--no-extension'] ? null : EXTENSION_DIR };
+    try { await b.relaunch(false, urls); } catch (e) { b.connected = null; await b.relaunch(true, urls).catch(() => {}); throw e; }
+    return { mode: 'connected', profile, extensionId: b.extensionId, headless: b.headlessOnly,
+      note: `A visible Chrome on ${profile}; logins you make there stay in that profile. ${b.extensionId ? `Side panel: click the Make It Ship toolbar icon (extension ${b.extensionId}); \`mis browse inbox\` reads its messages.` : ''} \`mis browse disconnect\` returns to headless.` };
+  },
+  async disconnect(b) {
+    if (!b.connected) return 'not connected (already headless)';
+    const urls = await b.tabUrls();
+    b.connected = null;
+    await b.relaunch(true, urls);
+    return `Disconnected; headless again at ${b.current().url}`;
+  },
+  async focus(b, tab, [sel]) {
+    await b.send(tab, 'Page.bringToFront');
+    await b.cdp.send('Target.activateTarget', { targetId: tab.targetId }).catch(() => {});
+    if (sel) await b.callOn(tab, await b.element(tab, sel), function () { this.scrollIntoView({ block: 'center', behavior: 'instant' }); this.focus(); });
+    return `Focused tab ${tab.id}${sel ? ` and ${sel}` : ''}`;
+  },
+  async memory(b) {
+    const tabs = [];
+    for (const t of b.tabs.values()) {
+      const h = await b.send(t, 'Runtime.getHeapUsage').catch(() => null);
+      tabs.push({ id: t.id, url: t.url, jsHeapUsedMB: h ? mb(h.usedSize) : null, jsHeapTotalMB: h ? mb(h.totalSize) : null,
+        buffers: { console: t.console.length, network: t.network.length, dialogs: t.dialogs.length } });
+    }
+    return { daemon: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [`${k}MB`, mb(v)])), tabs, browser: browserRss(b.proc?.pid) };
+  },
+  async watch(b, tab, args) {
+    const [o, [op]] = flags(args, { '--interval': 1 });
+    const shot = async () => {
+      const t = b.current();
+      const text = (await axTree(b, t, { compact: true, refs: false })).text;
+      const w = b.watch, last = w.entries.at(-1);
+      if (!last || last.url !== t.url || last.text !== text) { w.entries.push({ at: new Date().toISOString(), url: t.url, text }); if (w.entries.length > 50) w.entries.shift(); }
+    };
+    if (op === 'stop') {
+      if (!b.watch) throw new Error('not watching (start with `mis browse watch`)');
+      clearInterval(b.watch.timer);
+      await shot().catch(() => {});
+      const { entries, started } = b.watch;
+      b.watch = null;
+      return { started, stopped: new Date().toISOString(), snapshots: entries.map((e, i) => ({ at: e.at, url: e.url,
+        changes: i && entries[i - 1].url === e.url ? lineDiff(entries[i - 1].text, e.text).join('\n') : e.text })) };
+    }
+    if (op) throw USAGE_ERR('watch [--interval seconds] | watch stop');
+    if (b.watch) return `watching since ${b.watch.started} (${b.watch.entries.length} snapshot(s)); \`mis browse watch stop\` for the summary`;
+    const sec = Number(o['--interval'] ?? 5);
+    if (!(sec >= 1)) throw new Error('--interval must be at least 1 second');
+    b.watch = { started: new Date().toISOString(), entries: [] };
+    await shot();
+    b.watch.timer = setInterval(() => { if (b.watch) shot().catch(() => {}); }, sec * 1000); // errors (navigation, closed tab) only skip a tick
+    b.watch.timer.unref?.();
+    return `Watching: a snapshot every ${sec}s while you browse; \`mis browse watch stop\` returns what changed`;
+  },
+  async inbox(b, tab, args) {
+    if (!b.extensionId) throw new Error('no side panel: run `mis browse connect` (it loads the Make It Ship extension) first');
+    const clear = args.includes('--clear');
+    const expr = `chrome.storage.local.get('inbox').then(async (r) => { const m = r.inbox || []; ${clear ? "await chrome.storage.local.set({ inbox: [] });" : ''} return m; })`;
+    // read the extension's storage from one of its own pages over the DevTools pipe: the extension never talks to the daemon
+    const { targetId } = await b.cdp.send('Target.createTarget', { url: `chrome-extension://${b.extensionId}/sidepanel.html`, background: true });
+    try {
+      const { sessionId } = await b.cdp.send('Target.attachToTarget', { targetId, flatten: true });
+      for (let i = 0; ; i++) {
+        const r = await b.cdp.send('Runtime.evaluate', { expression: `typeof chrome !== 'undefined' && !!chrome.storage && document.readyState === 'complete'`, returnByValue: true }, sessionId);
+        if (r.result.value) break;
+        if (i > 100) throw new Error('the extension page did not load');
+        await sleep(50);
+      }
+      const r = await b.cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId);
+      const msgs = r.result.value ?? [];
+      return msgs.length ? msgs : '(inbox empty)';
+    } finally { await b.cdp.send('Target.closeTarget', { targetId }).catch(() => {}); }
+  },
+  async history(b, tab, args) {
+    if (args.includes('--clear')) { b.history.length = 0; return 'cleared'; }
+    return b.history;
+  },
+
   // ── handoff
   async handoff(b, tab, args) {
     if (b.handoff) return `HANDOFF: already waiting for the user at ${tab.url}`;
+    if (b.connected) throw new Error('the browser is already visible (connect); act there, or run `mis browse disconnect` first');
     if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY && !b.headlessOnly) {
       throw new Error('BLOCKED: no display for a visible browser window (set DISPLAY or run on a desktop session)');
     }
@@ -544,11 +972,22 @@ async function history(b, tab, delta) {
 // time, so it may not hide inside a chain.
 const GATED = new Set(['storage', 'js', 'eval', 'upload']);
 
+// Commands a browser skill may replay (skillify): the rest only observe, or are lifecycle/meta.
+const NOT_IN_SKILLS = new Set(['history', 'url', 'tabs', 'console', 'network', 'dialog', 'perf', 'memory', 'inbox', 'watch', 'focus', 'connect', 'disconnect', 'handoff', 'resume', 'cdp']);
+
 export async function runCommand(b, cmd, args, ctx) {
   if (cmd === 'chain') return chain(b, args[0], ctx);
   const h = HANDLERS[cmd];
   if (!h) throw new Error(`unknown browse command "${cmd}". Commands: ${Object.keys(HANDLERS).join(', ')}, chain, status, stop, restart`);
   if (cmd === 'cdp' && ctx.inChain) throw new Error('cdp is not allowed inside chain; run `mis browse cdp ...` on its own so the guard can ask');
+  // M9-E: the guard asks for these every time, and it cannot see inside chain files, tab-each or browser skills
+  if (BROWSE_ALWAYS_ASK.has(cmd) && ctx.inChain) throw new Error(`${cmd} is not allowed inside chain, tab-each or a browser skill; run \`mis browse ${cmd} ...\` on its own so the guard can ask`);
+  const result = await gated(b, h, cmd, args, ctx);
+  record(b, cmd, args); // only commands that succeeded
+  return result;
+}
+
+async function gated(b, h, cmd, args, ctx) {
   const tab = b.current();
   if (!GATED.has(cmd) || ctx.remote) return h(b, tab, args.map(String), ctx);
   // Judge the document the command will actually run in, by the origin the browser reports for it, and run the
@@ -560,6 +999,16 @@ export async function runCommand(b, cmd, args, ctx) {
   }
   tab.pinned = c.uniqueId;
   try { return await h(b, tab, args.map(String), ctx); } finally { tab.pinned = null; }
+}
+
+/** Command history for skillify: typed values become {{input}} parameters at once (never kept); credential commands are not recorded. */
+function record(b, cmd, args) {
+  if (BROWSE_ALWAYS_ASK.has(cmd) || NOT_IN_SKILLS.has(cmd)) return;
+  let a = args.map(String);
+  if (cmd === 'fill') a = [a[0], '{{input}}'];
+  if (cmd === 'type') a = ['{{input}}'];
+  b.history.push({ cmd, args: a, at: new Date().toISOString() });
+  if (b.history.length > 200) b.history.shift();
 }
 
 async function chain(b, steps, ctx) {

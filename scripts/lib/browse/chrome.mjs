@@ -26,12 +26,15 @@ export function findChrome(env = process.env) {
  * Launch the browser on a throwaway profile with CDP over a pipe (fds 3/4): no DevTools TCP port that other local
  * processes could reach without the daemon's token. Resolves once the browser answers.
  */
-export async function launchChrome({ exe, userDataDir, headless, extraArgs = [] }) {
-  const args = [`--user-data-dir=${userDataDir}`, '--remote-debugging-pipe', '--no-first-run', '--no-default-browser-check',
+export const OWNER_MARK = '--mis-browse-owner'; // ignored by Chrome; lets client.mjs recognize (and only kill) browsers it started
+
+export async function launchChrome({ exe, userDataDir, headless, extraArgs = [], extensions = false }) {
+  const args = [OWNER_MARK, `--user-data-dir=${userDataDir}`, '--remote-debugging-pipe', '--no-first-run', '--no-default-browser-check',
     // no phoning home: the org forbids sending data out, and background traffic would pollute `network`/`perf`
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
     '--disable-domain-reliability', '--disable-client-side-phishing-detection', '--metrics-recording-only',
-    '--password-store=basic', '--use-mock-keychain', '--disable-extensions',
+    // never the user's Keychain; extensions only for `connect` (loaded over the pipe with Extensions.loadUnpacked)
+    '--password-store=basic', '--use-mock-keychain', ...(extensions ? ['--enable-unsafe-extension-debugging'] : ['--disable-extensions']),
     // cross-origin iframes stay in-process so `frame` can reach them through one session
     '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process',
     ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...extraArgs, 'about:blank'];

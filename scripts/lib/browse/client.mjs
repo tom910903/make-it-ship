@@ -5,7 +5,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homeDir } from '../home.mjs';
-import { findChrome, NO_CHROME } from './chrome.mjs';
+import { findChrome, NO_CHROME, OWNER_MARK } from './chrome.mjs';
 
 const DAEMON = fileURLToPath(new URL('./daemon.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -28,7 +28,8 @@ function ours(pid, marker) {
   try { return execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes(marker); } catch { return false; }
 }
 const kill = (pid, marker) => { if (alive(pid) && ours(pid, marker)) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } };
-const DAEMON_MARK = 'browse/daemon.mjs', CHROME_MARK = 'mis-browse-profile-';
+// CHROME_MARK: kill only browsers we started; PROFILE_MARK: delete only our temp profiles (never a connect --profile-dir)
+const DAEMON_MARK = 'browse/daemon.mjs', CHROME_MARK = OWNER_MARK, PROFILE_MARK = 'mis-browse-profile-';
 
 async function request(s, path, body, timeoutMs) {
   const r = await fetch(`http://127.0.0.1:${s.port}${path}`, {
@@ -74,7 +75,7 @@ export async function ensureDaemon(dir) {
     if (old) { // crashed daemon leftovers: its orphaned browser and temp profile
       kill(old.pid, DAEMON_MARK); kill(old.chromePid, CHROME_MARK);
       for (let i = 0; i < 30 && alive(old.chromePid); i++) await sleep(100);
-      if (old.profile?.includes(CHROME_MARK)) rmSync(old.profile, { recursive: true, force: true });
+      if (old.profile?.includes(PROFILE_MARK)) rmSync(old.profile, { recursive: true, force: true });
       rmSync(join(dir, 'state.json'), { force: true });
     }
     const logFd = openSync(join(dir, 'daemon.log'), 'a');
@@ -108,7 +109,7 @@ export async function stop(dir) {
   kill(s.chromePid, CHROME_MARK);
   for (let i = 0; i < 30 && alive(s.chromePid); i++) await sleep(100);
   // the daemon removes the profile too; this covers a browser helper that wrote into it after that
-  if (s.profile?.includes(CHROME_MARK)) rmSync(s.profile, { recursive: true, force: true, maxRetries: 3 });
+  if (s.profile?.includes(PROFILE_MARK)) rmSync(s.profile, { recursive: true, force: true, maxRetries: 3 });
   rmSync(join(dir, 'state.json'), { force: true });
   return { stopped: true };
 }
