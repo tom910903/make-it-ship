@@ -213,7 +213,7 @@ export function classify(input, ctx) {
     if (!writes) return allow;
     if (ctx.freezeDir) {
       const paths = name === 'ast_grep_replace' ? [].concat(ti.paths ?? []) : [];
-      if (!paths.length || paths.some((p) => !(resolve(cwd, p) + sep).startsWith(ctx.freezeDir + sep))) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
+      if (!paths.length || paths.some((p) => outsideFreeze(resolve(cwd, p), ctx.freezeDir))) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
     }
     return ctx.activeRun ? ask(`${name} rewrites files outside the plan's per-file check; confirm the change`) : allow;
   }

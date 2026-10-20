@@ -7,6 +7,7 @@ import { stateRoot, loadRun, TERMINAL } from './state.mjs';
 import { homeDir, readHome } from './home.mjs';
 import { readLoop } from './loop.mjs';
 import { currentStyle } from './style.mjs';
+import { envSession } from './home.mjs';
 import { detectConfig } from './setup.mjs';
 
 export function memoryDir(cwd) {
@@ -144,7 +145,7 @@ function builtin(cwd, mode) {
     return run ? { id: run.state.runId, state: run.state.state, runMode: run.state.mode, active: !TERMINAL.includes(run.state.state) } : { active: false };
   }
   if (mode === 'loop') return readLoop(cwd);
-  if (mode === 'style') { const level = currentStyle(); return { level, active: level !== 'off' }; }
+  if (mode === 'style') { const level = currentStyle(envSession()); return { level, active: level !== 'off' }; }
   const f = readHome('freeze.json');
   return f?.dir ? { ...f, active: true } : { active: false };
 }

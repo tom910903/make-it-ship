@@ -92,7 +92,7 @@ test('project memory: auto-detect on read, merge write, notes and deduped direct
 
 test('mode state: write/read/clear custom modes; built-ins are live and read-only', async () => {
   const dir = makeRepo(), h = home();
-  const s = await mcpSession(dir, { MIS_STATE_HOME: h });
+  const s = await mcpSession(dir, { MIS_STATE_HOME: h, CLAUDE_CODE_SESSION_ID: 'S' });
   try {
     assert.match((await s.call('state_read', { mode: 'ralplan' })).text, /No state/);
     await s.call('state_write', { mode: 'ralplan', active: true, iteration: 2, current_phase: 'critic', state: { extra: 'y', active: false } });
@@ -117,7 +117,7 @@ test('mode state: write/read/clear custom modes; built-ins are live and read-onl
     // built-ins: run, loop, freeze, style
     assert.equal(mis(dir, ['start', '--input', 'demo task'], { env: { MIS_STATE_HOME: h } }).code, 0);
     writeLoop(dir, { active: true, task: 't', iteration: 1, max: 5 });
-    write(h, { 'freeze.json': { dir: join(dir, 'src') }, 'style.json': { level: 'ultra' } });
+    write(h, { 'freeze.json': { dir: join(dir, 'src') }, 'sessions/S.json': { style: 'ultra' } });
     const active = (await s.call('state_list_active')).json;
     const by = Object.fromEntries(active.map((m) => [m.mode, m]));
     assert.equal(by.run.state, 'PLANNING');
