@@ -4,7 +4,7 @@ A Claude Code plugin that takes an idea, a requirements `.md`, or an issue in yo
 
 It makes two promises:
 - **Nothing is called done without evidence.** Only `mis check` runs your project's test and build commands and records the exit code and log for the exact code state. Only `mis verdict` decides the result, using fixed rules. If the code or config changes later, that evidence is marked `STALE`.
-- **Risky actions need your approval.** A PreToolUse hook asks you before plan approval, `git push`, PR creation, package installs, destructive deletes, config changes, and external MCP writes. Force-pushing to `main`/`master` and editing run state by hand are always denied.
+- **Risky actions need your approval.** A PreToolUse hook asks you before plan approval, `git push`, PR creation, package installs, config changes, and external MCP writes while a run is active. Destructive commands (`git reset --hard`, `git clean -f`, `git checkout .`, force push, recursive delete outside the repo, database `DROP`/`TRUNCATE`, `kubectl delete`, `docker system prune`) and calls to other model services are asked about **at any time**, run or not. Force-pushing to `main`/`master` and editing run state by hand are always denied.
 
 ## Requirements
 - Claude Code with plugin support, macOS or Linux
@@ -54,8 +54,19 @@ More tools:
 
 Run state lives in `.git/make-it-ship/`, so it is never committed and never affects the code hash.
 
+## Always on (every conversation, not only inside a run)
+Installing the plugin is enough; nothing else needs to be installed for these.
+- **Session start:** the skill list and the working discipline (ask before building when unclear, test first, root cause before fixes, verify before claiming done), the coding style at the current level, an active-run notice, and a short map of the codebase's top-level functions.
+- **Coding style:** `/make-it-ship:style off|lite|full|ultra` (`mis style`; `mis style default <level>`). The rules also reach subagents; set `subagentMatcher` in `~/.make-it-ship/config.json` to limit which ones. "normal mode" turns it off.
+- **Keywords in your prompt:** `ralph` (persistent loop), `autopilot` / "build me an app…" (full run), `ulw` (parallel), `ralplan` (plan until the critic accepts), `deep interview`, `deslop`, `tdd`, `code review`, `security review`, `ultrathink`, `deepsearch`, `deep-analyze`, `ccg` (other models, asks first), `ultragoal`, `cancelomc`. Korean forms work too (랄프, 울트라워크, 코드 리뷰, …). Mentions inside code, quotes, URLs, paths or questions about a keyword do not trigger. Disable any with `keywords.disabled` in `~/.make-it-ship/config.json`; check a prompt with `mis test-prompt "<text>"`.
+- **Persistent loop:** `/make-it-ship:loop` (`mis loop start|status|cancel`). The session cannot stop until the run is reported with verdict VERIFIED, the run is BLOCKED for you, or the iteration limit is reached.
+- **Freeze:** `mis freeze <dir>` denies edits outside one directory; `mis unfreeze` lifts it.
+- **After tool calls:** matching `.cursor/rules` and `.github/instructions` files are shown once per session (Claude Code already loads `.claude/rules`), a reminder to run tests after many edits, and a root-cause hint after the same call fails three times.
+- **Status line:** `MIS ▸ idle · style full · main · <model> · ctx 42%`, or the run progress when a run exists (register it from `mis init`'s `hud.statusLine`).
+- Per-user state lives in `~/.make-it-ship/` (`MIS_STATE_HOME` overrides it). These hooks never block a session on their own errors; only the guard fails closed.
+
 ## `mis` CLI
-You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`.
+You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`.
 
 ## Configuration: `.make-it-ship.json`
 ```json

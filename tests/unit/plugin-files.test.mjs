@@ -152,3 +152,17 @@ test('M5 features are reachable from the flow and docs (M5 D-2, L-2, L-6)', () =
   for (const m of read('adapters/codex/AGENTS.md').matchAll(/agents\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), m[0]);
   assert.match(read('adapters/codex/AGENTS.md'), /spec-reviewer/);
 });
+
+test('M6 always-on layer is wired: hooks for every event, skills, notices, README', () => {
+  const hooks = JSON.parse(read('hooks/hooks.json')).hooks;
+  for (const ev of ['SessionStart', 'SubagentStart', 'UserPromptSubmit', 'Stop', 'PostToolUse', 'PostToolUseFailure']) {
+    const cmd = hooks[ev]?.[0]?.hooks?.[0]?.command ?? '';
+    assert.match(cmd, new RegExp(`scripts/hooks\\.mjs" ${ev}$`), ev);
+  }
+  for (const s of ['loop', 'style', 'cancel']) assert.match(read(`skills/${s}/SKILL.md`), new RegExp(`^---\\nname: ${s}\\n`));
+  const notices = read('THIRD_PARTY_NOTICES.md');
+  for (const p of ['oh-my-claudecode', 'Superpowers', 'Ponytail', 'gstack']) assert.match(notices, new RegExp(p));
+  const readme = read('README.md');
+  assert.match(readme, /## Always on/);
+  assert.match(readme, /asked about \*\*at any time\*\*/);
+});
