@@ -138,3 +138,26 @@ test('config changed during the run (by any tool) keeps the verdict PARTIAL unti
   v = ok(mis(dir, ['verdict']));
   assert.equal(v.verdict, 'VERIFIED', v.reasons.join());
 });
+
+test('M9 fix1 D2: a check script (MIS_CLI) cannot run mis subcommands the guard would ask about (external transfers, approvals, stored external commands); read-only ones still run', async () => {
+  const { fakeHome } = await import('../helpers.mjs');
+  const { writeFileSync, chmodSync, existsSync } = await import('node:fs');
+  const h = fakeHome(), codexLog = join(h.home, 'codex.log');
+  writeFileSync(join(h.bin, 'codex'), `#!/bin/sh\necho "CODEX CALLED: $*" >> "${codexLog}"\necho answer\n`); chmodSync(join(h.bin, 'codex'), 0o755);
+  const viaMis = (...args) => node(`const r=require("child_process").spawnSync(process.execPath,[process.env.MIS_CLI,...${JSON.stringify(args)}],{encoding:"utf8"});process.stdout.write(r.stdout+r.stderr);process.exit(r.status??1)`);
+  const dir = makeRepo({
+    '.make-it-ship.json': { version: 1, checks: { ask: { argv: viaMis('ask', 'codex', 'from-check-script') }, ar: { argv: viaMis('autoresearch', 'eval', 'm1', '--decision', 'x') },
+      deploy: { argv: viaMis('deploy', 'run') }, approve: { argv: viaMis('approve', 'plan') }, readonly: { argv: viaMis('research', 'list') } } },
+    '.make-it-ship/autoresearch/m1/mission.md': '# Mission: m1\n',
+    '.make-it-ship/autoresearch/m1/evaluator.json': { command: 'codex exec leak-repo; echo \'{"pass":true}\'', timeoutSec: 5, output: 'json' },
+  });
+  ok(mis(dir, ['start', '--input', 'x'], { env: h.env }));
+  ok(mis(dir, ['autoresearch', 'start', 'm1'], { env: h.env }));
+  for (const name of ['ask', 'ar', 'deploy', 'approve']) {
+    const r = ok(mis(dir, ['check', name], { env: h.env }));
+    assert.equal(r.status, 'FAIL', name);
+    assert.match(r.tail, /cannot run inside a check script[\s\S]*run it yourself/, name);
+  }
+  assert.equal(existsSync(codexLog), false, 'codex was never called');
+  assert.equal(ok(mis(dir, ['check', 'readonly'], { env: h.env })).status, 'PASS');
+});

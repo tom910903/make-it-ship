@@ -404,3 +404,98 @@ test('M9-D: commands that mis runs later (wait/detach after --, tournament --ben
     assert.equal(d(bash(`${mis} wait auto --text continue`), c), 'allow');
   }
 });
+
+// ---- M9 fix1 (round-1 D/E verifier): stored commands, stored-command files, ask texts with destination and contents
+const { mkdtempSync: mkd, mkdirSync: mkdir, writeFileSync: wf, realpathSync: rp, rmSync: rmf } = await import('node:fs');
+const { tmpdir: tmp } = await import('node:os');
+const { join: pj } = await import('node:path');
+function storedRepo(files) {
+  const r = rp(mkd(pj(tmp(), 'mis-policy-'))); mkdir(pj(r, '.git'));
+  for (const [p, c] of Object.entries(files)) { mkdir(pj(r, p, '..'), { recursive: true }); wf(pj(r, p), typeof c === 'string' ? c : JSON.stringify(c)); }
+  return r;
+}
+const M9F = 'node /p/scripts/mis.mjs';
+
+test('M9 fix1 D1: writes to evaluator.json, deploy.json and self-improve proposals ask with or without a run, through Write/Edit/MultiEdit, any MCP writer and Bash', () => {
+  const r = storedRepo({});
+  const ev = pj(r, '.make-it-ship', 'autoresearch', 'm1', 'evaluator.json'), dep = pj(r, '.make-it-ship', 'deploy.json');
+  const patch = pj(r, '.make-it-ship', 'self-improve', 'proposals', 'p1', 'change.patch');
+  for (const c of [{ ...ctx, repoRoot: r }, { ...ctx, repoRoot: r, activeRun: false }]) {
+    for (const f of [ev, dep, patch]) {
+      for (const input of [{ tool_name: 'Write', tool_input: { file_path: f, content: '{"command":"codex exec leak"}' } }, { tool_name: 'Edit', tool_input: { file_path: f, old_string: 'a', new_string: 'codex exec leak' } },
+        { tool_name: 'MultiEdit', tool_input: { file_path: f, edits: [{ old_string: 'a', new_string: 'codex exec leak' }] } }, { tool_name: 'mcp__filesystem__write_file', tool_input: { path: f, content: 'codex exec leak' } },
+        { tool_name: 'mcp__filesystem__edit_file', tool_input: { path: f, edits: [] } }, { tool_name: 'mcp__filesystem__move_file', tool_input: { source: pj(r, 'x.json'), destination: f } },
+        { tool_name: 'mcp__plugin_make-it-ship_mis__ast_grep_replace', tool_input: { paths: [f], apply: true } }]) {
+        const v = classify({ ...input, cwd: r }, c);
+        assert.equal(v.decision, 'ask', `${input.tool_name} ${f}`);
+        assert.match(v.reason, /runs later/);
+      }
+    }
+    assert.match(classify({ tool_name: 'Write', tool_input: { file_path: ev, content: '{"command":"codex exec leak"}' }, cwd: r }, c).reason, /codex exec leak/, 'the ask shows the new command');
+    for (const cmd of [`cat > ${ev} <<EOF\n{"command":"codex exec x"}\nEOF`, `echo '{}' > .make-it-ship/deploy.json`, `cd .make-it-ship/autoresearch/m1 && tee evaluator.json < /tmp/x`,
+      `cp /tmp/x .make-it-ship/deploy.json`, `sed -i '' s/a/b/ .make-it-ship/autoresearch/m1/evaluator.json`, `sh -c 'echo x >> .make-it-ship/deploy.json'`]) {
+      assert.equal(classify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: r }, c).decision, 'ask', cmd);
+    }
+    for (const input of [{ tool_name: 'Bash', tool_input: { command: 'cat .make-it-ship/deploy.json' } }, { tool_name: 'mcp__filesystem__read_file', tool_input: { path: ev } },
+      { tool_name: 'Edit', tool_input: { file_path: pj(r, '.make-it-ship', 'autoresearch', 'm1', 'mission.md'), old_string: 'a', new_string: 'b' } }]) {
+      if (!c.activeRun) assert.equal(classify({ ...input, cwd: r }, c).decision, 'allow', JSON.stringify(input));
+    }
+  }
+  rmf(r, { recursive: true, force: true });
+});
+
+test('M9 fix1 D1: autoresearch eval, check, bench, health and deploy run classify the command they will run from its stored file', () => {
+  const r = storedRepo({
+    '.make-it-ship/autoresearch/leak/evaluator.json': { command: `${M9F} ask codex leak-repo >/dev/null; echo '{"pass":true}'`, timeoutSec: 5, output: 'json' },
+    '.make-it-ship/autoresearch/direct/evaluator.json': { command: 'codex exec review; echo {}', timeoutSec: 5, output: 'json' },
+    '.make-it-ship/autoresearch/fine/evaluator.json': { command: `echo '{"pass":true}'`, timeoutSec: 5, output: 'json' },
+    '.make-it-ship/autoresearch/loop/evaluator.json': { command: `${M9F} autoresearch eval loop`, timeoutSec: 5, output: 'json' },
+    '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['npm', 'test'] }, leak: { argv: ['codex', 'exec', 'x'] } } },
+    '.make-it-ship/deploy.json': { mergeCmd: 'gh pr merge --squash', deployCmd: 'fly deploy --app shop', healthUrl: 'https://shop.example/health' },
+    'sub/x.txt': 'x',
+  });
+  for (const c of [{ ...ctx, repoRoot: r }, { ...ctx, repoRoot: r, activeRun: false }]) {
+    const v = (cmd, cwd = r) => classify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd }, c);
+    for (const name of ['leak', 'direct']) {
+      const a = v(`${M9F} autoresearch eval ${name} --decision x`);
+      assert.equal(a.decision, 'ask', name); assert.match(a.reason, /stored autoresearch evaluator command/); assert.match(a.reason, /codex/);
+    }
+    assert.equal(v(`${M9F} autoresearch eval leak --decision x`, pj(r, 'sub')).decision, 'ask', 'from a subdirectory too');
+    assert.match(v(`${M9F} autoresearch eval leak`).reason, /ask codex leak-repo/, 'the ask shows the stored command');
+    assert.equal(v(`${M9F} autoresearch eval loop`).decision, 'ask', 'a self-referencing evaluator fails closed');
+    assert.equal(v(`${M9F} autoresearch eval fine --decision x`).decision, 'allow');
+    for (const cmd of ['check leak', 'bench leak --runs 2', 'health', 'session create feature x']) assert.equal(v(`${M9F} ${cmd}`).decision, 'ask', cmd);
+    for (const cmd of ['session create feature x --no-baseline', 'session list']) assert.equal(v(`${M9F} ${cmd}`).decision, 'allow', cmd);
+    for (const cmd of ['check unit', 'bench unit']) assert.equal(v(`${M9F} ${cmd}`).decision, 'allow', cmd);
+    const d = v(`${M9F} deploy run`);
+    assert.equal(d.decision, 'ask'); assert.match(d.reason, /gh pr merge --squash/); assert.match(d.reason, /fly deploy --app shop/); assert.match(d.reason, /shop\.example\/health/);
+    assert.match(v(`${M9F} deploy setup --write --deploy-cmd 'vercel --prod'`).reason, /vercel --prod/);
+  }
+  wf(pj(r, '.make-it-ship', 'deploy.json'), JSON.stringify({ deployCmd: 'git push --force origin main' }));
+  assert.equal(classify({ tool_name: 'Bash', tool_input: { command: `${M9F} deploy run` }, cwd: r }, { ...ctx, repoRoot: r }).decision, 'deny', 'a stored command is decided like the same Bash command');
+  rmf(r, { recursive: true, force: true });
+});
+
+test('M9 fix1 D6: external-transfer asks name the destination and what goes there', () => {
+  const r = storedRepo({ '.make-it-ship/self-improve/proposals/p1/proposal.json': { id: 'p1', paths: ['.make-it-ship/deploy.json', 'skills/x/SKILL.md'] }, '.make-it-ship/wiki/w.md': '# w' });
+  const home = rp(mkd(pj(tmp(), 'mis-policy-home-')));
+  wf(pj(home, 'config.json'), JSON.stringify({ telemetry: { enabled: true, endpoint: 'https://telemetry.example/v1' } }));
+  wf(pj(home, 'gbrain.json'), JSON.stringify({ artifactsRemote: 'git@brain.example:me/brain.git', queue: ['/r/docs/a.md', { path: '/r/docs/b.md' }] }));
+  const saved = process.env.MIS_STATE_HOME;
+  process.env.MIS_STATE_HOME = home;
+  try {
+    const why = (cmd) => classify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: r }, { ...ctx, repoRoot: r, activeRun: false }).reason;
+    assert.match(why(`${M9F} telemetry sync`), /telemetry\.example\/v1/);
+    assert.match(why(`${M9F} gbrain sync`), /brain\.example[\s\S]*\/r\/docs\/a\.md[\s\S]*\/r\/docs\/b\.md/);
+    assert.match(why(`${M9F} gbrain ingest`), /wiki\/w\.md/);
+    assert.match(why(`${M9F} canary https://shop.example --pages /,/cart`), /https:\/\/shop\.example\/cart/);
+    assert.match(why(`${M9F} design generate "a logo"`), /api\.openai\.com/);
+    assert.match(why(`MIS_OPENAI_BASE_URL=https://proxy.example ${M9F} design generate "a logo"`), /proxy\.example/);
+    assert.match(why(`${M9F} approve proposal p1`), /\.make-it-ship\/deploy\.json/);
+    assert.match(why(`${M9F} pair-agent start`), /tunnel command/);
+    assert.match(why(`${M9F} ask codex "q"`), /codex CLI/);
+  } finally {
+    if (saved === undefined) delete process.env.MIS_STATE_HOME; else process.env.MIS_STATE_HOME = saved;
+    rmf(r, { recursive: true, force: true }); rmf(home, { recursive: true, force: true });
+  }
+});

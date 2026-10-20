@@ -3,6 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRepo, mis, fakeHome } from '../helpers.mjs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 
@@ -43,4 +48,51 @@ test('pair-agent with a tunnel: public URL from the tunnel output; a tunnel that
   const bad = mis(dir, ['pair-agent', 'start'], { env: { ...h.env, MIS_PAIR_TUNNEL_CMD: 'false' } });
   assert.equal(bad.code, 1); assert.match(bad.err, /BLOCKED: the tunnel did not come up/);
   assert.equal(ok(mis(dir, ['pair-agent', 'status'], { env })).running, false, 'endpoint closed when the tunnel failed');
+});
+
+test('M9 fix1 D3: a paired agent reads only pages it opened itself: back/forward/tab onto local or earlier pages are refused and blanked, tabs and url hide them, old console/network entries are gone', async () => {
+  const h = fakeHome(), dir = makeRepo({ 'secret.html': '<title>Local Secret</title><script>console.log("LOCAL-SECRET-LOG")</script><p>LOCAL-SECRET-CONTENT-42</p>' });
+  const env = { ...h.env, MIS_BROWSE_HEADLESS_ONLY: '1', MIS_BROWSE_IDLE_MS: '300000' };
+  const secretUrl = `file://${join(dir, 'secret.html')}`;
+  if (!findChrome()) { assert.match(mis(dir, ['browse', 'goto', secretUrl], { env }).err, /BLOCKED/); return; }
+  const site = spawn(process.execPath, [fileURLToPath(new URL('../fixtures/browse-site.mjs', import.meta.url))], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const base = `http://127.0.0.1:${String((await once(site.stdout, 'data'))[0]).trim()}`;
+  let s;
+  try {
+    ok(mis(dir, ['browse', 'goto', secretUrl], { env })); // the user's own local page, open before pairing
+    s = ok(mis(dir, ['pair-agent', 'start', '--local'], { env }));
+    const auth = { authorization: `Bearer ${s.token}` };
+    const post = async (cmd, args = []) => { const r = await fetch(`${s.url}/command`, { method: 'POST', headers: auth, body: JSON.stringify({ cmd, args }) }); return { status: r.status, body: JSON.stringify(await r.json()) }; };
+    const leaks = (r) => /LOCAL-SECRET|secret\.html|Local Secret/.test(r.body) || r.body.includes(dir);
+    const st = await post('status'); assert.equal(st.status, 200); assert.ok(!leaks(st) && !/stateDir|profile/.test(st.body), `status shows no local paths: ${st.body}`);
+    const userTab = JSON.parse((await post('tabs')).body).result.find((x) => x.active).id;
+    for (const cmd of ['text', 'html', 'url', 'console', 'network', 'snapshot']) {
+      const r = await post(cmd); assert.equal(r.status, 400, `${cmd} on a page the agent did not open`); assert.ok(!leaks(r), r.body);
+    }
+    assert.equal((await post('goto', [`${base}/next`])).status, 200);
+    const t = await post('text'); assert.equal(t.status, 200); assert.match(t.body, /Next page/);
+    for (const cmd of ['console', 'network']) { const r = await post(cmd); assert.equal(r.status, 200); assert.ok(!leaks(r), `${cmd}: ${r.body}`); }
+    const back = await post('back');
+    assert.equal(back.status, 400, 'back onto the local page is refused'); assert.ok(!leaks(back), back.body);
+    for (const cmd of ['text', 'url', 'html', 'forward']) { const r = await post(cmd); assert.notEqual(r.status, 200, cmd); assert.ok(!leaks(r), `${cmd}: ${r.body}`); }
+    const tabs = await post('tabs'); assert.equal(tabs.status, 200); assert.ok(!leaks(tabs), tabs.body); assert.ok(!tabs.body.includes(dir), tabs.body);
+    // a tab the user opens locally is not reachable either
+    ok(mis(dir, ['browse', 'newtab', secretUrl], { env }));
+    const mine = JSON.parse((await post('tabs')).body).result.find((x) => x.active);
+    assert.ok(!leaks({ body: JSON.stringify(mine) }));
+    assert.equal((await post('tab', [String(mine.id)])).status, 400, 'switching to a tab the agent did not open is refused');
+    const other = JSON.parse((await post('tabs')).body).result.find((x) => !x.active);
+    assert.equal((await post('tab', [String(other.id)])).status, 400);
+    // its own pages keep working
+    assert.equal((await post('newtab', [base])).status, 200);
+    const home = await post('text'); assert.equal(home.status, 200); assert.match(home.body, /Welcome/);
+    // a goto/newtab without a URL must not widen what counts as the agent's own (no "null" origin for file:/about: pages)
+    for (const [cmd, args] of [['newtab', []], ['goto', []]]) await post(cmd, args);
+    await post('tab', [String(userTab)]);
+    for (const cmd of ['back', 'back', 'text', 'html', 'url', 'tabs']) { const r = await post(cmd); assert.ok(!leaks(r), `${cmd}: ${r.body}`); }
+  } finally {
+    if (s) ok(mis(dir, ['pair-agent', 'stop'], { env }));
+    mis(dir, ['browse', 'stop'], { env });
+    site.kill();
+  }
 });

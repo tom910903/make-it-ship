@@ -23,8 +23,18 @@ const EPOCH_DELTA_S = 11644473600; // Chromium time: microseconds since 1601-01-
 const dataDir = (b) => (process.platform === 'darwin' ? b.mac && join(homedir(), 'Library', 'Application Support', b.mac)
   : process.platform === 'linux' ? b.linux && join(homedir(), '.config', b.linux) : null);
 
+// Every Chromium browser's user-data root, all channels (connect refuses them; cookie import knows only BROWSERS).
+const PROFILE_ROOTS = {
+  mac: ['Google/Chrome', 'Google/Chrome Beta', 'Google/Chrome Dev', 'Google/Chrome Canary', 'Google/Chrome for Testing', 'Chromium',
+    'Microsoft Edge', 'Microsoft Edge Beta', 'Microsoft Edge Dev', 'Microsoft Edge Canary', 'BraveSoftware/Brave-Browser', 'BraveSoftware/Brave-Browser-Beta',
+    'BraveSoftware/Brave-Browser-Nightly', 'Arc/User Data', 'Vivaldi', 'Vivaldi Snapshot', 'com.operasoftware.Opera', 'com.operasoftware.OperaGX', 'com.operasoftware.OperaNext', 'Yandex/YandexBrowser'],
+  linux: ['google-chrome', 'google-chrome-beta', 'google-chrome-unstable', 'google-chrome-canary', 'chromium', 'microsoft-edge', 'microsoft-edge-beta', 'microsoft-edge-dev',
+    'BraveSoftware/Brave-Browser', 'BraveSoftware/Brave-Browser-Beta', 'BraveSoftware/Brave-Browser-Nightly', 'vivaldi', 'vivaldi-snapshot', 'opera', 'opera-beta', 'opera-developer', 'yandex-browser'],
+};
 /** The user's own browser data dirs on this machine (connect refuses to run inside them). */
-export const browserDataDirs = () => Object.values(BROWSERS).map(dataDir).filter(Boolean);
+export const browserDataDirs = () => [...new Set([...Object.values(BROWSERS).map(dataDir),
+  ...(process.platform === 'darwin' ? PROFILE_ROOTS.mac.map((d) => join(homedir(), 'Library', 'Application Support', d))
+    : process.platform === 'linux' ? PROFILE_ROOTS.linux.map((d) => join(homedir(), '.config', d)).concat(join(homedir(), 'snap', 'chromium', 'common', 'chromium')) : [])].filter(Boolean))];
 
 /** The cookie DB of a profile: <profile>/Network/Cookies (Chrome 96+) or <profile>/Cookies. */
 export function cookieDbPath({ browser = 'chrome', profile = 'Default', profileDir } = {}) {
