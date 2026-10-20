@@ -47,19 +47,26 @@ const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abst
 // mention becomes a hint the model judges, since names, complaints and "don't use ralph" read the same to a regex.
 // Only prefix forms start the loop (user decision after five rounds of regex heuristics); every other mention of
 // ralph — "use ralph", "랄프로", names, questions, refusals — is a hint the model judges in context.
-const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph(?:\s|$)/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
+const LOOP_PREFIX = [/^\s*\/?ralph\s*[:：]/i, /^\s*\/ralph(?:\s|$)/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
 // Checked on the raw prompt: text removed by sanitize (URLs, code) must not turn a later "ralph:" into a prefix.
 const explicitLoop = (raw) => LOOP_PREFIX.some((r) => r.test(raw));
-// Cancel likewise only when the whole prompt is a short off-request; anything longer is left to the model (loop-hint).
-const OFF_ONLY = [
-  /^(?:stop|cancel|disable|end|turn\s+off|kill|halt|no\s+more)\s+(?:the\s+)?ralph(?:\s+(?:loop|mode))?$/i,
-  /^\/?ralph(?:\s+mode)?\s*[:,：]?\s*(?:stop|off|cancel|turn\s+off|end|halt)(?:\s+(?:the\s+)?(?:loop|ralph))?$/i,
-  /^(?:ralph|랄프|루프)(?:\s?모드로\s?진행)?\s*[:：]?\s*(?:꺼|꺼줘|꺼\s줘|그만|그만해|멈춰|중지|취소|끄기)$/i,
-  /^ラルフ\s*(?:を)?\s*[:：]?\s*(?:止めて|やめて|停止|止めろ)$/,
-];
+// Cancel only when the prompt consists of nothing but ralph words, off words and filler — no task words. A rule, not
+// a phrase list: "stop ralph now", "랄프를 꺼줘", "ラルフ: キャンセル" cancel; "stop ralph from deleting files" does not.
+const PREFIX_STRIP = /^\s*(?:(?:\/?ralph(?:\s+mode)?|랄프(?:\s?모드(?:로)?(?:\s*진행)?)?|ラルフ(?:\s?モード)?)\s*[:：]|\/ralph\s)\s*/i;
+const EN_OFF = /^(?:stop|quit|cancel|off|end|exit|halt|kill|disable|abort|turn|no)$/i;
+const EN_FILL = /^(?:ralph|ralph's|please|now|it|the|loop|mode|right|away|ok|okay|more)$/i;
+const NEGATION = /\b(?:don'?t|don’t|never|not|didn'?t|didn’t)\b|지\s?마|말고|않|ないで|ずに|ません/i;
+const CJK_OFF = /(?:그만|멈춰|멈추|꺼|끄|중지|종료|취소|정지|止め|やめ|停止|キャンセル|終了)(?:해|해요|해줘|해\s?줘|해\s?주세요|줘|\s?주세요|라|기|て|てください|ください|して|しろ|ろ|よ)?$/;
+const CJK_REST = /^(?:ralph|랄프|ラルフ|루프|모드|モード|loop|를|을|는|은|を|は|の|\s)*$/i;
 const cancelOnly = (raw) => {
-  const t = String(raw).trim().replace(/[.!。！]+$/, '').replace(/^please\s+|\s+please$/gi, '').trim();
-  return OFF_ONLY.some((r) => r.test(t)) || /\b(?:cancelomc|stopomc)\b/i.test(t);
+  const t = String(raw).trim().replace(/[.!?,。！？、]+$/, '').trim();
+  if (/\b(?:cancelomc|stopomc)\b/i.test(t)) return true;
+  if (!/ralph|랄프|ラルフ/i.test(t) || NEGATION.test(t)) return false;
+  const body = t.replace(PREFIX_STRIP, '').trim().replace(/[.!?,。！？、]+$/, '').trim();
+  const words = body.split(/[\s,]+/).filter(Boolean);
+  if (words.length && words.length <= 5 && words.every((w) => EN_OFF.test(w) || EN_FILL.test(w)) && words.some((w) => EN_OFF.test(w))) return true;
+  const m = body.match(CJK_OFF);
+  return !!m && CJK_REST.test(body.slice(0, m.index));
 };
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 
