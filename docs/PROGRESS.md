@@ -156,12 +156,12 @@ VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이�
 | M9-00 | 갭 매트릭스 재감사(ABSORBED 168) + 묶음 계획 | DONE | — | m9-plan.md | 17b3ab0 | 문서 |
 | M9-B0 | 결정: 계획·리뷰 기능은 개발 흐름에 녹임 | DONE | — | SPEC_CHANGES | 35e50d3 | — |
 | M9-D0 | 외부 전송 mis 명령 공통 ask 규칙(`EXTERNAL_MIS`) | DONE | `tests/unit/policy.test.mjs` | m9-plan D0 | (이 커밋) | npm test |
-| M9-A | 설치·수명주기 | TODO | | m9-plan A | | |
-| M9-B | 계획·리뷰·디자인·문서 기능을 흐름에 녹임 | TODO | | m9-plan B | | |
-| M9-C | 빠진 에이전트·스킬 작성 | TODO | | m9-plan C | | |
-| M9-D | 연구·운영·배포·외부([정책] 항상 ask) | TODO | | m9-plan D | | |
-| M9-E | 브라우저 자격 증명·고급 | TODO | | m9-plan E | | |
-| M9-F | 남은 훅 | TODO | | m9-plan F | | |
+| M9-A | 설치·수명주기(setup/migration, doctor, mcp-setup, config, update/uninstall, session, cancel-all/launch) + A4(help/info/capabilities lockfile/reference/gain) | DONE (검증 전) | `tests/integration/mis-{setup,lifecycle,session,help}.test.mjs` | m9-plan A | f662ea1, 0f92ad7 | npm test |
+| M9-B | 계획·리뷰·디자인·문서 기능을 흐름에 녹임 | DONE (검증 전) | `tests/integration/mis-{flow,plan,design}.test.mjs`, `tests/unit/flow-libs.test.mjs` | m9-plan B | 1bf2189 | npm test |
+| M9-C | 빠진 에이전트·스킬 작성(qa-tester tmux 포함) | DONE (검증 전) | `tests/unit/plugin-files.test.mjs`, `tests/integration/mis-{skill,tty,qa}.test.mjs` | m9-plan C | e368daf | npm test |
+| M9-D | 연구·운영·배포·외부([정책] 항상 ask) + 남은 6행(wait 자동 재개, canary 스크린샷·로드 시간·탐색, deploy run CI 대기·VERSION 드리프트·자동 revert, detach --lock·caffeinate, redact PII·법적 표시, domain-skill 주입 분류기) | DONE (검증 전) | `tests/integration/mis-{ops,research,models,ios-family,telemetry,gbrain,pair}.test.mjs` | m9-plan D | c5baa50, e1094d9 | npm test |
+| M9-E | 브라우저 자격 증명(항상 ask)·headed Chrome·추출·M8에서 넘긴 browse 명령 | DONE (검증 전) | `tests/integration/mis-browse*.test.mjs` | m9-plan E | ac11074 | npm test |
+| M9-F | 남은 훅(서브에이전트 추적·상태줄, 산출물 확인, 읽기 전용 자동 허용, 알림, 이탈 방지, 세션 요약, 라우팅 작성) | DONE (검증 전) | `tests/integration/hooks-m9f.test.mjs`, `tests/unit/readonly.test.mjs` | m9-plan F | b47399e | npm test |
 
 ## M10 — 원본 대비 비교 + HTML 보고서
 VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
