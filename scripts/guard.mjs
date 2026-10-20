@@ -51,6 +51,7 @@ try {
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
   } catch { /* no home */ }
   const r = classify(input, { ...ctx, freezeDir });
+  try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

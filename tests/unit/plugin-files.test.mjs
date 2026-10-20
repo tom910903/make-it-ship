@@ -155,7 +155,7 @@ test('M5 features are reachable from the flow and docs (M5 D-2, L-2, L-6)', () =
 
 test('M6 always-on layer is wired: hooks for every event, skills, notices, README', () => {
   const hooks = JSON.parse(read('hooks/hooks.json')).hooks;
-  for (const ev of ['SessionStart', 'SubagentStart', 'UserPromptSubmit', 'Stop', 'PostToolUse', 'PostToolUseFailure']) {
+  for (const ev of ['SessionStart', 'SubagentStart', 'UserPromptSubmit', 'Stop', 'PostToolUse', 'PostToolUseFailure', 'PreCompact', 'SessionEnd']) {
     const cmd = hooks[ev]?.[0]?.hooks?.[0]?.command ?? '';
     assert.match(cmd, new RegExp(`scripts/hooks\\.mjs" ${ev}$`), ev);
   }

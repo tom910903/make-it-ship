@@ -25,6 +25,7 @@ test('every keyword triggers in English and Korean', () => {
     think: ['ultrathink about the cache', 'think hard here', '울트라씽크'],
     search: ['deepsearch for the retry logic', 'search the codebase for retries', '딥 서치 해줘'],
     analyze: ['deep-analyze this crash', '딥 분석 해줘'],
+    wiki: ['wiki this finding', 'wiki add the auth notes'],
   };
   for (const [name, prompts] of Object.entries(cases)) {
     for (const p of prompts) assert.ok(names(p).includes(name), `${name} ← "${p}" got ${names(p)}`);

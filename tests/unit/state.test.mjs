@@ -1,6 +1,10 @@
+import { mkdtempSync as _mk, writeFileSync as _wf, existsSync as _ex } from 'node:fs';
+import { tmpdir as _tmp } from 'node:os';
+import { join as _join } from 'node:path';
+import { reclaimLock } from '../../scripts/lib/state.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRepo, git } from '../helpers.mjs';
 import { stateRoot, createRun, loadRun, saveState, withLock, canTransition, transition, newRunId, readEvents } from '../../scripts/lib/state.mjs';
@@ -65,4 +69,63 @@ test('lock: exclusive while holder alive, stale lock reclaimed', () => {
   let ran = false;
   withLock(run, () => { ran = true; });
   assert.ok(ran, 'stale lock reclaimed');
+});
+
+test('lock reclaim removes only the stale lock it judged, never a lock someone created since (N6)', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
+  reclaimLock(lock, JSON.stringify({ pid: 999998, at: 'old' }));
+  assert.equal(_ex(lock), true, 'the current lock differs from what was judged stale');
+  reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
+  assert.equal(_ex(lock), false);
+  assert.equal(_ex(`${lock}.reclaim`), false);
+});
+
+test('M7 N7: an empty lock left by a crash between create and write is reclaimed once it is old', () => {
+  const dir = makeRepo();
+  const run = createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const lock = join(run.dir, 'lock');
+  writeFileSync(lock, '');
+  const old = new Date(Date.now() - 60000);
+  utimesSync(lock, old, old);
+  let ran = false;
+  withLock(run, () => { ran = true; }, { waitMs: 2000 });
+  assert.ok(ran);
+});
+
+test('M7 N8: a waiter does not spin while another process holds the reclaim marker', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, JSON.stringify({ pid: 999999, at: 'x' }));
+  _wf(`${lock}.reclaim`, '');
+  assert.equal(reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'x' })), false, 'busy: report it so the caller sleeps');
+  assert.ok(_ex(lock));
+});
+
+const require_fs = await import('node:fs');
+
+test('M7 N9: reclaim never removes a lock that was replaced by a new file with the same (empty) content', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, '');
+  const { statSync, unlinkSync } = require_fs;
+  const oldIno = statSync(lock).ino;
+  unlinkSync(lock); _wf(_join(d, 'pad'), 'x'); _wf(lock, '');
+  if (statSync(lock).ino === oldIno) return; // filesystem reused the inode: nothing to distinguish here
+  assert.equal(reclaimLock(lock, '', oldIno), true);
+  assert.ok(_ex(lock), 'the new owner\'s lock is kept');
+});
+
+test('M7 N9-fs: a fresh empty lock is kept even when the filesystem reuses the old inode number', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, ''); // brand-new owner mid-create; the reclaimer judged an older empty lock with this same inode number
+  const { statSync } = require_fs;
+  assert.equal(reclaimLock(lock, '', statSync(lock).ino), true);
+  assert.ok(_ex(lock), 'a lock younger than the orphan age is never removed');
+  const old = (Date.now() - 10000) / 1000;
+  require_fs.utimesSync(lock, old, old);
+  assert.equal(reclaimLock(lock, '', statSync(lock).ino), true);
+  assert.ok(!_ex(lock), 'a still-old empty lock is reclaimed');
 });

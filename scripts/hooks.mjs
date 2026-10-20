@@ -2,6 +2,7 @@
 // Always-on hooks (M6): SessionStart, SubagentStart, ... One entry, event name in argv[2].
 // Fail-open by design: any error or bad input prints nothing and exits 0 so a session is never blocked.
 // (guard.mjs is the separate fail-closed PreToolUse hook.)
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleRules, currentStyle } from './lib/style.mjs';
@@ -10,6 +11,19 @@ import { contextPercent } from './lib/context.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = (event, text) => text ? { hookSpecificOutput: { hookEventName: event, additionalContext: text } } : null;
+
+/** Text of the last assistant message in a transcript (for <remember> tags). */
+function lastAssistantText(path) {
+  if (!path) return '';
+  const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
+  for (let i = lines.length - 1; i >= 0 && i >= lines.length - 50; i--) {
+    try {
+      const e = JSON.parse(lines[i]);
+      if (e.type === 'assistant') return (e.message?.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+    } catch { /* partial line */ }
+  }
+  return '';
+}
 
 const handlers = {
   async SessionStart(input) {
@@ -32,6 +46,13 @@ const handlers = {
       try { const f = (await import('./lib/home.mjs')).readHome('freeze.json'); if (f?.dir && !f.root) parts.push(`Edits are frozen to ${f.dir}: Write/Edit outside it are denied until the user runs mis unfreeze.`); } catch { /* no home */ }
     }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
+    try {
+      const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');
+      try { (await import('./lib/state.mjs')).stateRoot(cwd); mem.projectEnsure(cwd); } catch { /* outside a repo: nothing to detect */ }
+      // After compaction the preserved block already carries the priority notes and directives; add only the project facts.
+      parts.push(input.source === 'compact' ? [mem.preCompactContext(cwd), mem.projectContext(cwd)].filter(Boolean).join('\n\n') : mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
+      if (input.source === 'compact') parts.push(wiki.wikiPreCompact(cwd));
+    } catch { /* memory and wiki are optional context */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
     parts.push(buildCodeMap(cwd));
     return context('SessionStart', parts.filter(Boolean).join('\n\n'));
@@ -49,6 +70,7 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
+    try { (await import('./lib/memory.mjs')).extractRemember(typeof input.last_assistant_message === 'string' ? input.last_assistant_message : lastAssistantText(input.transcript_path), cwd); } catch { /* best effort */ }
     const { loopForSession, writeLoop, endLoop, loopDecision, freshEvidence } = await import('./lib/loop.mjs');
     const loop = loopForSession(cwd, input.session_id);
     if (loop.active) {
@@ -92,7 +114,16 @@ const handlers = {
       sess.edits = (sess.edits ?? 0) + 1;
       if (sess.edits % EDIT_REMINDER_EVERY === 0) out.push(`${sess.edits} edits since the last test run: run the tests (or mis check) and read the output before claiming progress.`);
     }
-    if (input.tool_name === 'Bash' && isTestCommand(ti.command)) { sess.edits = 0; sess.failures = {}; }
+    if (input.tool_name === 'Bash' && isTestCommand(ti.command)) {
+      sess.edits = 0; sess.failures = {};
+      try { (await import('./lib/memory.mjs')).learnTestCommand(input.cwd || process.cwd(), ti.command); } catch { /* best effort */ }
+    }
+    // <remember> tags count only in subagent results (the model's own words), never in files or command output it read.
+    if (['Agent', 'Task'].includes(input.tool_name)) {
+      const r = input.tool_response;
+      const text = typeof r === 'string' ? r : Array.isArray(r?.content) ? r.content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n') : typeof r?.result === 'string' ? r.result : '';
+      try { (await import('./lib/memory.mjs')).extractRemember(text, input.cwd || process.cwd()); } catch { /* best effort */ }
+    }
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
     return context('PostToolUse', out.join('\n\n'));
   },
@@ -106,6 +137,15 @@ const handlers = {
     return n >= 3 && n % 3 === 0
       ? context('PostToolUseFailure', `This exact ${input.tool_name} call has failed ${n} times. Stop retrying it: find the root cause first (reproduce, read the full error, test one hypothesis at a time; /make-it-ship:debug).`)
       : null;
+  },
+  async PreCompact(input) {
+    const cwd = input.cwd || process.cwd();
+    const text = [(await import('./lib/memory.mjs')).preCompactContext(cwd), (await import('./lib/wiki.mjs')).wikiPreCompact(cwd)].filter(Boolean).join('\n\n');
+    return text ? { systemMessage: `Make It Ship keeps this across compaction (re-injected at the next session start):\n${text}` } : null;
+  },
+  async SessionEnd(input) {
+    (await import('./lib/wiki.mjs')).wikiSessionEnd(input.cwd || process.cwd(), input);
+    return null;
   },
   SubagentStart(input) {
     const rules = styleRules(currentStyle(input.session_id));
@@ -122,6 +162,7 @@ try {
   for await (const c of process.stdin) raw += c;
   let input = {};
   try { input = raw.trim() ? JSON.parse(raw.replace(/^﻿/, '')) : {}; } catch { input = {}; }
+  try { (await import('./lib/trace.mjs')).appendTrace({ cwd: input.cwd, hook: process.argv[2], tool: input.tool_name }); } catch { /* tracing is optional */ }
   const out = await handlers[process.argv[2]]?.(input);
   if (out) process.stdout.write(JSON.stringify(out) + '\n');
 } catch { /* fail-open */ }

@@ -36,6 +36,8 @@ const KEYWORDS = [
     'Think deeply before answering: lay out the options, check each assumption against the code, and verify before concluding.'),
   K('search', /\bdeepsearch\b|딥\s?서치|ディープ\s?サーチ|\bsearch\s+(the\s+)?(codebase|code|files?|project)\b|\bfind\s+(in\s+)?(the\s+)?(codebase|all\s+files?)\b/i,
     'Search the codebase thoroughly before answering: dispatch the make-it-ship:explorer agent (several in parallel for separate areas) and answer with file:line references.'),
+  K('wiki', /\bwiki\s+(this|add|lint|query)\b|위키에\s?(추가|저장)|ウィキに追加/i,
+    'Project wiki: use the wiki_add / wiki_query / wiki_lint / wiki_read tools (Make It Ship MCP server) — "wiki this" means capture the current finding as a page.'),
   K('analyze', /\b(deep[\s-]?analy[sz]e)\b|딥\s?분석|ディープ\s?アナライズ/i,
     'Deep analysis: invoke /make-it-ship:debug — reproduce, trace, test one hypothesis at a time, and record the root cause before any fix.'),
 ];
