@@ -171,3 +171,8 @@ test('M6 R10: English inflections and full-width letters of off stems keep a pre
   for (const p of ['ralph: no stop', 'stop ralph? no']) assert.ok(!names(p).includes('cancel'), p);
   assert.deepEqual(names('ralph: end-to-end tests are red, fix them'), ['loop']);
 });
+
+test('M6 after PASS: katakana/hiragana off spellings and full-width prefixes', () => {
+  for (const p of ['ラルフ: ヤメテ', 'ralph: ﾔﾒﾃ', 'ralph: とめて']) assert.ok(!names(p).includes('loop'), p);
+  assert.deepEqual(names('ｒａｌｐｈ: fix the parser'), ['loop']);
+});
