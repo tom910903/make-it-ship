@@ -173,6 +173,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 둔 채 `.worktrees/<run>-T<n>/…` 파일을 편집하면, guard가 그 task가 소유한 파일도 계획 범위 밖으로 판정해 ask를 냈다. **수정함.** 이제 파일 편집은 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 범위를 판정한다(`scripts/guard.mjs`). 테스트: `tests/integration/guard.test.mjs` "a file inside a task worktree is scoped by that worktree". npm test 320/320.
 
 ## RISKS
+- (M7 N8) run lock 회수: reclaimer가 5초 넘게 멈추면(예: SIGSTOP) 다른 프로세스가 `.reclaim` 표식을 지워 두 reclaimer가 겹칠 수 있다. 회수 구간은 읽기+삭제 수 µs라 실사용 위험은 낮고, 230회 동시성 스트레스에서 유실 0건이었다(M7 3차).
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
 - (M1 검증 L-1) 헤드리스 첫 실행에서 모델이 설정 확인을 기다리며 멈추는 경우가 많다(비결정적). 확인 요청은 Spec에 부합하므로 수용한다. 무인 실행 시 요청에 "질문 없이 진행"을 명시.
 - (M1 검증 L-2) `mis doctor`는 설정 파일의 `enabledPlugins`를 읽으므로, 이번 세션에 실제로 로드되지 않은 플러그인도 경고할 수 있다. 플러그인이 로드 목록을 얻을 방법이 없어 "enabled in settings" 문구로 수용.

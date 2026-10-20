@@ -97,14 +97,19 @@ export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS
   for (;;) {
     try {
       const fd = openSync(lock, 'wx');
-      writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-      closeSync(fd);
+      try { writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); }
+      catch (w) { try { unlinkSync(lock); } catch { /* gone */ } throw w; }
+      finally { closeSync(fd); }
       break;
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
       const seen = readLock(lock);
       const pid = seen && (() => { try { return JSON.parse(seen).pid; } catch { return null; } })();
-      if (pid && !pidAlive(pid)) { reclaimLock(lock, seen); run.reclaimedLock = { pid }; continue; }
+      // dead owner, or an empty/garbled lock old enough that its writer must have crashed mid-create
+      const orphan = !pid && seen !== null && (() => { try { return Date.now() - statSync(lock).mtimeMs > 5000; } catch { return false; } })();
+      if ((pid && !pidAlive(pid)) || orphan) {
+        if (reclaimLock(lock, seen)) { run.reclaimedLock = { pid }; continue; }
+      }
       if (Date.now() >= until) throw new Error(`run is locked by pid ${pid}`);
       sleepMs(20 + Math.floor(Math.random() * 30));
     }
@@ -116,12 +121,15 @@ const readLock = (lock) => { try { return readFileSync(lock, 'utf8'); } catch { 
 
 /** Remove a stale lock only if it is still exactly the one judged stale: its owner may have exited and a new owner
  *  taken the lock since we read it. Reclaimers are serialized by a short-lived `.reclaim` file. */
+// shortcut: a reclaimer stalled for over 5s (e.g. SIGSTOP) could have its marker removed by another; the reclaim step is a
+// read+unlink of microseconds, so this is accepted (docs/PROGRESS.md RISKS) rather than built on heavier primitives.
 export function reclaimLock(lock, seen) {
   const r = `${lock}.reclaim`;
   try { closeSync(openSync(r, 'wx')); } catch (e) {
     if (e.code !== 'EEXIST') throw e;
     try { if (Date.now() - statSync(r).mtimeMs > 5000) unlinkSync(r); } catch { /* gone */ }
-    return;
+    return false;
   }
   try { if (readLock(lock) === seen) unlinkSync(lock); } catch { /* gone */ } finally { try { unlinkSync(r); } catch { /* gone */ } }
+  return true;
 }

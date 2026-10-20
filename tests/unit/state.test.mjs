@@ -4,7 +4,7 @@ import { join as _join } from 'node:path';
 import { reclaimLock } from '../../scripts/lib/state.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRepo, git } from '../helpers.mjs';
 import { stateRoot, createRun, loadRun, saveState, withLock, canTransition, transition, newRunId, readEvents } from '../../scripts/lib/state.mjs';
@@ -80,4 +80,25 @@ test('lock reclaim removes only the stale lock it judged, never a lock someone c
   reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
   assert.equal(_ex(lock), false);
   assert.equal(_ex(`${lock}.reclaim`), false);
+});
+
+test('M7 N7: an empty lock left by a crash between create and write is reclaimed once it is old', () => {
+  const dir = makeRepo();
+  const run = createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const lock = join(run.dir, 'lock');
+  writeFileSync(lock, '');
+  const old = new Date(Date.now() - 60000);
+  utimesSync(lock, old, old);
+  let ran = false;
+  withLock(run, () => { ran = true; }, { waitMs: 2000 });
+  assert.ok(ran);
+});
+
+test('M7 N8: a waiter does not spin while another process holds the reclaim marker', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, JSON.stringify({ pid: 999999, at: 'x' }));
+  _wf(`${lock}.reclaim`, '');
+  assert.equal(reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'x' })), false, 'busy: report it so the caller sleeps');
+  assert.ok(_ex(lock));
 });

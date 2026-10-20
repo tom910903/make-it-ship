@@ -282,6 +282,7 @@ const WHOLE_SUITE = /^(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test|node\s+--test|p
 
 /** PostToolUse: remember a test command that just succeeded, if the project has none recorded yet. */
 export function learnTestCommand(cwd, command) {
+  try { stateRoot(cwd); } catch { return false; } // outside a repo there is no project to learn for
   const m = projectEnsure(cwd);
   const cmd = String(command ?? '').trim();
   // only a plain whole-suite command: no paths, filters, pipes or redirections
