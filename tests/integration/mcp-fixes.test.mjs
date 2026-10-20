@@ -122,3 +122,9 @@ test('M7 N5: code that kills its own interpreter is not run twice', async () => 
     assert.equal((await s.call('python_repl', { action: 'execute', code: 'print(1+1)' })).json.stdout, '2\n', 'next call works');
   } finally { s.close(); }
 });
+
+test('M7 N2 (rest): outside a repo a passing test command is not learned into a global project', () => {
+  const h = home(), nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
+  hook('PostToolUse', { cwd: nr, session_id: 'A', tool_name: 'Bash', tool_input: { command: 'cargo test' } }, { MIS_STATE_HOME: h });
+  assert.equal(existsSync(join(h, 'memory', 'project.json')), false);
+});
