@@ -263,3 +263,85 @@ OMC 대비 의도적 차이로 판단해 결함으로 세지 않은 것(PARTIAL 
 - N6의 원인 확정(재현 실패, 가설만).
 
 ROUND2: DEFECTS FOUND
+
+## 3차 검증 (round 3)
+
+- 대상: 브랜치 `m7-wip`, HEAD 9b35d38 (2차 이후 수정 커밋 1개: N1~N6, 9개 파일). 커밋 메시지·2차 보고서의 수정 주장은 근거로 쓰지 않고 재현으로만 판정했다.
+- 검증자: 독립 검증 에이전트(구현 미참여). 임시 디렉터리는 모두 저장소 밖(`$TMPDIR`, scratchpad `r3/`).
+
+### 기본 확인
+- `claude plugin validate .`: ✔ Validation passed
+- `npm test` 5회 연속(순차 실행. 1~3회차는 내 lock 스트레스 smoke·REPL·N1~N5 프로브와 동시에 돌아 부하가 있었다): 1회 417/417 (72초), 2회 417/417 (90초), 3회 417/417 (54초), 4회 417/417 (45초), 5회 417/417 (43초). 모두 exit 0, 실패·flake 없음 (`mis-concurrency` 포함).
+
+### N1~N5 재검증 (MCP stdio 직접 구동 + 훅 직접 실행)
+
+| ID | 판정 | 근거 |
+|---|---|---|
+| N1 | FIXED | `wiki_ingest` 거부: `.GIT/config`, `.Git/HEAD`, `.gIT/config`, `sub/../.GIT/config`, 절대 경로 `<dir>/.GIT/config`, 대문자 저장소 경로 `<DIR>/.git/config`, `.GIT`를 가리키는 심볼릭 링크 `lnk/config`, `.GIT/./config`, `.GIT//config`, `.git/logs/HEAD`. 정상 수집 유지: `notes.git.md`, `x.git/a.md`(이름에 .git이 들어간 일반 파일·디렉터리). |
+| N2 | **PARTIAL (미해결)** | SessionStart 경로는 고쳐짐: Cargo.toml만 있는 비저장소 A에서 SessionStart → 전역 `MIS_STATE_HOME/memory/project.json` 생성 안 됨, 이어진 빈 비저장소 B에 주입 없음. 저장소·저장소 하위 디렉터리에서는 감지 유지. **그러나 PostToolUse 경로는 그대로**: 같은 A에서 Bash `cargo test` PostToolUse 1회 → `learnTestCommand`가 `projectEnsure`로 전역 `project.json`을 만든다(`projectRoot: <A>`, languages Rust, testCommand `cargo test`). 이후 관계없는 비저장소 B의 SessionStart에 `## Project / languages: Rust / test: \`cargo test\``가 주입된다. 2차 N2 본문이 지적한 "learnTestCommand도 저장소 밖에서는 같은 전역 파일에 쓴다"가 수정되지 않았다(`scripts/hooks.mjs:119`는 저장소 여부를 확인하지 않음). 추가된 테스트 M7 N2는 SessionStart만 본다. |
+| N3 | FIXED | priority·package.json 저장소에서 `source=compact`: `## Project` 1회, priority 1회, test 명령 포함. `source=resume`: `## Project` 1회, priority 1회(중복 없음). |
+| N4 | FIXED | 학습 안 됨: `pytest tests/test_one.py -k slow`, `npm test -- --grep foo`, `npm test 2>&1 \| tail`, `npm test; echo hi`, `npm test && rm -rf x`, `cargo test some_fn`, `go test ./pkg/...`, `FOO=1 npm test`. 학습됨: `npm test`, `npm run test`, `pytest`, `node --test`, `make test`, `npm  test`(공백 2개 그대로 저장, 무해). 감지된 test 명령(`npm test`)은 이후 `pytest`로 덮어쓰지 않음. 실패한 명령은 PostToolUse가 아니라 PostToolUseFailure로 가므로 학습 대상이 아니다. |
+| N5 | FIXED | MCP: `open(f,'a').write('x'); os._exit(1)` 1회 호출 → 파일 1줄, 응답 `python process exited while running this code (it was not retried)…`, 다음 호출 정상(`7`). 유휴 인터프리터를 외부 SIGKILL 직후 호출 → `restarted:true`, 코드 1회 실행(`y` 1줄, `42`). 300ms 후 호출 → 새 세션 정상. SIGINT 타임아웃 1초 → 1006ms에 `KeyboardInterrupt`, 상태 유지(`w=9`). SIGINT 무시 루프 → 3059ms에 kill, 다음 호출 `restarted:true` 정상. 실행 중(ack 후) 외부 SIGKILL → 재시도 없음(`z` 1줄). `repl.mjs` 직접 구동으로 ack/exit 순서 경쟁도 확인: 이벤트 루프를 0/60/300/1000ms 바쁘게 막아 ack 줄과 프로세스 종료가 동시에 준비되게 한 상태에서 `os._exit` 85회, `os.kill(getpid(), SIGKILL)` 30회, `ctypes.string_at(0)`(segfault) 20회 → 모두 1회 실행, 재실행 0회. 종료 후 `repl_bridge` 잔존 프로세스 없음. |
+
+추가 확인 (N4): 감지된 test 명령이 없는 저장소에서 `PostToolUseFailure` Bash `npm test`(실패) → `build.testCommand` null. `PostToolUseFailure` 핸들러는 실패 횟수만 세고 `learnTestCommand`를 호출하지 않는다(`scripts/hooks.mjs` 130행대).
+
+### D1~D9 회귀 (손으로 5개 + N 재검증에 포함된 것)
+| ID | 결과 | 근거 |
+|---|---|---|
+| D1 | 유지 | 다른 저장소·git 아닌 기존 경로 `workingDirectory` → 세션 저장소 notepad에 기록, 다른 저장소 notepad null, 전역 `MIS_STATE_HOME/memory` 생성 안 됨, 없는 경로 → `isError` |
+| D2 | 유지 | Agent `tool_input.prompt` 태그·`tool_use` 블록 태그·Read 결과 태그 무시, 텍스트 결과의 `R3 "q" line\nl2` 1건만 원문 그대로 저장, 같은 결과 재입력에도 중복 없음 |
+| D3 | 유지 | guard가 Bash·MCP 도구 각 1건씩 `{"hook":"PreToolUse","tool":…,"decision":"allow"}`를 trace.jsonl에 기록 (2줄) |
+| D5 | 유지 | C 파일만 있는 저장소에서 `lsp_diagnostics_directory` → `success:false, filesChecked:0` |
+| D9 | 유지 | 저장소 밖 `stateRoot` → throw, stderr 빈 문자열 |
+| D4 / D6 / D7 | 유지 | 위 N1(.git 차단 11가지), N5(재시작·타임아웃), N3(compact priority 1회)에서 확인 |
+| D8 | PARTIAL 유지 | 저장소 감지·학습은 동작(N3·N4), 저장소 밖 PostToolUse 학습이 전역에 새는 문제(N2) 남음 |
+
+### 실사용 (headless dogfood)
+- 준비: `node evals/setup-demo.mjs a <scratchpad>/r3/demo`(새 사본), `MIS_STATE_HOME=<scratchpad>/r3/home`, 플래그 `--plugin-dir <m7 worktree> --setting-sources project --permission-mode bypassPermissions --output-format stream-json --verbose`(`--strict-mcp-config` 없음). Claude Code 2.1.292.
+- init: `plugin:make-it-ship:mis` connected(source plugin), mis 도구 54개. 결과 success, 12 turns, $0.28.
+- 모델이 실제로 부른 도구(모두 `mcp__plugin_make-it-ship_mis__` 접두어): notepad_write_priority, notepad_write_working, notepad_read, project_memory_read, wiki_add, wiki_query, python_repl ×2, trace_timeline, 그리고 Bash `git status --short`.
+- 디스크: `.git/make-it-ship/memory/notepad.json`에 priority `R3-PRIORITY: run tests before shipping`, working `R3-WORKING note`. project_memory_read는 SessionStart가 만든 기억(languages JavaScript, `projectRoot` = demo) 반환.
+- wiki_add → `.make-it-ship/wiki/r3-testing-guide.md` 생성, wiki_query("WOMBAT-77") → 1건 score 2. `git status --short` 출력 없음(깨끗).
+- python_repl `z = 6*7` → `print(z)` → `42\n` (execution 1→2, 상태 유지).
+- trace_timeline 11건(SessionStart, UserPromptSubmit, MCP 도구 PreToolUse allow…). 종료 후 `MIS_STATE_HOME/trace.jsonl` 15줄, MCP 도구 9종 10건 + Bash 1건 모두 `decision:"allow"`.
+- 종료 후 m7의 `repl_bridge`·`server.mjs`·clangd 잔존 프로세스 없음(보이는 `server.mjs` 2개는 다른 worktree `make-it-ship-m8`의 것). SessionEnd가 `session-log-*.md` 생성.
+
+### N6 (stale lock reclaim) 재검증
+
+코드 검토 (`scripts/lib/state.mjs` `withLock`/`reclaimLock`): 2차 가설의 경로(holder X가 lock을 풀고 종료한 사이 B가 새 lock을 잡으면 A가 B의 lock을 지움)는 막혔다. 지우기 전에 `.reclaim` 파일로 reclaimer끼리 직렬화하고, lock 내용(pid + ms 시각)이 판단 당시 읽은 내용과 같을 때만 지운다. 남은 경쟁·문제는 아래와 같다.
+- (재현) **빈 lock 영구 잠김**: `openSync('wx')`와 `writeFileSync` 사이에 writer가 죽거나 `writeFileSync`/`closeSync`가 예외(예: ENOSPC)를 던지면 빈 lock이 남는다(예외 경로에서는 fd도 샌다). 빈 내용이면 pid가 없어 reclaim 대상이 아니므로 이후 모든 writer가 대기 시간 후 `run is locked by pid `(빈 pid)로 실패한다. 손으로 파일을 지울 때까지 run이 잠긴다. 재현: 빈 lock 파일 + `MIS_LOCK_WAIT_MS=1500` → `mis interview add` exit 1. M7 이전부터 있던 코드이고 창은 아주 좁다.
+- (추론, 재현 안 됨) **오래된 `.reclaim` 파괴 경쟁**: `.reclaim`이 5초보다 오래되면 `statSync` 후 `unlinkSync`로 지우는데, 이 두 호출은 원자적이지 않다. 두 waiter가 같은 오래된 파일을 보면 두 번째 waiter가 새 reclaimer C의 새 `.reclaim`을 지울 수 있고, 그러면 D가 C와 동시에 들어온다. `readLock(lock) === seen` 비교와 `unlinkSync`도 원자적이지 않으므로 C가 stale lock을 지우고 E가 새 lock을 잡은 뒤 D가 E의 lock을 지우는 순서가 가능하다(lost update). 전제: reclaimer가 `.reclaim`을 잡은 채 5초 넘게 멈추거나 죽어야 한다(SIGSTOP, 심한 스왑).
+- (관찰) **바쁜 대기**: 새 `.reclaim`이 있으면 `reclaimLock`이 그냥 반환하고 `continue`가 `sleepMs`를 건너뛰어 waiter가 최대 5초 동안 CPU 100%로 돈다. 재현: dead-pid lock + 방금 만든 `.reclaim` → `interview add`가 5931ms 뒤 성공. 아무것도 회수하지 않았는데도 `run.reclaimedLock`이 설정된다(사소).
+- 정상 확인: dead-pid lock + 10초 된 `.reclaim`(죽은 reclaimer) → 회복해서 성공, `.reclaim` 남지 않음.
+
+스트레스 (각 반복마다 새 저장소·새 run, 동시 `mis interview add` writer N개. exit 0인 writer의 항목이 하나라도 없으면 lost update로 판정. id 중복, lock·`.reclaim` 잔존도 검사):
+
+| 시나리오 | 코드 | 반복 | lost update | 기타 |
+|---|---|---|---|---|
+| plain, N=8 | 9b35d38 | 60 | 0 | 없음 |
+| dead-pid lock 미리 둠, N=12 | 9b35d38 | 60 | 0 | 없음 |
+| dead-pid lock 미리 둠, N=8 | 9b35d38 | 60 | 0 | 없음 |
+| dead-pid lock + writer 1/4을 40~160ms에 SIGKILL, N=10 | 9b35d38 | 50 | 0 | 1회: 죽은 reclaimer의 `.reclaim`이 남음(5초 뒤 자가 회복 경로, 위 바쁜 대기) |
+| **대조군** plain, N=12, `yes` 10개로 CPU 부하(load avg 약 35~41) | **23a2307 (수정 전)** | 60 | **2회** (iter 9: exit 0 12개 중 4건 유실, iter 18: 1건 유실) | 6회는 30초 대기 초과 실패(오류로 보고됨, 조용한 유실 아님) |
+| 같은 부하·같은 조건 | 9b35d38 | 60 | **0** | 9회 30초 대기 초과 실패(부하 때문, 오류로 보고됨) |
+
+대조군에서 수정 전 코드는 같은 하네스로 조용한 유실을 재현했고(2/60), 수정 후 코드는 0/60이었다. 이 경로는 고쳐졌다고 판단한다. 부하에서 생긴 대기 초과는 writer가 오류로 보고하므로 lost update가 아니다. 다만 위의 빈 lock 영구 잠김과 오래된 `.reclaim` 경쟁은 남아 있다.
+
+### 정보: N5의 남은 이론적 경쟁
+`proc.on('exit')`가 waiter를 `null`로 깨우는데, Node의 `'exit'`는 stdio를 다 읽기 전에 올 수 있다. ack 줄이 아직 fd3 버퍼에 있으면 `acked`가 false로 보여 코드가 다시 실행될 수 있다. 이벤트 루프를 바쁘게 막은 135회 시험에서는 한 번도 일어나지 않았다. `'close'`를 기다리면 이 경쟁이 사라진다. 차단 사유는 아니다.
+
+### 3차 결함 목록
+
+| ID | 심각도 | 출처 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|---|
+| N2 | 중간 | 2차 N2 수정 불완전 | 저장소 밖 세션에서 PostToolUse Bash test 명령(`cargo test` 등)이 `learnTestCommand` → `projectEnsure`로 전역 `MIS_STATE_HOME/memory/project.json`을 만든다. 이후 관계없는 모든 비저장소 세션의 SessionStart에 그 언어와 test 명령이 주입된다. SessionStart 경로만 고쳐졌고 추가된 테스트도 SessionStart만 본다. | 비저장소 A(Cargo.toml)에서 PostToolUse Bash `cargo test` → 빈 비저장소 B SessionStart에 `languages: Rust`, ``test: `cargo test` `` | `scripts/hooks.mjs:119` (저장소 확인 없이 `learnTestCommand` 호출), `scripts/lib/memory.mjs` `learnTestCommand` |
+| N7 | 낮음 | M3 `withLock` (M7 이전), N6 검토 중 발견 | 빈 lock 파일(생성과 기록 사이 크래시, 또는 기록 예외)은 회수되지 않아 run이 영구 잠긴다. 예외 경로에서는 fd도 샌다. | 빈 lock + `MIS_LOCK_WAIT_MS=1500` → `run is locked by pid ` exit 1 | `scripts/lib/state.mjs` `withLock` |
+| N8 | 낮음 | N6 수정 | 오래된(5초 이상) `.reclaim`을 지울 때 stat→unlink가 원자적이지 않아 reclaimer 둘이 동시에 들어갈 수 있다. reclaimer가 5초 넘게 멈추면 이론상 lost update가 가능하다(재현 안 됨). 새 `.reclaim`이 있는 동안 waiter는 sleep 없이 최대 5초 동안 바쁜 대기를 한다(재현: 5931ms). | 위 N6 절 | `scripts/lib/state.mjs` `reclaimLock`, `withLock`의 `continue` |
+
+2차 결함 최종: N1·N3·N4·N5·N6 FIXED(N6은 대조군으로 확인), **N2 PARTIAL**(PostToolUse 경로 미수정). 새로 N7(M7 이전부터 있던 문제)과 N8(N6 수정의 남은 경쟁·바쁜 대기)을 찾았다. npm test 5/5 통과, validate 통과, dogfood 정상.
+
+### 3차 미검증
+- 대화형(tmux) 세션, 실제 자동 compaction, Linux(대소문자 구분 FS).
+- N8의 lost update 경로(5초 넘게 멈추는 상황을 만들지 않았다), N5 `'exit'`/stdio 순서 경쟁의 실제 발생.
+
+ROUND3: DEFECTS FOUND
