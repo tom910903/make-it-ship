@@ -47,26 +47,26 @@ const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abst
 // mention becomes a hint the model judges, since names, complaints and "don't use ralph" read the same to a regex.
 // Only prefix forms start the loop (user decision after five rounds of regex heuristics); every other mention of
 // ralph — "use ralph", "랄프로", names, questions, refusals — is a hint the model judges in context.
-const LOOP_PREFIX = [/^\s*\/?ralph\s*[:：]/i, /^\s*\/ralph(?:\s|$)/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
+// One prefix shape for both loop and cancel: "ralph:", "ralph mode:", "랄프 모드로 진행:", "ラルフモード：", "/ralph …".
+const PREFIX = /^\s*(?:\/?(?:ralph|랄프|ラルフ)(?:\s*(?:mode|모드로?(?:\s*(?:진행|해))?|モード))?\s*[:：]|\/ralph(?=\s|$))\s*/i;
 // Checked on the raw prompt: text removed by sanitize (URLs, code) must not turn a later "ralph:" into a prefix.
-const explicitLoop = (raw) => LOOP_PREFIX.some((r) => r.test(raw));
-// Cancel only when the prompt consists of nothing but ralph words, off words and filler — no task words. A rule, not
-// a phrase list: "stop ralph now", "랄프를 꺼줘", "ラルフ: キャンセル" cancel; "stop ralph from deleting files" does not.
-const PREFIX_STRIP = /^\s*(?:(?:\/?ralph(?:\s+mode)?|랄프(?:\s?모드(?:로)?(?:\s*진행)?)?|ラルフ(?:\s?モード)?)\s*[:：]|\/ralph\s)\s*/i;
+const explicitLoop = (raw) => PREFIX.test(raw);
+// Cancel only when every token is a ralph word, an off word (any inflection/polite ending) or filler — no task words,
+// no negation, at most 6 tokens. A rule, not a phrase list: "stop ralph now", "랄프: 꺼줘요", "ラルフ: 停止してください" cancel.
+const RALPH_TOKEN = /^(?:ralph|ralph's|랄프|ラルフ|루프|loop|mode|모드|モード)$/i;
 const EN_OFF = /^(?:stop|quit|cancel|off|end|exit|halt|kill|disable|abort|turn|no)$/i;
-const EN_FILL = /^(?:ralph|ralph's|please|now|it|the|loop|mode|right|away|ok|okay|more)$/i;
-const NEGATION = /\b(?:don'?t|don’t|never|not|didn'?t|didn’t)\b|지\s?마|말고|않|ないで|ずに|ません/i;
-const CJK_OFF = /(?:그만|멈춰|멈추|꺼|끄|중지|종료|취소|정지|止め|やめ|停止|キャンセル|終了)(?:해|해요|해줘|해\s?줘|해\s?주세요|줘|\s?주세요|라|기|て|てください|ください|して|しろ|ろ|よ)?$/;
-const CJK_REST = /^(?:ralph|랄프|ラルフ|루프|모드|モード|loop|를|을|는|은|を|は|の|\s)*$/i;
+const EN_FILL = /^(?:please|now|it|the|right|away|ok|okay|more|주세요|줘|줘요|해|해요|해줘|해주세요|하세요|좀|ください|下さい)$/i;
+const CJK_OFF = /^(?:그만|멈|꺼(?!내)|끄|중지|종료|취소|정지|止め|やめ|停止|キャンセル|終了)[\p{Script=Hangul}\p{Script=Hiragana}下さい]*$/u;
+const PARTICLE = /^(?:를|을|는|은|가|이|を|は|が|の|で)/;
+const NEGATION = /\b(?:don'?t|don’t|never|not|didn'?t|didn’t)\b|지\s?마|말고|않|ないで|ずに|ません|ないと/i;
 const cancelOnly = (raw) => {
-  const t = String(raw).trim().replace(/[.!?,。！？、]+$/, '').trim();
+  const t = String(raw).trim();
   if (/\b(?:cancelomc|stopomc)\b/i.test(t)) return true;
   if (!/ralph|랄프|ラルフ/i.test(t) || NEGATION.test(t)) return false;
-  const body = t.replace(PREFIX_STRIP, '').trim().replace(/[.!?,。！？、]+$/, '').trim();
-  const words = body.split(/[\s,]+/).filter(Boolean);
-  if (words.length && words.length <= 5 && words.every((w) => EN_OFF.test(w) || EN_FILL.test(w)) && words.some((w) => EN_OFF.test(w))) return true;
-  const m = body.match(CJK_OFF);
-  return !!m && CJK_REST.test(body.slice(0, m.index));
+  const tokens = t.replace(PREFIX, ' ralph ').replace(/(ralph|랄프|ラルフ)/gi, ' $1 ')
+    .split(/[\s,、，—–;:：~…!?.。！？]+/).map((w) => w.replace(PARTICLE, '')).filter(Boolean);
+  return tokens.length <= 7 && tokens.every((w) => RALPH_TOKEN.test(w) || EN_OFF.test(w) || EN_FILL.test(w) || CJK_OFF.test(w))
+    && tokens.some((w) => EN_OFF.test(w) || CJK_OFF.test(w)) && tokens.filter((w) => RALPH_TOKEN.test(w)).length <= 2;
 };
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 

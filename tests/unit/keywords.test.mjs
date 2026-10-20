@@ -141,3 +141,13 @@ test('M6 R7: a prompt made only of ralph words, off words and filler cancels (an
     assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
   assert.deepEqual(names('ralph：fix it'), ['loop'], 'full-width colon prefix');
 });
+
+test('M6 R8: token rule — any polite ending, punctuation, mixed languages, inner commas; one prefix shape shared by loop and cancel', () => {
+  for (const p of ['ラルフ: 停止してください', 'ラルフ: キャンセルしてください', '랄프: 중지하세요', '랄프: 멈춰요', '랄프: 꺼줘요', '랄프 꺼주세요', 'ラルフを止めて下さい',
+    'ralph: stop…', 'ralph: stop;', '랄프: 꺼줘~', 'stop ralph…', '랄프, 꺼줘', 'ラルフ、止めて', 'ralph — stop', '랄프 stop', 'stop 랄프', 'ラルフ stop', 'ralph 꺼줘', '랄프 그만 꺼',
+    '랄프 모드로 해: 꺼줘'])
+    assert.deepEqual(names(p), ['cancel'], p);
+  for (const p of ['랄프: 데이터 꺼내는 함수 고쳐줘', '랄프 그만두지 마', '랄프: 멈추지 말고 계속해', 'ralph ralph ralph ralph ralph ralph 꺼줘'])
+    assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
+  assert.deepEqual(names('랄프 모드로 해: 로그인 고쳐줘'), ['loop']);
+});

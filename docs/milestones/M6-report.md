@@ -1070,3 +1070,124 @@ ROUND6: DEFECTS FOUND
   - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
 
 ROUND7: DEFECTS FOUND
+
+## 8차 검증 (round 8)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD 383aacb)
+- 검증자: 독립 verifier (구현에 참여하지 않음).
+- 기준: 과제에 적힌 7차 계약.
+  - LOOP: 원문이 접두형으로 시작하고 cancel이 아니면 loop다.
+  - CANCEL (목록이 아니라 규칙): 앞의 접두형과 끝 문장부호를 뗀 프롬프트가 ralph 단어, 끄기 단어(어간 + 공손 어미), 채움말만으로 되어 있고, 라틴 단어가 5개 이하이며, 부정이 없을 때다. 또는 `cancelomc`/`stopomc`가 있을 때다.
+  - 그 밖의 ralph 언급은 `loop-hint`다. hint는 결함이 아니다.
+- 실험은 모두 저장소 밖 scratchpad에서 했다. `MIS_STATE_HOME`은 임시 디렉터리로 지정했다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 키워드 판정은 `detectKeywords`로 했다. 대표 8문장은 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했고, 결과가 같았다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` ×3 | 1회차: tests 371 · pass 371 · fail 0<br>2·3회차: pass 370 · fail 1. 두 번 모두 같은 테스트가 실패했다: `mis-resume.test.mjs:16` "running check leaves a marker".<br>이 파일만 따로 3회 돌리면 3회 모두 통과한다 (부하 평균 약 5). 아래 R8-5 |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 7차 결함 문장 25개 재실행 + 새 문장 100개. 합계 125개. 계약 위반 26개 (R8-1~R8-4). 참고 2개는 결함으로 세지 않는다 |
+
+### 7차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R7-1 접두형 끄기 변형 → loop | FIXED | 15문장 모두 cancel이다 (`ralph: please stop`, `ralph: stop, please`, `랄프: 그만해줘`, `랄프 모드: 꺼`, `ラルフ: 止めてください`, `ラルフモード: 停止`, `ralph: stop?` 등).<br>훅 경로에서 `ralph: please stop`도 cancel이다. |
+| R7-2 비접두형 끄기 → hint | FIXED | 10문장 모두 cancel이다 (`Please, stop ralph`, `turn ralph off`, `exit ralph`, `랄프를 꺼줘`, `랄프 모드 꺼줘`, `ラルフを終了して` 등). |
+
+### 새 문장 대조 (규칙의 경계)
+
+| 분류 | 문장 수 | 위반 | 내용 |
+|---|---|---|---|
+| 5단어 상한 | 8 | 0 (참고 2) | 5단어는 cancel이다: `ralph: please stop the loop now`, `ralph: stop it now please ok`.<br>6단어는 cancel이 아니다: `stop the ralph loop now please`.<br>참고 2건은 아래에 적었다. |
+| 부정 (영·한·일, 접두형 포함) | 13 | 0 | 비접두형은 cancel이 아니다: `never stop ralph`, `랄프 끄지마`, `랄프 안 꺼`, `ラルフを止めるな`.<br>접두형은 loop다: `ralph: don't stop`, `ラルフ: やめないで`. |
+| 조사 (를·는·の·を·は, 모드·루프) | 7 | 0 | 모두 cancel이다. |
+| 공손 어미 (비접두형) | 10 | 8 | R8-1 |
+| 공손 어미 (접두형) | 6 | 6 | R8-1. **loop가 된다** |
+| 섞인 문장부호 | 13 | 7 | R8-2, R8-3 |
+| 접두형 + 끄기 (`/ralph`, `ralph mode：`, `랄프 모드로 진행:`, 언어를 섞은 형태) | 9 | 1 | R8-4 |
+| 언어 혼합, 끄기 단어 두 개 | 6 | 4 | R8-3 |
+| 과제어 + 끄기 단어 | 14 | 0 | 접두형은 loop다: `ralph: stop the server`, `랄프: 서버 꺼줘`, `ラルフ: テストを止めて`.<br>비접두형은 cancel이 아니다: `stop ralph from deleting files`, `랄프 빌드 중지`, `cancel ralph order`. |
+| 접두형 과제 / 비접두형 언급 | 12 | 0 | 접두형 과제 7개는 모두 loop다 (`ralph：fix it` 포함).<br>비접두형 5개는 loop가 아니다. |
+| `cancelomc`/`stopomc` | 2 | 0 | cancel |
+
+- 계약의 두 방향 중 위험한 쪽은 지켜졌다.
+  - 비접두형이 loop가 된 경우: 0건
+  - 과제어나 부정이 있는데 cancel이 된 경우: 0건
+- 남은 위반은 모두 "규칙을 만족하는데 cancel이 아니다" 쪽이다. 그중 접두형은 loop를 켠다.
+
+### 새 결함
+
+**R8-1 · MEDIUM · 공손 어미가 붙은 끄기 요청이 cancel이 아니다. 접두형이면 loop를 켠다**
+- 재현 (접두형) → **loop** (6건): `랄프: 멈춰요`, `랄프: 중지하세요`, `랄프: 꺼줘요`, `ラルフ: 停止してください`, `ラルフ: キャンセルしてください`, `ラルフ：終了してください`
+  - 훅 경로: `ラルフ: 停止してください`, `랄프: 멈춰요`, `랄프: 중지하세요` → `[MAKE IT SHIP: loop]`
+- 재현 (비접두형) → hint (8건): `랄프 멈춰요`, `랄프 꺼줘요`, `랄프 중지하세요`, `랄프 그만하세요`, `ラルフを停止してください`, `ラルフをキャンセルしてください`, `ラルフを終了してください`, `ラルフをやめて下さい`
+- 원인: `keywords.mjs`의 `CJK_OFF` 어미 목록이 닫혀 있다.
+  - 한국어: `요`, `줘요`, `하세요`가 없다.
+  - 일본어: `してください`가 없다. `して`와 `てください`는 따로 있지만, 둘을 합친 형태는 없다. `下さい`(한자 표기)도 없다.
+  - 계약은 "어간 + 공손 어미"다. 그리고 일본어 サ변 명사(停止·キャンセル·終了)의 공손형은 거의 언제나 `してください`다.
+- 영향: R7-1과 같은 종류다. 끄려는 사용자에게 loop와 "do not stop early"가 주입된다.
+- 고칠 방향: 어미를 목록으로 늘리지 말고 (して|て)?(ください|下さい)?, (해)?(줘)?(요)?, 하세요처럼 조합으로 받는다.
+
+**R8-2 · LOW-MEDIUM · 끝 문장부호 `…` `;` `~`가 지워지지 않는다**
+- 재현 (접두형) → **loop**: `ralph: stop…`, `ralph: stop;`, `랄프: 꺼줘~`
+  - 훅 경로: `ralph: stop…`, `ralph: stop;` → loop
+- 재현 (비접두형) → hint: `stop ralph…`
+- 원인: 끝 문장부호 집합이 `[.!?,。！？、]`뿐이다.
+- `~`가 문장부호인지는 판단이 갈린다. `…`와 `;`는 분명히 문장부호다.
+
+**R8-3 · LOW · 가운데 문장부호, 언어 혼합, 끄기 단어 두 개 → cancel이 아니라 hint**
+- 재현 → hint (7건): `랄프, 꺼줘`, `ラルフ、止めて`, `ralph — stop`, `랄프 stop`, `stop 랄프`, `ラルフ stop`, `랄프 그만 꺼`
+- 원인:
+  - 영어 경로는 쉼표로 나누지만 CJK 경로의 `CJK_REST`는 `,` `、`를 받지 않는다.
+  - 영어 경로의 `EN_FILL`에 `랄프`·`ラルフ`가 없다. 반대로 `ralph 꺼줘`는 cancel이다 (비대칭).
+  - `CJK_REST`에 끄기 어간이 없다. 그래서 끄기 단어 두 개(`그만 꺼`)는 통과하지 못한다.
+- loop는 켜지지 않는다. hint 문구가 `mis loop cancel`을 안내한다. 그래서 LOW로 둔다.
+
+**R8-4 · LOW · `LOOP_PREFIX`와 `PREFIX_STRIP`이 받는 접두형이 다르다**
+- 재현: `랄프 모드로 해: 꺼줘` → **loop**
+- 원인: `LOOP_PREFIX`는 `모드로 해:`를 받는다. `PREFIX_STRIP`은 `모드로 진행:`만 받는다.
+- R7-1의 원인 하나(두 정규식이 어긋남)가 다른 형태로 남은 것이다. 이 형태는 계약 목록에는 없다. 그래서 LOW로 둔다.
+- 같은 종류: `ralph mode： fix x`(전각 콜론)는 `PREFIX_STRIP`은 받지만 `LOOP_PREFIX`는 받지 않는다. 그래서 hint가 된다. 이것도 계약 목록 밖의 형태다.
+
+**R8-5 · LOW · `mis-resume` 테스트가 부하에서 실패한다**
+- `npm test` 2·3회차에서 `mis-resume.test.mjs:28` "running check leaves a marker"가 실패했다 (각 371 중 fail 1).
+- 마커를 기다리는 시간이 50ms × 100회 = 5초로 고정되어 있다. 3회차는 전체 수행 시간이 675초였다 (1회차는 328초).
+- 단독으로 실행하면 3/3 통과한다. 그래서 제품 결함이 아니라 테스트의 시간 의존성이다.
+- 다만 7차의 "3회 안정"은 이번에 재현되지 않았다.
+
+**참고 (결함으로 세지 않음)**
+- CJK 경로에는 라틴 단어 5개 상한이 적용되지 않는다.
+  - 재현: `ralph ralph ralph ralph ralph ralph 꺼줘` → cancel, `ralph loop loop loop loop loop 그만` → cancel
+  - 과제어가 없으므로 과제의 결함 정의에는 해당하지 않는다. 규칙 문구와만 어긋난다.
+- `Ralph: …`(사람을 부르는 문장)이 loop가 되는 것은 사용자가 받아들인 위험이다. 그대로다.
+
+### 이전 결함 수동 확인 (4건)
+
+| ID | 결과 |
+|---|---|
+| R6-3 정리 뒤 접두형 / R6-4 `/ralph-…` 파일명 / R6-2 부정 | 다음 6문장이 모두 hint다:<br>- `see https://x.io/a ralph: fix`<br>- 코드블록 뒤 `ralph: fix it`<br>- `/ralph-lauren.png is broken, replace it`<br>- `/ralph.png fix`<br>- `add a button to stop ralph`<br>- `don’t stop ralph`<br>유지 |
+| D1 loop 세션 묶기 | 저장소 F에서 `CLAUDE_CODE_SESSION_ID=A`로 `loop start`했다.<br>- Stop A → `{"decision":"block", … LOOP 1/20 …}`<br>- Stop B(같은 저장소) → 출력 없음<br>- 다른 저장소 G의 세션 C → 출력 없음<br>- 세션 B의 cancel → "belongs to another session (A)" 오류<br>- 세션 A의 cancel → `active: false`<br>유지 |
+| R3-4 freeze 범위 | F에서 `freeze src`, cwd F:<br>- `F/src/a.js` allow<br>- `F/other.js`, `G/a.js` → deny<br>cwd G의 `G/a.js` → allow<br>유지 |
+| 세션별 스타일 | 세션 X에 `ponytail lite` 프롬프트 → "Style level is now lite".<br>`currentStyle('X')` = lite, `currentStyle('Y')` = full<br>유지 |
+
+### 판정
+
+**DEFECTS FOUND**
+- 7차 결함 2건: 모두 FIXED (R7-1 15문장, R7-2 10문장).
+- 새 결함:
+  - MEDIUM 1건: R8-1 (공손 어미)
+  - LOW-MEDIUM 1건: R8-2 (끝 문장부호)
+  - LOW 3건: R8-3 (가운데 문장부호·언어 혼합), R8-4 (두 접두형 정규식 불일치), R8-5 (테스트 시간 의존)
+- 판정을 정하는 근거: R8-1. `ラルフ: 停止してください`, `랄프: 중지하세요`는 계약의 CANCEL 규칙(어간 + 공손 어미)을 만족한다. 그런데 loop를 켠다.
+- 나머지 결과:
+  - 비접두형 loop 0건. 과제어·부정 cancel 0건.
+  - validate 통과, 이전 결함 수동 확인 4건 모두 유지.
+- 미검증:
+  - 대화형 세션과 Linux
+  - 헤드리스 모델 판단
+  - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
+
+ROUND8: DEFECTS FOUND
