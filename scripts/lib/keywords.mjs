@@ -50,17 +50,17 @@ const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abst
 // One prefix shape for both loop and cancel: "ralph:", "ralph mode:", "랄프 모드로 진행:", "ラルフモード：", "/ralph …".
 const PREFIX = /^\s*(?:\/?(?:ralph|랄프|ラルフ)(?:\s*(?:mode|모드로?(?:\s*(?:진행|해))?|モード))?\s*[:：]|\/ralph(?=\s|$))\s*/i;
 // Checked on the raw prompt: text removed by sanitize (URLs, code) must not turn a later "ralph:" into a prefix.
-const explicitLoop = (raw) => PREFIX.test(raw) && !OFF_STEM.test(String(raw).replace(PREFIX, ''));
+const explicitLoop = (raw) => PREFIX.test(raw) && !OFF_STEM.test(String(raw).normalize('NFKC').replace(PREFIX, ''));
 // Built so that the harmful mistakes cannot happen (M6 round 9): cancel needs every token to be a ralph word, a filler, or an
 // off word from a CLOSED list of whole words (no open-ended endings, so negated forms like 끄지말아줘 / 止めるな never match);
 // a prefix prompt containing any off stem anywhere is not auto-looped — it becomes a hint for the model.
 const RALPH_TOKEN = /^(?:ralph|랄프|ラルフ|루프|loop|mode|모드|モード)(?:를|을|는|은|가|이|を|は|が|の)?$/i;
-const EN_OFF = /^(?:stop|quit|cancel|off|end|exit|halt|kill|disable|abort|turn|no)$/i;
-const EN_FILL = /^(?:please|now|it|the|right|away|ok|okay|more|주세요|줘|줘요|해|해요|해줘|해주세요|하세요|좀|ください|下さい)$/i;
+const EN_OFF = /^(?:stop|quit|cancel|off|end|exit|halt|kill|disable|abort|turn)$/i;
+const EN_FILL = /^(?:please|now|it|the|right|away|ok|okay|주세요|줘|줘요|해|해요|해줘|해주세요|하세요|좀|ください|下さい)$/i;
 const CJK_OFF = /^(?:꺼|꺼줘|꺼줘요|꺼주세요|그만|그만해|그만해줘|그만해요|멈춰|멈춰줘|멈춰요|중지|중지해|중지해줘|중지하세요|종료|종료해|종료해줘|취소|취소해|취소해줘|정지|정지해|止めて|止めてください|止めて下さい|やめて|やめてください|停止|停止して|停止してください|キャンセル|キャンセルして|キャンセルしてください|終了|終了して)$/;
-const OFF_STEM = /\b(?:stop|quit|cancel|off|exit|halt|kill|disable|abort)\b|그만|멈|꺼|끄|중지|종료|취소|정지|止め|やめ|停止|キャンセル|終了/i;
+const OFF_STEM = /\b(?:stop|quit|cancel|exit|halt|kill|disabl|abort)|\boff\b|그만|멈|꺼|끄|중지|종료|취소|정지|止め|やめ|停止|キャンセル|終了/i;
 const cancelOnly = (raw) => {
-  const t = String(raw).trim();
+  const t = String(raw).normalize('NFKC').trim();
   if (/\b(?:cancelomc|stopomc)\b/i.test(t)) return true;
   if (!/ralph|랄프|ラルフ/i.test(t)) return false;
   const tokens = t.replace(PREFIX, ' ralph ').replace(/(ralph|랄프|ラルフ|モード|모드|루프)/gi, ' $1 ')

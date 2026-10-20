@@ -1313,3 +1313,91 @@ ROUND8: DEFECTS FOUND
   - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
 
 ROUND9: DEFECTS FOUND
+
+## 10차 검증 (round 10)
+
+대상: `develop` b204114 (9차 수정 "harmless by construction"). 검증자는 구현하지 않았다. 저장소는 이 절 추가 말고는 바꾸지 않았다. 임시 저장소와 상태(`MIS_STATE_HOME`, `HOME`)는 저장소 밖 `/private/tmp/claude-501/r10`에 두었다.
+
+- 키워드 판정은 `detectKeywords`로 했다. 대표 문장 9개는 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했다.
+- 판정 기준은 이번 계약의 결함 (a)~(d)다. 동의어가 hint가 되는 것은 설계대로이므로 세지 않았다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` ×3 | 3회 모두 tests 373 · pass 373 · fail 0. 끊긴 실행 없음 |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 9차 결함 문장 33개 재실행 + 새 문장 104개. 합계 137개. 계약 위반 13개 + 훅 경로 1개 (R10-1). 계약 모순 3개 (참고 1) |
+
+### 9차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R9-1 끄기 토큰 안의 부정 | FIXED | 20문장 모두 cancel이 아니다. 비접두형 16개는 hint다.<br>접두형 4개(`랄프: 끄지말아줘`, `ラルフ: 止めるな`, `ラルフ: 停止しない`, `랄프: 종료안해`)는 loop도 cancel도 아닌 hint다.<br>훅 경로: `ラルフを止めるな` → loop-hint |
+| R9-2 끄기 어간으로 시작하는 과제 명사 | FIXED | 5문장 모두 hint다 (`랄프: 정지화면 꺼줘`, `랄프: 끄집어내줘`, `랄프 그만큼 해줘` 등).<br>훅 경로: `랄프: 정지화면 꺼줘` → loop-hint |
+| R9-3 조사가 붙은 ralph 단어 | FIXED | 8문장 모두 cancel이다 (`랄프 모드를 꺼줘`, `ラルフのモードを止めて`, `랄프: 루프를 꺼줘`, `ralph: 모드를 꺼` 등).<br>훅 경로: `랄프 모드를 꺼줘` → cancel |
+
+### 새 문장 대조
+
+| 분류 | 문장 수 | 위반 | 내용 |
+|---|---|---|---|
+| 목록 밖 부정 (비접두형) | 12 | 0 | `랄프 안 꺼`, `랄프 꺼 마`, `랄프 끄지 마세요`, `ラルフを止めてくれるな`, `ralph dont stop`, `ralph stop not` 등 → hint |
+| 목록 밖 부정 (접두형) | 5 | 0 | `ralph: dont stop`, `랄프: 멈추지 마`, `ラルフ: 止めないで`, `ralph: keep going, do not stop` → hint (loop 아님) |
+| 목록 밖 활용형 (비접두·접두) | 8 + 5 | 0 | `랄프 꺼라`, `랄프 종료해주세요`, `ラルフ止めろ`, `랄프: 꺼버려`, `ralph mode: 종료해주세요` → hint |
+| 규칙을 정확히 만족하는 끄기 | 15 | 0 | `랄프를 꺼줘`, `ラルフモードを止めてください`, `/ralph quit`, `랄프 모드로 진행: 취소해줘`, `ラルフは停止`, `ralph:stop!!!` 등 → cancel |
+| 상한 | 4 | 0 | ralph 2개 → cancel, 3개 → hint. 7토큰 → cancel, 8토큰(`please please stop the ralph loop right now`) → hint |
+| `cancelomc`/`stopomc` | 2 | 0 | 문장 안 어디에 있어도 cancel |
+| 끄기 어간이 든 접두형 과제 | 8 | 0 | `ralph: stop the server then fix`, `ralph: disable the flaky test`, `랄프: 종료 버튼 고쳐줘`, `ラルフ: 停止ボタンを直して` → hint |
+| 비접두형 | 6 | 0 | `please ralph: fix it`, `x ralph: fix`, `랄프로 고쳐줘` → hint. `> ralph: fix`, `` `ralph: fix` `` → 아무것도 없음. loop 0건 |
+| 끄기 어간 없는 접두형 | 8 | 0 | `ralph: fix login`, `ラルフ：ログインを直して`, `/ralph build the api`, `랄프 모드로 해: 테스트 추가`, `ralph: endpoint for users` → loop |
+| **영어 끄기 어간의 활용형 (접두형)** | 18 | **13** (+훅 경로 1) | **R10-1** |
+| 계약 모순 (`end`/`turn`/`no`) | 3 | — | 참고 1 |
+| `no`로 만든 부정 | 4 | 0 | 참고 2 |
+| 목록 밖 동의어 (접두형) | 5 | 0 | 참고 3 |
+| 전각 글자 `ｓｔｏｐ` | 1 | 0 | 참고 4 |
+
+### 새 결함
+
+**R10-1 · MEDIUM · 영어 끄기 어간은 단어 전체일 때만 어간으로 본다. 그래서 `ralph: stopped`가 loop를 켠다** (결함 (b))
+- 재현 (접두형) → **loop** (14건. 하네스 13건 + 훅 경로로만 돌린 `ralph mode: cancelled` 1건): `ralph: stopped`, `ralph: stopping`, `ralph: stops`, `ralph: cancelled`, `/ralph cancelling`, `ralph: quitting`, `ralph: quitting now`, `ralph: disabled`, `ralph: exiting`, `ralph: aborting`, `ralph: killed`, `ralph: halted`, `ralph mode: stopped, thanks`, `ralph mode: cancelled`
+- 훅 경로: `ralph: stopped`, `ralph mode: cancelled`, `/ralph stopping` → `[MAKE IT SHIP: loop]` ("do not stop early" 주입)
+- 원인: `OFF_STEM`의 영어 부분이 `\b(?:stop|quit|cancel|off|exit|halt|kill|disable|abort)\b`다. 끝의 `\b` 때문에 `stopped`, `cancelled`, `disabled`에서는 어간이 잡히지 않는다. 한국어·일본어 어간은 단어 안 어디에서나 잡힌다. 두 언어의 기준이 다르다.
+- 계약과 대조: SPEC_CHANGES 9차 항목은 "접두형도 본문에 끄기 어간이 있으면 자동 loop 대신 모델 힌트"라고 한다. 영어 어간을 단어 전체로 한정한다는 말은 없다. `stopped`에는 어간 `stop`이 있으므로 (b)에 해당한다.
+- 영향: 끄려는 뜻의 접두형 문장이 loop를 켠다. 9차가 "구조적으로 불가능"하게 만들었다고 한 바로 그 해로운 오판이다. 다만 접두형이어야 하고, 비접두형에서는 일어나지 않는다.
+- 같은 원인으로 `ralph: stopwatch`, `ralph: stop_server`, `ralph: unstoppable build`, `ralph: offline mode fix`도 loop다. 계약 문구대로라면 이것도 hint여야 한다. 하지만 과제이므로 해는 없다. 위반 수에는 넣지 않았다.
+- 고칠 방향: 영어 부분의 끝 `\b`를 없앤다 (`\b(?:stop|quit|…)`). 접두형 과제가 hint로 더 많이 가는 쪽으로만 바뀐다. 9차의 "판단이 갈리면 모델에게" 원칙과 맞다.
+
+**참고 (판정에 넣지 않음)**
+1. 계약 모순: `end`, `turn`, `no`는 `EN_OFF`(끄기 단어)에 있지만 `OFF_STEM`(끄기 어간)에는 없다. 그래서 `ralph: no`, `ralph: end`, `ralph: turn`은 (c)로는 cancel이어야 하고 (d)로는 loop여야 한다. 둘 다 만족하는 코드는 없다. 코드는 cancel을 고른다. 안전한 쪽이다. 계약 문구에서 한쪽을 맞추면 된다 (예: 세 단어를 어간 목록에도 넣는다).
+2. `no`가 끄기 단어여서 부정을 목록 단어만으로 만들 수 있다. `ralph: no stop`("논스톱으로"), `ralph: no more stop`, `stop ralph? no`, `ralph off? no!` → **cancel**. 모든 토큰이 목록 안이므로 계약 위반은 아니다. 하지만 "부정 형태는 구조적으로 맞을 수 없다"는 9차 주장은 이 경우에 성립하지 않는다. `no`를 목록에서 빼는 것을 검토할 만하다.
+3. 목록 밖 동의어가 접두형에서는 hint가 아니라 loop가 된다: `랄프: 끝`, `랄프: 스톱`, `ラルフ: ストップ`, `ラルフ: 止まれ`, `ralph: pause`. 계약 (d)대로다. 하지만 "동의어는 hint가 된다"는 설명은 비접두형에만 맞는다.
+4. `ralph: ｓｔｏｐ`(전각) → loop. 글자 그대로 `stop`이 아니므로 계약 밖이다.
+5. 9차 보고서의 "8토큰 → cancel 아님"은 유지된다. 이번 하네스의 첫 8토큰 문장은 실제로 7토큰이어서 고쳐 다시 돌렸다.
+
+### 이전 결함 수동 확인 (3건)
+
+| ID | 결과 |
+|---|---|
+| D1 loop 세션 묶기 | 임시 저장소 F에서 세션 A로 `loop start`.<br>- Stop A → `{"decision":"block", … LOOP 1/20 …}`<br>- Stop B(같은 저장소) → 출력 없음<br>- 저장소 G의 세션 C → 출력 없음<br>유지 |
+| D6 cancel 연동 | 세션 B의 `loop cancel` → "the active loop belongs to another session (A)".<br>세션 A에서 `start --input` 후 `mis cancel` → `CANCELLED`. loop `active: false`. 이후 Stop A → 출력 없음.<br>유지 |
+| D10 freeze 실경로 | F에서 `freeze src`. Write 입력을 `guard.mjs`에 넣었다.<br>- `F/src/a.js` → 결정 없음 (allow)<br>- `F/other.js` → deny<br>- `F/src/escape/x.js`(G를 가리키는 링크) → deny<br>- 링크 cwd `Flink`에서 `Flink/src/new/deep.js` → allow<br>- `F/src/../x.js` → deny<br>유지 |
+
+### 판정
+
+**DEFECTS FOUND**
+- 9차 결함 3건: 모두 FIXED. 9차 문장 33개가 모두 계약대로다.
+- 새 결함 1건: R10-1 (MEDIUM). 영어 끄기 어간의 활용형(`stopped`, `cancelled`, `disabled` 등)이 든 접두형 문장이 loop가 된다. 14건. 결함 (b)다.
+- 나머지 결과:
+  - 결함 (a): 0건. 목록 밖 단어가 있는데 cancel이 된 문장이 없다.
+  - 결함 (c): 0건 (계약 모순 3건 제외).
+  - 결함 (d): 0건.
+  - 비접두형 loop: 0건.
+  - `npm test` 3회 통과 (373/373). validate 통과.
+  - 이전 결함 수동 확인 3건 모두 유지.
+- 계약 정리가 필요한 것: 참고 1 (`end`/`turn`/`no`의 (c)·(d) 모순), 참고 2 (`no`로 만든 부정이 cancel).
+- 미검증:
+  - 대화형 세션과 Linux
+  - 헤드리스 모델 판단
+  - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
+
+ROUND10: DEFECTS FOUND
