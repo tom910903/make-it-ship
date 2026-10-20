@@ -463,3 +463,98 @@ ROUND3: DEFECTS FOUND
 - N9를 넓히지 않은 실제 코드에서 재현하는 것, RISKS 경쟁(죽거나 멈춘 reclaimer 뒤 이중 회수)의 실제 lost update.
 
 ROUND4: DEFECTS FOUND
+
+## 5차 검증 (round 5)
+
+- 대상: 브랜치 `m7-wip`, HEAD e30ce81 (4차 이후 수정 커밋 1개: N9·N10·RISKS, 4개 파일). 커밋 메시지의 주장은 근거로 쓰지 않고 재현으로 판정했다.
+- 검증자: 독립 검증 에이전트(구현 미참여). 임시 디렉터리는 모두 저장소 밖(scratchpad `r5/`, `$TMPDIR`). 대조용 옛 코드는 `git archive 4decb41`로 풀었다. 내가 띄운 프로세스만 PID로 관리했다.
+- 부하: load average 10~22. 다른 worktree 작업이 계속 돌았으므로 "유휴" 측정은 없다.
+
+### 기본 확인
+- `claude plugin validate .`: ✔ Validation passed
+- `npm test` 3회: 421/421 (106초, 스트레스와 겹침), 421/421 (53초), 421/421 (235초). 실패 0, skip 0.
+
+### N9 (빈 lock 회수 ABA)
+
+**순서 재현 probe** (`withLock`과 같은 순서로 A·B가 내용과 inode를 판정 → B 회수 → W가 `wx`로 새 lock 생성, 아직 기록 전 → A 회수 시도). 200회 반복:
+
+| 코드 | W의 새 inode가 A가 본 inode와 같음 | W lock 삭제 | 두 번째 writer `wx` 성공 |
+|---|---|---|---|
+| e30ce81 (APFS) | 0/200 | **0/200** | **0/200** |
+| 4decb41 (대조) | 0/200 | 200/200 | 200/200 |
+| e30ce81, inode 재사용을 흉내(A의 `seenIno` = W의 inode) | 해당 | 200/200 | 200/200 |
+
+**창을 넓힌 스트레스** (4차와 같은 하네스. `openSync`~`writeFileSync` 사이 30ms, orphan 판정~`reclaimLock` 사이 0~300ms sleep을 넣은 사본, writer 실프로세스):
+
+| 코드 | 시나리오 | 반복×N | exit 0 | SIGKILL | lost update |
+|---|---|---|---|---|---|
+| 4decb41 넓힌 사본 (대조) | empty (`''`·`{"pid":` 번갈아) | 15×10 | 150 | 0 | **29건 (6회, 모두 `''` 회차)** |
+| e30ce81 넓힌 사본 | empty | 20×10 + 30×10 | 500 | 0 | **0** |
+| e30ce81 넓힌 사본 | empty-kill | 20×12 | 180 | 60 | **0** |
+
+판정: macOS(APFS)에서 **FIXED**. 하네스는 대조군에서 유실을 잡으므로 0건은 의미가 있다.
+
+다만 보호는 전적으로 "새 lock의 inode가 옛 lock과 다르다"에 기댄다(위 흉내 실험에서 inode가 같으면 4decb41과 똑같이 지운다). APFS는 inode 번호를 재사용하지 않지만, README가 지원한다고 적은 Linux의 ext4 등은 지운 inode 번호를 곧바로 다시 쓰는 일이 흔하다. 그런 파일시스템에서는 N9가 그대로 남을 수 있다. 이번 커밋의 단위 테스트도 inode가 재사용되면 `return`으로 아무것도 검사하지 않고 통과한다(`tests/unit/state.test.mjs` "M7 N9"). Linux VM이 없고 설치도 금지라서 실제 Linux에서는 재현하지 못했다(아래 N9-fs).
+- 수정 방향(참고): 내용이 없는(pid 없는) 경우 `.reclaim`을 잡은 뒤 lock의 mtime이 여전히 5초보다 오래됐는지 다시 확인하고 지운다. 파일시스템과 무관하다.
+
+### 전체 동시성 스트레스 (e30ce81, 작업 트리 그대로)
+
+판정 기준과 하네스는 4차와 같다(exit 0 writer의 질문이 `state.json`에 없으면 lost update, id 중복·state 손상·lock/`.reclaim` 잔존도 검사).
+
+| 시나리오 | 반복 | N | exit 0 | SIGKILL | lost update | 기타 |
+|---|---|---|---|---|---|---|
+| plain | 30 | 8 | 240 | 0 | **0** | 없음 |
+| dead-pid lock | 30 | 12 | 360 | 0 | **0** | 없음 |
+| dead-pid + writer 1/4 SIGKILL | 30 | 10 | 210 | 90 | **0** | 없음 |
+| 10초 된 빈/깨진 lock | 25 | 10 | 250 | 0 | **0** | 없음 |
+| 위 + writer 1/4 SIGKILL | 20 | 12 | 180 | 60 | **0** | 없음 |
+| dead-pid + writer 1/2 SIGKILL | 25 | 12 | 158 | 142 | **0** | 1회 `.reclaim` 잔존(죽은 reclaimer, 5초 뒤 자가 회복) |
+| 합계 | **160** | | **1398** | 292 | **0** | 실패(exit≠0) 0, id 중복 0, state 손상 0, lock 잔존 0 |
+
+넓힌 사본 70회(위 N9 표)를 더하면 230회, lost update 0.
+
+### N10 (lsp-client 테스트 flaky)
+
+수정 확인(코드): fake server가 `initialized`에서 받은 `workspace/configuration` 왕복을 `configReady`로 두고, hover는 그것을 기다린 뒤 답한다. 알림은 순서대로 처리되므로 hover보다 `configReady` 설정이 항상 먼저다.
+
+| 코드 | 조건 | 실패 |
+|---|---|---|
+| 4decb41 fixture (대조) | 순차 80회 | **7/80** (모두 `cfg=none`) |
+| e30ce81 | 순차 40회 (load ~10) | 0/40 |
+| e30ce81 | 스트레스와 동시에 순차 60회 (load ~17) | 0/60 |
+| e30ce81 | 4개 병렬 루프×30 (load ~17) | 0/120 |
+| e30ce81 | 스트레스 후 순차 40회 (load ~22) | 0/40 |
+
+합계 HEAD 0/260, 대조 7/80. 판정: **FIXED**. `npm test` 3회도 모두 통과했다.
+
+### RISKS 기록 (`docs/PROGRESS.md` "(M7 N8·N9)") 정확성
+
+4차 지적 중 고쳐진 것:
+- 전제에 "5초 넘게 멈추거나 **죽으면**"이 들어갔다. 엄밀히는 죽은 회수자가 남긴 오래된 `.reclaim`을 다른 두 회수자가 지우고 다시 만드는 과정(stat→unlink가 원자적이지 않음)에서 겹친다. 하지만 위험을 알리는 문장으로는 충분하다.
+- N9가 기록에 들어갔다.
+
+아직 틀린 것:
+1. **"(빈 lock도 구분)"은 일반 규칙으로 쓰기에 넓다.** inode를 재사용하는 파일시스템에서는 구분하지 못한다. 같은 커밋의 단위 테스트도 그 경우를 "nothing to distinguish here"로 건너뛴다. README는 Linux 지원을 명시한다.
+2. **근거 수치가 또 수정 전 코드의 값이다.** "M7 4차 스트레스(160회 …) 유실 0건(수정 후 코드 기준)"은 4decb41에서 쟀다. 4decb41에는 inode 확인이 없고 N9가 있었다. 또 4차에서 이미 밝혔듯이, 넓히지 않은 스트레스는 N9 경쟁을 만들지 못한다. 4차가 N8 기록에서 지적한 것과 같은 문제다. 올바른 근거는 e30ce81에서 잰 이번 수치다(전체 160회 0건, 넓힌 사본 70회 0건, 대조 15회 29건).
+3. `state.mjs` `reclaimLock` 위의 `shortcut:` 주석(125~126행)은 바뀌지 않았다. 아직 "SIGSTOP 정지"만 적고 있고, 죽은 회수자나 inode 재사용 한계는 없다. 4차에서 N8-doc의 위치로 함께 지적한 부분이다.
+
+판정: **N8-doc 부분 해결, 미해결 항목 남음.**
+
+### 5차 결함 목록
+
+| ID | 심각도 | 출처 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|---|
+| N8-doc (잔여) | 낮음 (문서) | 4차 N8-doc | RISKS의 근거 수치가 수정 전 코드(4decb41) 값이다. "빈 lock도 구분"은 inode 재사용 FS에서 성립하지 않는다. `shortcut:` 주석이 갱신되지 않았다. | 위 RISKS 절 | `docs/PROGRESS.md` RISKS, `scripts/lib/state.mjs:125-126` |
+| N9-fs | 낮음 (조건부, 실제 Linux 미재현) | N9 수정(e30ce81) | 빈 lock 회수 보호가 inode 차이에만 기댄다. inode가 재사용되면 N9와 똑같이 새 lock을 지운다(흉내 200/200). 이때 N9 단위 테스트는 아무것도 검사하지 않고 통과한다. | `reclaimLock(lock, '', <W의 inode>)`로 흉내 | `scripts/lib/state.mjs` `reclaimLock`, `tests/unit/state.test.mjs` "M7 N9" |
+
+4차 결함 최종:
+- N9: macOS(APFS) **FIXED** (순서 재현 0/200, 넓힌 스트레스 70회 0건, 대조 29건). inode를 재사용하는 FS에는 N9-fs가 남는다.
+- N10: **FIXED** (HEAD 0/260, 대조 7/80).
+- N8-doc: **부분 해결** (위 잔여 항목).
+- 스트레스 160회·1398 쓰기에서 lost update 0. validate 통과. `npm test` 3/3 통과.
+
+### 5차 미검증
+- 실제 Linux(ext4 등)에서 inode 재사용으로 N9가 다시 생기는지. colima VM이 꺼져 있고 설치가 금지돼 띄우지 않았다. macOS의 msdos 램디스크는 커널 확장 권한이 없어 마운트하지 못했다(만든 램디스크는 바로 분리함).
+- 대화형 세션, headless dogfood(이번 수정은 lock 경로와 테스트 fixture뿐이라 직접 실행으로 대체).
+
+ROUND5: DEFECTS FOUND
