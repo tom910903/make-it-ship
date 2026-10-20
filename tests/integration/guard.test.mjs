@@ -92,3 +92,20 @@ test('guard: plan scope still applies while the run is BLOCKED (a limit block ma
   const r = run({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: `${dir}/other.js` }, cwd: dir });
   assert.equal(r.out?.permissionDecision, 'ask');
 });
+
+test('guard: a file inside a task worktree is scoped by that worktree, whatever the session cwd', () => {
+  const dir = makeRepo();
+  const { state: { runId } } = createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'plan', 'set', '-'], { cwd: dir, encoding: 'utf8', env,
+    input: JSON.stringify({ goal: 'g', plannedFiles: [], tasks: [{ id: 'T1', title: 't', acceptance: ['a'], files: ['src/a.js'] }, { id: 'T2', title: 't', acceptance: ['a'], files: ['src/b.js'] }] }) });
+  const wt = `${dir}/.worktrees/T1`;
+  assert.equal(spawnSync('git', ['worktree', 'add', '-q', '-b', `mis/${runId}/T1`, wt], { cwd: dir }).status, 0);
+  const w = (cwd, p) => run({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: p }, cwd }).out?.permissionDecision ?? 'allow';
+  assert.equal(w(dir, `${wt}/src/a.js`), 'allow', 'main-session cwd, T1-owned file in T1 worktree');
+  assert.equal(w(dir, `${wt}/src/b.js`), 'ask', 'main-session cwd, T2-owned file in T1 worktree');
+  assert.equal(w(dir, `${wt}/src/new/c.js`), 'ask', 'new directory in T1 worktree');
+  assert.equal(w(wt, `${wt}/src/a.js`), 'allow');
+  assert.equal(w(wt, `${dir}/other.js`), 'ask', 'worktree cwd, main-repo file outside the plan');
+  assert.equal(w(dir, `${dir}/src/b.js`), 'allow', 'main repo keeps the whole plan scope');
+});

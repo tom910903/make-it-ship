@@ -81,4 +81,4 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
 - 메인 세션이 main 저장소를 cwd로 두고 worktree 안의 파일을 편집하면, guard는 경로를 `.worktrees/<run>-T1/src/text.js`처럼 상대 경로로 본다.
 - 그래서 T1 **소유 파일도** 범위 밖으로 판정해 ask를 낸다.
 - worktree 안에서 실행되는 implementer(cwd가 worktree)는 정상이다. `src/text.js`는 허용되고 `src/math.js`는 ask다.
-- 허용해야 할 편집을 묻는 것뿐이고 막아야 할 편집을 통과시키지는 않는다. 그래서 수정은 PROGRESS.md 제안으로만 남긴다.
+- 허용해야 할 편집을 묻는 것뿐이고 막아야 할 편집을 통과시키지는 않는다. → 같은 날 수정함: 파일 편집은 파일이 있는 worktree 기준으로 범위를 판정한다(`scripts/guard.mjs`, 회귀 테스트 추가).

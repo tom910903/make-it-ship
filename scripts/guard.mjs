@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse hook entry (Spec §7). Prints a decision only for ask/deny; errors fail closed (ask).
 import { execFileSync } from 'node:child_process';
+import { existsSync, statSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { classify } from './lib/policy.mjs';
 import { loadRun } from './lib/state.mjs';
 
@@ -32,7 +34,12 @@ try {
   for await (const chunk of process.stdin) raw += chunk;
   const input = JSON.parse(raw);
   const cwd = input.cwd || process.cwd();
-  const r = classify(input, context(cwd));
+  // A file edit is scoped by the worktree that holds the file, not by the session cwd (main session editing a task worktree)
+  const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
+  let at = file ? resolve(cwd, String(file)) : cwd;
+  while (file && !existsSync(at) && dirname(at) !== at) at = dirname(at);
+  if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
+  const r = classify(input, context(at));
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

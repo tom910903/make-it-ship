@@ -121,13 +121,15 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 ## BLOCKED
 
 ## PROPOSALS
-- (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 두고 `.worktrees/<run>-T<n>/…` 파일을 편집하면 guard가 그 task 소유 파일도 계획 범위 밖으로 보고 ask를 낸다. 경로가 해당 worktree 안이면 그 task의 files로 판정하도록 바꾸는 것을 제안한다. 지금은 과잉 확인일 뿐 통과시키지는 않는다.
 
 ## SPEC_CHANGES
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
 - (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING, BLOCKED 포함)에서만 적용한다.
 - (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.
+
+## FIXES (사후)
+- (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 둔 채 `.worktrees/<run>-T<n>/…` 파일을 편집하면, guard가 그 task가 소유한 파일도 계획 범위 밖으로 판정해 ask를 냈다. **수정함.** 이제 파일 편집은 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 범위를 판정한다(`scripts/guard.mjs`). 테스트: `tests/integration/guard.test.mjs` "a file inside a task worktree is scoped by that worktree". npm test 320/320.
 
 ## RISKS
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
