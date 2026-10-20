@@ -32,6 +32,14 @@ import { teamCommands, excludeWorktrees } from './commands-team.mjs';
 import { skillCommands } from './commands-skill.mjs';
 import { ttyCommands } from './commands-tty.mjs';
 import { readLoop, endLoop } from './loop.mjs';
+import { modelCommands, probeModels } from './commands-models.mjs';
+import { researchCommands, approveProposal } from './commands-research.mjs';
+import { opsCommands } from './commands-ops.mjs';
+import { iosExtra } from './commands-ios.mjs';
+import { telemetryCommands } from './telemetry.mjs';
+import { gbrainCommands } from './commands-gbrain.mjs';
+import { designCommands } from './commands-design.mjs';
+import { pairCommands } from './commands-pair.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -217,10 +225,11 @@ const pastDeadline = (s) => s.deadlineAt && Date.now() > Date.parse(s.deadlineAt
 const deadlineBlock = (s) => limitBlock(s, `runtime limit exceeded (deadline ${s.deadlineAt}); ask the user: mis approve continue`);
 const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttemptsPerTask: 2, maxRuntimeMinutes: 120 };
 
-function approve([what], cwd) {
+function approve([what, id], cwd) {
+  if (what === 'proposal') return approveProposal(id, cwd); // self-improve: no run needed; the guard always asks
   if (what === 'continue') return approveContinue(cwd);
   if (what === 'config') return approveConfig(cwd);
-  if (what !== 'plan') fail('usage: mis approve <plan|continue|config>');
+  if (what !== 'plan') fail('usage: mis approve <plan|continue|config|proposal <id>>');
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'approve plan');
@@ -624,7 +633,8 @@ function learn([sub, arg], cwd) {
 const OTHER_MODEL_CLIS = ['codex', 'gemini'];
 
 function secondOpinion([sub], cwd) {
-  if (sub !== 'detect') fail('usage: mis second-opinion detect');
+  if (sub === 'probe') return probeModels();
+  if (sub !== 'detect') fail('usage: mis second-opinion detect|probe');
   const available = [];
   for (const name of OTHER_MODEL_CLIS) {
     for (const d of (process.env.PATH ?? '').split(':')) {
@@ -670,13 +680,14 @@ function bench(args, cwd) {
   });
 }
 
-function ios([sub], cwd) {
+function ios([sub, ...rest], cwd) {
+  if (iosExtra[sub]) return iosExtra[sub](rest, cwd);
   if (sub === 'bridge-scan') {
     const files = bridgeScan(repoRoot(cwd));
     return { files, clean: files.length === 0 };
   }
   if (sub === 'devices') return listDevices();
-  return fail('usage: mis ios <bridge-scan|devices>');
+  return fail('usage: mis ios <bridge-scan|devices|sync [--apply]|daemon start|status|stop|mint <name>|tokens [revoke <name>]>');
 }
 
 function qa([sub], cwd) {
@@ -712,5 +723,5 @@ function init(args, cwd) {
 }
 
 
-export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands, ...skillCommands, ...ttyCommands };
+export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands, ...skillCommands, ...ttyCommands, ...modelCommands, ...researchCommands, ...opsCommands, ...telemetryCommands, ...gbrainCommands, ...designCommands, ...pairCommands };
 export { requiredChecks };

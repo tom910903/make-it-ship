@@ -133,6 +133,8 @@ const handlers = {
       const text = typeof r === 'string' ? r : Array.isArray(r?.content) ? r.content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n') : typeof r?.result === 'string' ? r.result : '';
       try { (await import('./lib/memory.mjs')).extractRemember(text, input.cwd || process.cwd()); } catch { /* best effort */ }
     }
+    // M9-D telemetry: a no-op unless the user turned it on (mis telemetry on); local file only.
+    if (input.tool_name === 'Skill') (await import('./lib/telemetry.mjs')).logEvent({ event: 'skill_run', skill: String(ti.skill ?? ti.command ?? ''), outcome: 'invoked' });
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
     return context('PostToolUse', out.join('\n\n'));
   },

@@ -15,7 +15,8 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester', 'analyst', 'planner', 'tracer'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
+  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -240,4 +241,12 @@ test('M9-C C3: skill authoring skills write only learned-skill locations and tes
   const readme = read('README.md');
   assert.match(readme, /## Skill authoring/);
   for (const a of Object.keys(M9C_AGENTS)) assert.match(readme, new RegExp(`\`${a}\``), `README lists ${a}`);
+});
+
+test('M9-D: external-transfer skills say company policy may forbid it; the scientist agent is read-only with python_repl', () => {
+  for (const s of ['ask', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent']) assert.match(read(`skills/${s}/SKILL.md`), /company policy may forbid/i, s);
+  for (const [s, re] of [['research', /mis approve proposal/], ['research', /ONE message/], ['deploy', /mis canary/], ['telemetry', /off by default/i], ['gbrain', /BLOCKED/], ['ios', /BLOCKED/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
+  const sci = read('agents/scientist.md'), fm = frontmatter(sci);
+  assert.equal(fm.tools, 'Read, Grep, Glob, Bash, mcp__plugin_make-it-ship_mis__python_repl');
+  for (const re of [/untrusted/i, /\[FINDING:/, /\[EVIDENCE:/, /\[CONFIDENCE:/, /Do not modify/, /\.git\/make-it-ship\//]) assert.match(sci, re);
 });

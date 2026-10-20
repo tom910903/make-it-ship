@@ -248,6 +248,20 @@ test('load-html, scoped/limited snapshot, clip screenshot, frame by url', () => 
   ok(b('frame', 'main'));
 });
 
+test('M9-D canary: N checks of each page record HTTP status and console errors; new errors and failed pages are alerts', () => {
+  if (!chrome) return blocked(mis(dir, ['canary', base, '--checks', '1'], { env: ENV }));
+  const r = mis(dir, ['canary', base, '--pages', '/,/next,/missing', '--checks', '2', '--interval', '0s'], { env: ENV });
+  assert.equal(r.code, 1, r.err);
+  assert.equal(r.json.checks, 2);
+  const first = Object.fromEntries(r.json.results[0].map((p) => [new URL(p.url).pathname, p]));
+  assert.equal(first['/'].status, 200); assert.equal(first['/'].consoleErrors, 1);
+  assert.equal(first['/next'].consoleErrors, 0); assert.equal(first['/missing'].status, 404);
+  assert.deepEqual(r.json.alerts.map((a) => `${a.level} ${new URL(a.url).pathname}`).sort(), ['CRITICAL /missing', 'HIGH /']);
+  ok(mis(dir, ['canary', base, '--pages', '/', '--baseline'], { env: ENV }));
+  const healthy = ok(mis(dir, ['canary', base, '--pages', '/', '--checks', '2', '--interval', '0s'], { env: ENV }));
+  assert.equal(healthy.status, 'HEALTHY', 'the error the baseline already had is not an alert');
+});
+
 test('stop shuts the daemon and the browser down; restart brings it back', async () => {
   if (!chrome) return blocked(b('restart'));
   const s = ok(b('restart'));

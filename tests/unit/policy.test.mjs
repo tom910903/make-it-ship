@@ -268,3 +268,41 @@ test('M9-A: mis commands that change files outside the repo (settings, CLAUDE.md
   assert.equal(d(bash(`${M} setup team --write`), ctx), 'ask', 'writes .make-it-ship.json during a run');
   assert.equal(d(bash(`${M} setup team --write`), idle), 'allow');
 });
+
+test('M9-D: every external or approval-gated mis subcommand asks with and without a run; read-only siblings pass', async () => {
+  const { EXTERNAL_MIS, APPROVAL_MIS } = await import('../../scripts/lib/policy.mjs');
+  const M = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
+  const external = ['ask codex "q"', 'ask gemini "q" --file a.md', 'ccg "q"', 'benchmark-models "p" --models codex,gemini', 'interop',
+    'telemetry sync', 'telemetry dashboard community', 'gbrain init', 'gbrain import docs', 'gbrain sync', 'gbrain query "x"',
+    'gbrain restore git@x:y.git', 'gbrain artifacts-init git@x:y.git', 'gbrain ingest', 'design generate "brief"', 'design variants "b" --count 3',
+    'design iterate s1 "darker"', 'design evolve shot.png "b"', 'pair-agent start', 'pair-agent start --local', 'ios daemon start --tailnet --target http://d', 'ios mint agent1'];
+  const approval = ['approve proposal p1', 'deploy setup --write --url https://x', 'deploy run', 'canary https://example.com --checks 2', 'ios sync --apply'];
+  const readOnly = ['second-opinion detect', 'second-opinion probe', 'telemetry status', 'telemetry on', 'telemetry log --skill qa', 'analytics',
+    'gbrain detect', 'gbrain ingest --probe', 'gbrain policy get', 'gbrain enqueue a.md', 'gbrain uninstall', 'design compare', 'design gallery', 'pair-agent stop', 'pair-agent status',
+    'ios daemon start --target http://127.0.0.1:9', 'ios daemon stop', 'ios sync', 'deploy setup', 'deploy status', 'deploy run --dry-run', 'landing-report', 'mission-board',
+    'wait --seconds 1', 'detach -- npm test', 'research list', 'autoresearch status m', 'self-improve list', 'writer-memory status'];
+  for (const c of [ctx, { ...ctx, activeRun: false }]) {
+    for (const cmd of external) {
+      const r = classify(bash(`${M} ${cmd}`), c);
+      assert.equal(r.decision, 'ask', cmd);
+      assert.match(r.reason, /leaves this machine/, cmd);
+    }
+    for (const cmd of approval) assert.equal(d(bash(`${M} ${cmd}`), c), 'ask', cmd);
+    for (const cmd of readOnly) assert.equal(d(bash(`${M} ${cmd}`), c), c.activeRun && /^approve/.test(cmd) ? 'ask' : 'allow', cmd);
+  }
+  // the registry itself: deleting an entry fails here
+  const names = (list) => list.map(([p]) => p.join(' '));
+  for (const p of ['ask', 'ccg', 'benchmark-models', 'interop', 'telemetry sync', 'telemetry dashboard', 'gbrain sync', 'gbrain ingest', 'design generate', 'pair-agent start', 'ios daemon start', 'ios mint']) assert.ok(names(EXTERNAL_MIS).includes(p), p);
+  for (const p of ['approve proposal', 'deploy setup', 'deploy run', 'canary', 'ios sync']) assert.ok(names(APPROVAL_MIS).includes(p), p);
+});
+
+test('M9-D: commands that mis runs later (wait/detach after --, tournament --bench, autoresearch --eval) are classified like the same Bash command', () => {
+  const mis = 'node /p/scripts/mis.mjs', idle = { ...ctx, activeRun: false };
+  for (const c of [ctx, idle]) {
+    for (const cmd of [`${mis} detach -- rm -rf ~`, `${mis} wait --seconds 1 -- git push --force origin main`, `${mis} self-improve tournament --bench 'git push --force origin x' a.patch`,
+      `${mis} autoresearch init m --mission x --eval 'rm -rf ~'`, `${mis} autoresearch init m --mission x --eval='codex exec review'`]) assert.notEqual(d(bash(cmd), c), 'allow', cmd);
+    assert.equal(d(bash(`${mis} detach -- cat .git/make-it-ship/runs/r/state.json`), c), 'deny');
+    for (const cmd of [`${mis} detach -- npm test`, `${mis} wait --seconds 1 -- echo hi`, `${mis} self-improve tournament --bench 'npm run bench' a.patch`, `${mis} autoresearch init m --mission x --eval 'node eval.js'`]) assert.equal(d(bash(cmd), c), 'allow', cmd);
+  }
+  assert.equal(d(bash(`${mis} wait --seconds 1 -- npm install x`)), 'ask', 'run-level rules apply with a run');
+});

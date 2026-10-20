@@ -59,7 +59,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task",
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|Skill",
         "hooks": [
           {
             "type": "command",
