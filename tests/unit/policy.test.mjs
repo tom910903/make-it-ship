@@ -464,7 +464,8 @@ test('M9 fix1 D1: autoresearch eval, check, bench, health and deploy run classif
     assert.match(v(`${M9F} autoresearch eval leak`).reason, /ask codex leak-repo/, 'the ask shows the stored command');
     assert.equal(v(`${M9F} autoresearch eval loop`).decision, 'ask', 'a self-referencing evaluator fails closed');
     assert.equal(v(`${M9F} autoresearch eval fine --decision x`).decision, 'allow');
-    for (const cmd of ['check leak', 'bench leak --runs 2', 'health']) assert.equal(v(`${M9F} ${cmd}`).decision, 'ask', cmd);
+    for (const cmd of ['check leak', 'bench leak --runs 2', 'health', 'session create feature x']) assert.equal(v(`${M9F} ${cmd}`).decision, 'ask', cmd);
+    for (const cmd of ['session create feature x --no-baseline', 'session list']) assert.equal(v(`${M9F} ${cmd}`).decision, 'allow', cmd);
     for (const cmd of ['check unit', 'bench unit']) assert.equal(v(`${M9F} ${cmd}`).decision, 'allow', cmd);
     const d = v(`${M9F} deploy run`);
     assert.equal(d.decision, 'ask'); assert.match(d.reason, /gh pr merge --squash/); assert.match(d.reason, /fly deploy --app shop/); assert.match(d.reason, /shop\.example\/health/);

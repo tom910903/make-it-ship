@@ -31,10 +31,11 @@ function trustRefusal(path) {
   const dir = existsSync(p) && statSync(p).isDirectory() ? p : dirname(p);
   const top = git(dir, 'rev-parse', '--show-toplevel'), root = top.status === 0 ? top.stdout.trim() : null;
   const remote = root ? git(root, 'remote', 'get-url', 'origin').stdout?.trim() || null : null;
+  if (!root) return `${p} is not in a git repository; only files of a repository go to gbrain`;
   const trust = cfg().policy[remote ?? 'local'] ?? 'artifacts-only';
   if (trust === 'deny') return `the remote ${remote ?? 'local'} is set to deny (mis gbrain policy)`;
-  const rel = root ? relative(root, p) || '.' : p;
-  if (trust === 'artifacts-only' && (!root || rel.startsWith('..') || isAbsolute(rel) || !isArtifact(rel))) {
+  const rel = relative(root, p) || '.';
+  if (trust === 'artifacts-only' && (rel.startsWith('..') || isAbsolute(rel) || !isArtifact(rel))) {
     return `${rel} is not an artifact (docs/, .make-it-ship/ or .md/.txt files) and the remote ${remote ?? 'local'} is artifacts-only (mis gbrain policy set ${remote ?? 'local'} full allows source)`;
   }
   return null;

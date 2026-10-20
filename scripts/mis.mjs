@@ -15,7 +15,7 @@ try {
     const { classify } = await import('./lib/policy.mjs');
     const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
     const env = ['MIS_SKILL_TEST_CMD', 'MIS_TEAM_WORKER_CMD'].filter((k) => process.env[k]).map((k) => `${k}=set `).join('');
-    const r = classify({ tool_name: 'Bash', tool_input: { command: `${env}mis ${[name, ...args].map(q).join(' ')}` }, cwd: process.cwd() }, { repoRoot: process.cwd(), activeRun: false });
+    const r = classify({ tool_name: 'Bash', tool_input: { command: `${env}mis ${[name, ...args].map(q).join(' ')}` }, cwd: process.cwd() }, { repoRoot: process.cwd(), activeRun: true }); // check and bench run inside a run: run-level rules (approve, init --write) apply
     if (r.decision !== 'allow') throw new Error(`cannot run inside a check script (MIS_CLI is set), because the guard cannot ask there (${r.reason}); run it yourself so the guard can ask`);
   }
   const out = await cmd(args, process.cwd());

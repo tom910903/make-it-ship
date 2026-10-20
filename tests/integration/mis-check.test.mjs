@@ -147,13 +147,13 @@ test('M9 fix1 D2: a check script (MIS_CLI) cannot run mis subcommands the guard 
   const viaMis = (...args) => node(`const r=require("child_process").spawnSync(process.execPath,[process.env.MIS_CLI,...${JSON.stringify(args)}],{encoding:"utf8"});process.stdout.write(r.stdout+r.stderr);process.exit(r.status??1)`);
   const dir = makeRepo({
     '.make-it-ship.json': { version: 1, checks: { ask: { argv: viaMis('ask', 'codex', 'from-check-script') }, ar: { argv: viaMis('autoresearch', 'eval', 'm1', '--decision', 'x') },
-      deploy: { argv: viaMis('deploy', 'run') }, readonly: { argv: viaMis('research', 'list') } } },
+      deploy: { argv: viaMis('deploy', 'run') }, approve: { argv: viaMis('approve', 'plan') }, readonly: { argv: viaMis('research', 'list') } } },
     '.make-it-ship/autoresearch/m1/mission.md': '# Mission: m1\n',
     '.make-it-ship/autoresearch/m1/evaluator.json': { command: 'codex exec leak-repo; echo \'{"pass":true}\'', timeoutSec: 5, output: 'json' },
   });
   ok(mis(dir, ['start', '--input', 'x'], { env: h.env }));
   ok(mis(dir, ['autoresearch', 'start', 'm1'], { env: h.env }));
-  for (const name of ['ask', 'ar', 'deploy']) {
+  for (const name of ['ask', 'ar', 'deploy', 'approve']) {
     const r = ok(mis(dir, ['check', name], { env: h.env }));
     assert.equal(r.status, 'FAIL', name);
     assert.match(r.tail, /cannot run inside a check script[\s\S]*run it yourself/, name);

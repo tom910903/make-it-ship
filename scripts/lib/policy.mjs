@@ -300,9 +300,10 @@ function storedCommands(mis, dir) {
     const e = readJsonAt(inRepo(dir, '.make-it-ship', 'autoresearch', mis[2], 'evaluator.json'));
     return typeof e?.command === 'string' ? [['autoresearch evaluator', e.command]] : [];
   }
-  if (['check', 'bench', 'health'].includes(a)) {
-    const checks = readJsonAt(inRepo(dir, '.make-it-ship.json'))?.checks ?? {};
-    const names = a === 'health' ? Object.keys(checks).filter((n) => !n.startsWith('qa-')) : [b];
+  // mis session create runs the quick checks in the new worktree as a baseline (unless --no-baseline)
+  if (['check', 'bench', 'health'].includes(a) || (a === 'session' && b === 'create' && !mis.includes('--no-baseline'))) {
+    const cfg = readJsonAt(inRepo(dir, '.make-it-ship.json')), checks = cfg?.checks ?? {};
+    const names = a === 'health' ? Object.keys(checks).filter((n) => !n.startsWith('qa-')) : a === 'session' ? cfg?.required?.quick ?? Object.keys(checks) : [b];
     const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
     return names.filter((n) => Array.isArray(checks[n]?.argv)).map((n) => [`check "${n}"`, checks[n].argv.map(q).join(' ')]);
   }

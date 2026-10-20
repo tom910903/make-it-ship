@@ -63,7 +63,9 @@ test('M9 fix1 D3: a paired agent reads only pages it opened itself: back/forward
     s = ok(mis(dir, ['pair-agent', 'start', '--local'], { env }));
     const auth = { authorization: `Bearer ${s.token}` };
     const post = async (cmd, args = []) => { const r = await fetch(`${s.url}/command`, { method: 'POST', headers: auth, body: JSON.stringify({ cmd, args }) }); return { status: r.status, body: JSON.stringify(await r.json()) }; };
-    const leaks = (r) => /LOCAL-SECRET|secret\.html|Local Secret/.test(r.body);
+    const leaks = (r) => /LOCAL-SECRET|secret\.html|Local Secret/.test(r.body) || r.body.includes(dir);
+    const st = await post('status'); assert.equal(st.status, 200); assert.ok(!leaks(st) && !/stateDir|profile/.test(st.body), `status shows no local paths: ${st.body}`);
+    const userTab = JSON.parse((await post('tabs')).body).result.find((x) => x.active).id;
     for (const cmd of ['text', 'html', 'url', 'console', 'network', 'snapshot']) {
       const r = await post(cmd); assert.equal(r.status, 400, `${cmd} on a page the agent did not open`); assert.ok(!leaks(r), r.body);
     }
@@ -84,6 +86,10 @@ test('M9 fix1 D3: a paired agent reads only pages it opened itself: back/forward
     // its own pages keep working
     assert.equal((await post('newtab', [base])).status, 200);
     const home = await post('text'); assert.equal(home.status, 200); assert.match(home.body, /Welcome/);
+    // a goto/newtab without a URL must not widen what counts as the agent's own (no "null" origin for file:/about: pages)
+    for (const [cmd, args] of [['newtab', []], ['goto', []]]) await post(cmd, args);
+    await post('tab', [String(userTab)]);
+    for (const cmd of ['back', 'back', 'text', 'html', 'url', 'tabs']) { const r = await post(cmd); assert.ok(!leaks(r), `${cmd}: ${r.body}`); }
   } finally {
     if (s) ok(mis(dir, ['pair-agent', 'stop'], { env }));
     mis(dir, ['browse', 'stop'], { env });

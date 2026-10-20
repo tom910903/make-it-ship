@@ -76,6 +76,9 @@ test('M9 fix1 D5: trust tiers hold at enqueue, sync and import (artifacts-only p
   ok(mis(dir, ['gbrain', 'enqueue', 'src/core.c'], { env: h.env }));
   assert.equal(ok(mis(dir, ['gbrain', 'sync'], { env: h.env })).copied, 1);
   assert.match(pushed(), /core\.c/);
+  // a file outside any repository is never queued, whatever the tier
+  const loose = join(mkdtempSync(join(tmpdir(), 'mis-loose-')), 'id_rsa'); writeFileSync(loose, 'PRIVATE');
+  assert.match(mis(dir, ['gbrain', 'enqueue', loose], { env: h.env }).err, /not in a git repository/);
   // deny: nothing is queued or imported
   ok(mis(dir, ['gbrain', 'policy', 'set', 'local', 'deny'], { env: h.env }));
   assert.match(mis(dir, ['gbrain', 'enqueue', 'docs/a.md'], { env: h.env }).err, /deny/);
