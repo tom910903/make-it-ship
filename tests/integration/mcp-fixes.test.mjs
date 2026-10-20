@@ -80,3 +80,45 @@ test('M7 D7: after compaction the priority note is injected once', async () => {
   const ctx = hook('SessionStart', { cwd: dir, session_id: 'A', source: 'compact' }, { MIS_STATE_HOME: h }).hookSpecificOutput.additionalContext;
   assert.equal(ctx.split('UNIQUE-PRIORITY-NOTE').length - 1, 1);
 });
+
+test('M7 N1: .git is refused in any case', async () => {
+  const dir = makeRepo();
+  const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
+  try { for (const p of ['.GIT/config', '.Git/HEAD']) assert.equal((await s.call('wiki_ingest', { path: p })).isError, true, p); } finally { s.close(); }
+});
+
+test('M7 N2: outside a repo SessionStart does not detect or store a project', () => {
+  const h = home(), nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
+  write(nr, { 'Cargo.toml': '[package]\nname="x"\n' });
+  hook('SessionStart', { cwd: nr, session_id: 'A', source: 'startup' }, { MIS_STATE_HOME: h });
+  assert.equal(existsSync(join(h, 'memory', 'project.json')), false);
+});
+
+test('M7 N3: after compaction the project block is still injected', () => {
+  const dir = makeRepo({ 'package.json': JSON.stringify({ scripts: { test: 'node --test' } }) }), h = home();
+  hook('SessionStart', { cwd: dir, session_id: 'A', source: 'startup' }, { MIS_STATE_HOME: h });
+  const ctx = hook('SessionStart', { cwd: dir, session_id: 'A', source: 'compact' }, { MIS_STATE_HOME: h }).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /## Project/);
+});
+
+test('M7 N4: only a plain whole-suite test command is learned', () => {
+  const dir = makeRepo({ 'package.json': JSON.stringify({ name: 'x' }) }), h = home();
+  const post = (command) => hook('PostToolUse', { cwd: dir, session_id: 'A', tool_name: 'Bash', tool_input: { command } }, { MIS_STATE_HOME: h });
+  post('pytest tests/test_one.py -k slow');
+  post('npm test 2>&1 | tail -5');
+  assert.equal(projectRead(dir)?.build?.testCommand ?? null, null);
+  post('npm test');
+  assert.equal(projectRead(dir).build.testCommand, 'npm test');
+});
+
+test('M7 N5: code that kills its own interpreter is not run twice', async () => {
+  const dir = makeRepo();
+  const f = join(dir, 'count.txt');
+  const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
+  try {
+    const r = (await s.call('python_repl', { action: 'execute', code: `open(${JSON.stringify(f)}, 'a').write('x\\n'); import os; os._exit(1)` })).json;
+    assert.match(r.error ?? '', /exited|died/);
+    assert.equal(readFileSync(f, 'utf8'), 'x\n');
+    assert.equal((await s.call('python_repl', { action: 'execute', code: 'print(1+1)' })).json.stdout, '2\n', 'next call works');
+  } finally { s.close(); }
+});

@@ -186,3 +186,80 @@ OMC 대비 의도적 차이로 판단해 결함으로 세지 않은 것(PARTIAL 
 - `<remember>`는 모델이 다른 사람 말을 인용해도 저장된다(Stop 훅 `last_assistant_message` 전체를 검색). OMC와 같은 동작.
 - `lsp_code_action_resolve`는 OMC와 달리 미리보기 없이 바로 파일을 쓰고 서버 command를 실행한다. run 밖에서는 guard가 묻지 않는다. OMC 사용 습관("resolve로 내용 확인 후 Edit로 적용")대로 호출하면 예상과 달리 파일이 바뀐다. 도구 설명에는 쓰기가 명시되어 있다.
 - `--strict-mcp-config`를 쓰는 사용자는 54개 도구가 모두 사라진다(README에 명시).
+
+## 2차 검증 (round 2)
+
+- 대상: 브랜치 `m7-wip`, HEAD 23a2307 (1차 이후 수정 커밋 1개: 10개 파일, +136/-15). 커밋 메시지의 수정 주장은 근거로 쓰지 않고 재현으로만 판정했다.
+- 검증자: 독립 검증 에이전트(구현 미참여). 임시 디렉터리는 모두 저장소 밖(`$TMPDIR`, scratchpad).
+
+### 기본 확인
+- `claude plugin validate .`: ✔ Validation passed
+- `npm test` 1회차: 411 tests, pass 411, fail 0 (약 108초), exit 0
+
+### D1~D9 재검증 (MCP stdio 직접 구동 + 훅 직접 실행)
+
+| ID | 판정 | 근거 |
+|---|---|---|
+| D1 | FIXED | 다른 저장소 경로 → 세션 저장소 notepad에 기록, 다른 저장소 `.git/make-it-ship` 생성 안 됨(notepad·state_write·shared_memory_write 모두). 없는 경로 `/nonexistent/zzz` → `isError: workingDirectory not found`. git 아닌 기존 경로 → 세션 저장소(전역 `MIS_STATE_HOME/memory` 생성 안 됨). 상대 경로 `../<other>` → 세션 저장소. 같은 저장소의 linked worktree·하위 디렉터리 → 정상 기록(공유 common dir). 단, 다른 저장소 경로를 줬을 때 대체되었다는 안내가 응답에 없다(OMC와 같음, 정보성). |
+| D4 | PARTIAL | `.git/config`, `./.git/HEAD`, 절대 경로, `docs/../.git/config`, `.git/config`를 가리키는 심볼릭 링크, worktree의 `.git` 파일 모두 거부. **그러나 `.GIT/config`는 수집됨**(macOS 대소문자 무시 파일 시스템, `created: ["git-config"]`, index 요약에 `[core]`). `realpathSync`가 대소문자를 정규화하지 않고 검사는 `includes('.git')` 정확 일치라서 우회된다. → 신규 결함 N1. `.git-notes.txt` 같은 일반 dotfile은 정상 수집. |
+| D5 | FIXED | C 파일만 있는 저장소에서 `success:false, filesChecked:0, summary "…; nothing was checked"`. |
+| D6 | FIXED | SIGINT 무시 무한 루프 1초 타임아웃 → kill 후 다음 호출이 `restarted:true` + `stdout "42"`로 실제 실행. 외부에서 SIGKILL한 직후(대기 없이) 호출도 `restarted:true, stdout "4"`. 300ms 대기 후 호출은 새 세션으로 정상 실행. |
+| D7 | FIXED | `source=compact` SessionStart에서 priority 문구 1회. 단 compact 경로는 `memorySessionContext` 대신 `preCompactContext`만 써서 `## Project`(언어·test 명령)가 빠진다(1차 실사용에서는 compact 후에도 test 명령이 주입되었음). → 정보성 N3. |
+| D9 | FIXED | PROGRESS M7-02~04 DONE·M7-05 IN_PROGRESS로 갱신. `stateRoot`가 git stderr를 버림(`stdio ignore`). 저장소 밖에서 `stateRoot`는 여전히 throw(호출자 기대 유지 확인). |
+| D2 | FIXED | 훅 직접 실행: Agent `tool_response.prompt`·`tool_input.prompt`의 태그 무시, `content[].type=tool_use` 안 태그 무시, Read 결과 태그 무시, 문자열 응답·`{result}` 응답 처리, 같은 내용 재입력·Stop 인용 시 중복 없음. **실제 headless 세션 2회**(`claude -p`, 아래 플래그): 모델이 Agent(general-purpose)에 `<remember>PROMPT-TAG-B-SHOULD-NOT-BE-SAVED</remember>`가 든 prompt를 넘기고, subagent 결과는 `<remember>Fact B line one\nline two has "double quotes" and 'single quotes'</remember>` + `<remember priority>PRIO-B "quoted"</remember>`. 디스크 `notepad.json`: working 1건 `Fact B line one\nline two has "double quotes" and 'single quotes'`(실제 줄바꿈·따옴표, 이스케이프 없음), priority `PRIO-B "quoted"`, prompt 태그 없음. 전사본 `tool_use_result.content[0].text`와 글자 단위로 일치. |
+| D3 | FIXED | guard가 판정마다 `{hook:"PreToolUse", tool, decision[, reason]}` 기록(이전 커밋 guard로는 같은 입력에 trace 0줄). ask 행에 reason 포함. 실사용 trace_timeline에 MCP 도구 10건·Bash가 `PreToolUse … allow`로 표시. MCP 도구의 PostToolUse 행은 여전히 없음(matcher에 `mcp__` 없음, 정보성). |
+| D8 | PARTIAL | (a) FIXED: 새 데모 저장소 첫 SessionStart에서 `project.json`이 생성되고(lastScanned = SessionStart 시각) additionalContext에 `# Project memory … languages: JavaScript, test: npm test` 주입(실사용 hook_response로 확인). (b) 학습은 test 명령 1개만(`learnTestCommand`): OMC의 사용자 메시지 지시 감지·자주 쓰는 경로 학습은 없음. 학습 조건도 느슨함: `pytest tests/test_one.py -k slow`처럼 범위를 좁힌 명령, 출력이 `1 failed`인 명령(파이프로 exit 0)도 프로젝트 test 명령으로 저장(N4). 그리고 저장소 밖 세션에서 새 결함 N2 발생. |
+
+### 회귀 확인
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 기억 도구 workingDirectory = 같은 저장소의 linked worktree | 통과 | `git worktree add` 경로 → 세션 저장소 notepad에 기록(common dir 공유) |
+| python_repl 정상·타임아웃·reset | 통과 | 변수 유지(x=5→10), 1.5초 타임아웃 SIGINT 후 상태 유지(x=5), ValueError traceback 후 세션 유지, reset 후 `"x" in dir()` False, get_state 빈 목록 |
+| lsp (clangd, C 파일) | 통과 | `lsp_diagnostics main.c` → `undeclared identifier 'undefined_var'` error. `lsp_diagnostics_directory`는 C 파일을 검사하지 않으며 이제 `success:false`(설계대로) |
+| wiki_ingest 일반 파일 | 통과 | `docs/guide.md` → `guide-title` 생성, `.git-notes.txt` 정상 수집 |
+| SessionStart startup의 priority 주입 | 통과 | 여러 줄 priority가 `## Priority notes`로 주입 |
+| guard fail-closed | 통과 | 잘못된 JSON → `ask (fail-closed)`. trace 홈을 쓸 수 없는 경우(`MIS_STATE_HOME=/dev/null/x`)에도 판정 출력 동일. `git push`·`rm -rf /`·`gh pr create` 판정이 이전 커밋 guard와 동일 |
+| stateRoot 저장소 밖 throw | 통과 | `stateRoot(<git 아닌 디렉터리>)` → throw 유지(memoryDir 폴백·loadRun 호출자 기대 그대로) |
+
+### 실사용 (headless dogfood)
+- 준비: `node evals/setup-demo.mjs a <scratchpad>/m7r2/demo`(새 사본), `MIS_STATE_HOME=<scratchpad>/m7r2/home`, 플래그 `--plugin-dir <m7 worktree> --setting-sources project --permission-mode bypassPermissions --output-format stream-json --verbose`(`--strict-mcp-config` 없음). Claude Code 2.1.292.
+- init: `plugin:make-it-ship:mis` connected, mis 도구 54개. 13 turns, $0.29, exit 0.
+- project_memory_read → 이미 SessionStart가 만든 기억(languages JavaScript, testCommand `npm test`) 반환.
+- notepad_write_priority/working/read → 디스크 `notepad.json`에 `R2-PRIORITY: keep diffs small`, `R2-WORKING note`.
+- wiki_add → `.make-it-ship/wiki/r2-testing-guide.md`; wiki_query("QUOKKA-42") → 1건 score 2. `git status` 깨끗(wiki git-ignore).
+- python_repl `y = 21` → `print(y*2)` → `42`.
+- trace_timeline → 13건: SessionStart, UserPromptSubmit, `PreToolUse mcp__plugin_make-it-ship_mis__<도구> allow` 10건, `PreToolUse Bash allow`, `PostToolUse Bash`. trace_summary `PreToolUse: 11`.
+- 종료 후 repl_bridge·mcp server·clangd 잔존 프로세스 없음. SessionEnd가 `session-log-*.md` 생성.
+
+### npm test 안정성 (3회 요구)
+- 1회차 411/411 (108초), 2회차 411/411 (65초), **3회차 410/411 실패 1** (104초, 내 MCP·훅 probe와 동시 실행, load avg 약 17~22).
+- 실패: `tests/integration/mis-concurrency.test.mjs:31` "concurrent mis writers wait for the lock instead of failing or losing updates" — `7 !== 8`. 30행(8개 writer 모두 exit 0)은 통과했으므로 **모든 writer가 성공을 보고했는데 기록 1건이 조용히 사라졌다**(타임아웃이 아니라 lost update).
+- 추가 실행: 4회차 npm test 411/411, 해당 테스트 단독 8회·병렬 10회 모두 통과, 20개 동시 `interview add` × 6회 모두 20건. 재현은 안 되었지만 3회 중 1회 실패이므로 "3회 안정" 조건은 **불충족**.
+- M7 이전부터 있던 코드다: M7 diff는 `state.mjs`에서 `stateRoot`의 stdio만 바꿨고 `withLock`은 손대지 않았다.
+- 가설(미확정): `withLock`의 reclaim 경로가 holder pid 읽기 → `pidAlive` → `unlinkSync(lock)` 순서인데, 지우기 전에 그 파일이 아직 같은 holder의 것인지 확인하지 않는다. 막 끝나고 종료한 writer X의 pid를 읽은 사이 X가 lock을 풀고 B가 새 lock을 잡으면, A는 X가 죽었다고 보고 **B의 lock을 지운다** → A·B 동시 임계 구역 → 갱신 1건 유실.
+
+### 첫 번째 D2 headless 실행 메모
+- 1회차(셸 작은따옴표 안 `\"`를 prompt에 그대로 넣음)에서는 저장값에 `\"`가 남았지만, 전사본 `tool_use_result.content[0].text`도 똑같이 `\"`(subagent가 백슬래시를 실제로 출력)였다. 프롬프트 인용 부산물이지 이스케이프 결함이 아니다. 판정은 백슬래시 없는 2회차 기준.
+
+### 추가 확인: python_repl 재실행 (D6 수정 경로)
+- 코드 `open(f,'a').write('ran\n'); import os; os._exit(1)` 1회 호출 → 응답은 `error: python process exited; it will be restarted on the next call`, **파일에는 `ran` 2줄**. 인터프리터가 응답 전에 죽으면 "코드가 실행되지 않았다"고 가정하고 새 인터프리터에서 같은 코드를 한 번 더 실행하기 때문. 사용자 코드가 스스로 프로세스를 죽인 경우(os._exit, segfault, OOM kill)에는 부작용(파일 추가, 네트워크 요청, DB 쓰기)이 두 번 일어나고, 응답 문구는 "다음 호출에 재시작"이라 두 번 실행된 사실도 알 수 없다. → N5.
+
+### 2차 결함 목록
+
+| ID | 심각도 | 출처 | 내용 | 재현 | 위치 |
+|---|---|---|---|---|---|
+| N1 | 낮음 | D4 수정 불완전 | `wiki_ingest`의 `.git` 차단이 대소문자 정확 일치라 macOS(대소문자 무시 FS)에서 `.GIT/config`가 수집된다(D4와 같은 노출). `realpathSync`는 대소문자를 정규화하지 않는다. | `wiki_ingest {path:".GIT/config"}` → `created:["git-config"]`, 요약 `[core]` | `scripts/mcp/tools/knowledge.mjs` `ingestFile` (`.includes('.git')`) — 대소문자 무시 비교 또는 `realpathSync.native` |
+| N2 | 중간 | D8 수정이 만든 회귀 | SessionStart가 `projectEnsure(cwd)`를 무조건 호출한다. 저장소 밖에서는 `memoryDir`가 throw하지 않고 전역 `~/.make-it-ship/memory/`로 폴백하므로 `catch { /* not a repo */ }`는 동작하지 않는다. 처음 연 비저장소 디렉터리의 감지 결과가 전역 `project.json`에 저장되고, 이후 **관계없는 모든 비저장소 세션**에 그 언어·test 명령이 주입된다. `learnTestCommand`도 저장소 밖에서는 같은 전역 파일에 쓴다. | `Cargo.toml`만 있는 비저장소 A에서 SessionStart → 빈 비저장소 B에서 SessionStart: B의 additionalContext에 `languages: Rust`, `test: cargo test` | `scripts/hooks.mjs` SessionStart, `scripts/lib/memory.mjs` `memoryDir`/`projectEnsure`/`learnTestCommand` |
+| N3 | 낮음 | D7 수정이 만든 회귀 | `source=compact`에서 `memorySessionContext` 대신 `preCompactContext`만 넣어 `## Project`(언어·build/test 명령)가 compaction 후 사라진다. 1차 실사용에서는 compact 후 test 명령이 주입되었다. | priority·package.json 있는 저장소에서 SessionStart source=compact → `npm test`/`node --test` 문자열 없음 | `scripts/hooks.mjs` SessionStart |
+| N4 | 낮음 | D8(b) 수정 | 첫 test 명령을 성공 여부·범위와 관계없이 프로젝트 test 명령으로 저장한다. `pytest tests/test_one.py -k slow`, 출력 `1 failed`(파이프로 exit 0) 모두 저장됨. 이후 매 세션 이 명령이 "test:"로 주입된다. OMC 학습(지시 감지·경로)은 여전히 없음. | 감지 명령 없는 저장소에서 PostToolUse Bash `pytest tests/test_one.py -k slow` → `build.testCommand` 그 값 | `scripts/lib/memory.mjs` `learnTestCommand`, `scripts/hooks.mjs` PostToolUse |
+| N5 | 중간 | D6 수정이 만든 회귀 | 응답 전에 인터프리터가 죽으면 같은 코드를 새 인터프리터에서 자동으로 다시 실행한다. 코드 자체가 프로세스를 죽인 경우 부작용이 2번 일어나고 응답은 이를 알리지 않는다. | 위 "python_repl 재실행" 절: 1회 호출에 `ran` 2줄 | `scripts/lib/repl.mjs` `r === null` 재시도 분기 |
+| N6 | 중간 | M7 이전부터(M3 `withLock`), M7 범위 밖 | npm test 3회 중 1회 lost update로 실패(동시 writer 8개 모두 성공, 기록 7건). 재현 안 됨, 원인은 위 가설(reclaim TOCTOU). "npm test 3회 안정" 조건 불충족. | npm test 3회차 로그 | `scripts/lib/state.mjs` `withLock` |
+
+1차 결함 최종: D1·D2·D3·D5·D6·D7·D9 FIXED, D4·D8 PARTIAL. 단 D6·D7·D8 수정이 각각 N5·N3·N2 회귀를 만들었다.
+
+### 2차 미검증
+- 대화형(tmux) 세션, 자동 compaction, Linux(대소문자 구분 FS)에서의 N1(재현되지 않을 것으로 예상).
+- N6의 원인 확정(재현 실패, 가설만).
+
+ROUND2: DEFECTS FOUND

@@ -1,3 +1,7 @@
+import { mkdtempSync as _mk, writeFileSync as _wf, existsSync as _ex } from 'node:fs';
+import { tmpdir as _tmp } from 'node:os';
+import { join as _join } from 'node:path';
+import { reclaimLock } from '../../scripts/lib/state.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
@@ -65,4 +69,15 @@ test('lock: exclusive while holder alive, stale lock reclaimed', () => {
   let ran = false;
   withLock(run, () => { ran = true; });
   assert.ok(ran, 'stale lock reclaimed');
+});
+
+test('lock reclaim removes only the stale lock it judged, never a lock someone created since (N6)', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
+  reclaimLock(lock, JSON.stringify({ pid: 999998, at: 'old' }));
+  assert.equal(_ex(lock), true, 'the current lock differs from what was judged stale');
+  reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
+  assert.equal(_ex(lock), false);
+  assert.equal(_ex(`${lock}.reclaim`), false);
 });

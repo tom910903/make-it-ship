@@ -48,9 +48,9 @@ const handlers = {
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     try {
       const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');
-      try { mem.projectEnsure(cwd); } catch { /* not a repo */ }
-      // After compaction the preserved block already carries the priority notes and directives.
-      parts.push(input.source === 'compact' ? mem.preCompactContext(cwd) : mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
+      try { (await import('./lib/state.mjs')).stateRoot(cwd); mem.projectEnsure(cwd); } catch { /* outside a repo: nothing to detect */ }
+      // After compaction the preserved block already carries the priority notes and directives; add only the project facts.
+      parts.push(input.source === 'compact' ? [mem.preCompactContext(cwd), mem.projectContext(cwd)].filter(Boolean).join('\n\n') : mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
       if (input.source === 'compact') parts.push(wiki.wikiPreCompact(cwd));
     } catch { /* memory and wiki are optional context */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');

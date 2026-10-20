@@ -1,7 +1,7 @@
 // Run state (Spec §5): JSON state + JSONL events under <git-common-dir>/make-it-ship/.
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, existsSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, existsSync, openSync, closeSync, unlinkSync , statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 export function stateRoot(cwd) {
@@ -102,8 +102,9 @@ export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS
       break;
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
-      const pid = holder(lock);
-      if (pid && !pidAlive(pid)) { try { unlinkSync(lock); } catch { /* raced */ } run.reclaimedLock = { pid }; continue; }
+      const seen = readLock(lock);
+      const pid = seen && (() => { try { return JSON.parse(seen).pid; } catch { return null; } })();
+      if (pid && !pidAlive(pid)) { reclaimLock(lock, seen); run.reclaimedLock = { pid }; continue; }
       if (Date.now() >= until) throw new Error(`run is locked by pid ${pid}`);
       sleepMs(20 + Math.floor(Math.random() * 30));
     }
@@ -111,6 +112,16 @@ export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS
   try { return fn(); } finally { try { unlinkSync(lock); } catch { /* already gone */ } }
 }
 
-function holder(lock) {
-  try { return JSON.parse(readFileSync(lock, 'utf8')).pid; } catch { return null; }
+const readLock = (lock) => { try { return readFileSync(lock, 'utf8'); } catch { return null; } };
+
+/** Remove a stale lock only if it is still exactly the one judged stale: its owner may have exited and a new owner
+ *  taken the lock since we read it. Reclaimers are serialized by a short-lived `.reclaim` file. */
+export function reclaimLock(lock, seen) {
+  const r = `${lock}.reclaim`;
+  try { closeSync(openSync(r, 'wx')); } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+    try { if (Date.now() - statSync(r).mtimeMs > 5000) unlinkSync(r); } catch { /* gone */ }
+    return;
+  }
+  try { if (readLock(lock) === seen) unlinkSync(lock); } catch { /* gone */ } finally { try { unlinkSync(r); } catch { /* gone */ } }
 }

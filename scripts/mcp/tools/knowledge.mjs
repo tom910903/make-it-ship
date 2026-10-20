@@ -30,7 +30,7 @@ function ingestFile(cwd, a) {
   const root = realpathSync(repoRoot(cwd)), given = resolve(cwd, a.path);
   const file = existsSync(given) ? realpathSync(given) : given; // follow symlinks: the real file must be inside the repo
   if (!(file + sep).startsWith(root + sep) || !existsSync(file) || !statSync(file).isFile()) fail(`path must be an existing file inside the repository: ${a.path}`);
-  if (relative(root, file).split(sep).includes('.git')) fail(`git internals are not wiki material (may hold credentials): ${a.path}`);
+  if (relative(root, file).split(sep).some((p) => p.toLowerCase() === '.git')) fail(`git internals are not wiki material (may hold credentials): ${a.path}`);
   const text = readFileSync(file, 'utf8');
   const title = a.title || text.match(/^#\s+(.+)$/m)?.[1].trim() || relative(root, file);
   return ingest(cwd, { title, content: text.replace(/^#\s+.+\n?/m, '').trim(), tags: a.tags, category: a.category, confidence: a.confidence,

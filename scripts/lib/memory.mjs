@@ -227,6 +227,15 @@ export function sharedCleanup(cwd, ns, now = new Date()) {
 // ---- hook helpers (fail open: callers inject '' / skip on any problem)
 const directiveLines = (m) => (m?.userDirectives ?? []).map((d) => `- ${d.priority === 'high' ? '[high] ' : ''}${d.directive}`);
 
+function projectBlock(m) {
+  const langs = m?.techStack?.languages ?? [];
+  const cmds = Object.entries(m?.build ?? {}).filter(([, v]) => v).map(([k, v]) => `${k.replace(/Command$/, '')}: \`${v}\``);
+  return langs.length || cmds.length ? `## Project\n${[langs.length ? `languages: ${langs.join(', ')}` : '', ...cmds].filter(Boolean).join('\n')}` : '';
+}
+
+/** The project facts block alone ('' when unknown). */
+export function projectContext(cwd) { try { return projectBlock(projectRead(cwd)); } catch { return ''; } }
+
 /** SessionStart: priority notepad + project memory directives and summary; '' when nothing is stored. */
 export function memorySessionContext(cwd) {
   try {
@@ -236,9 +245,8 @@ export function memorySessionContext(cwd) {
     const m = projectRead(cwd);
     const dl = directiveLines(m);
     if (dl.length) out.push(`## User directives (follow these)\n${dl.join('\n')}`);
-    const langs = m?.techStack?.languages ?? [];
-    const cmds = Object.entries(m?.build ?? {}).filter(([, v]) => v).map(([k, v]) => `${k.replace(/Command$/, '')}: \`${v}\``);
-    if (langs.length || cmds.length) out.push(`## Project\n${[langs.length ? `languages: ${langs.join(', ')}` : '', ...cmds].filter(Boolean).join('\n')}`);
+    const pb = projectBlock(m);
+    if (pb) out.push(pb);
     return out.length ? `# Project memory (Make It Ship)\n\n${out.join('\n\n')}` : '';
   } catch { return ''; }
 }
@@ -270,11 +278,14 @@ export function preCompactContext(cwd) {
   } catch { return ''; }
 }
 
+const WHOLE_SUITE = /^(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test|node\s+--test|pytest|python3?\s+-m\s+pytest|go\s+test\s+\.\/\.\.\.|cargo\s+test|make\s+(?:test|check)|npx\s+(?:vitest\s+run|jest)|swift\s+test|mvn\s+test|\.\/gradlew\s+test)$/;
+
 /** PostToolUse: remember a test command that just succeeded, if the project has none recorded yet. */
 export function learnTestCommand(cwd, command) {
   const m = projectEnsure(cwd);
-  const cmd = String(command ?? '').trim().slice(0, 200);
-  if (!cmd || m.build?.testCommand) return false;
+  const cmd = String(command ?? '').trim();
+  // only a plain whole-suite command: no paths, filters, pipes or redirections
+  if (!WHOLE_SUITE.test(cmd) || m.build?.testCommand) return false;
   projectSave(cwd, { ...m, build: { ...m.build, testCommand: cmd } });
   return true;
 }

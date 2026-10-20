@@ -17,7 +17,7 @@ function start(id, dir) {
   const proc = spawn(py, ['-u', BRIDGE], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe', 'pipe'], detached: true }); // own group: killing it also stops subprocesses user code started
   const s = { proc, waiting: [], queue: Promise.resolve(), count: 0 };
   proc.stdout.resume(); proc.stderr.resume(); proc.stdin.on('error', () => {});
-  createInterface({ input: proc.stdio[3] }).on('line', (l) => s.waiting.shift()?.(JSON.parse(l)));
+  createInterface({ input: proc.stdio[3] }).on('line', (l) => { const m = JSON.parse(l); if (m.ack) s.acked = true; else s.waiting.shift()?.(m); });
   proc.on('exit', () => { if (sessions.get(id) === s) sessions.delete(id); for (const w of s.waiting.splice(0)) w(null); });
   proc.on('error', () => {});
   sessions.set(id, s);
@@ -28,6 +28,7 @@ const ask = (s, req, ms) => new Promise((res) => {
   const t = setTimeout(() => { s.waiting.splice(s.waiting.indexOf(done), 1); res(undefined); }, ms);
   const done = (m) => { clearTimeout(t); res(m); };
   s.waiting.push(done);
+  s.acked = false;
   s.proc.stdin.write(JSON.stringify(req) + '\n');
 });
 const late = (s, ms) => new Promise((res) => {
@@ -50,8 +51,9 @@ export function repl({ action, code = '', id = 'default', timeoutMs = 300000, di
   s ??= start(id, dir);
   const run = async () => {
     let r = await ask(s, { action, code }, action === 'execute' ? timeoutMs : 10000);
+    if (r === null && s.acked) return { session: id, error: 'python process exited while running this code (it was not retried); the next call starts a fresh interpreter (state lost)' };
     if (r === null) {
-      // the interpreter died before answering (killed from outside): the code never ran, so run it once in a fresh one
+      // the interpreter was already dead and never received the request, so the code did not run: run it once in a fresh one
       sessions.delete(id); s = start(id, dir);
       r = await ask(s, { action, code }, action === 'execute' ? timeoutMs : 10000);
       if (r === null) return { session: id, error: 'python process exited; it will be restarted on the next call (state lost)' };

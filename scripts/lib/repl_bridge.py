@@ -52,6 +52,8 @@ while True:
         if not line:
             break
         req = json.loads(line)
+        proto.write(json.dumps({"ack": True}) + "\n")  # received: from here on the code may run
+        proto.flush()
         action = req.get("action")
         if action == "execute":
             execute(req.get("code", ""))
