@@ -140,6 +140,13 @@ VERIFY: PENDING — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서�
 
 ## M8 — 브라우저·팀·문서 변환
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M8-01 | 내장 브라우저(CDP 데몬, `mis browse` 명령 그룹, snapshot @e 참조, handoff/resume), guard(cdp·--remote ask) | DONE | `tests/integration/mis-browse*.test.mjs` | gap §5.4 | f3a03c4 | npm test |
+| M8-02 | `mis pdf`(marked 벤더), `mis visual-verdict`(PNG 디코더), Playwright 없는 웹 QA·qa-only·디자인 리뷰·페이지 성능 | DONE | 같은 묶음 | gap §5.1, §2.1 | f3a03c4 | npm test |
+| M8-03 | 팀 런타임(`mis team`, tmux 워커, 공유 task 목록·원자적 claim), team 스킬(plan→exec→verify→fix), codex/gemini 워커 ask | DONE | `tests/integration/mis-team.test.mjs` | gap §2.1·§2.4·§2.6 | c5c04fe | npm test |
+| M8-04 | 프로젝트 세션 관리(`mis session`, psm), visual companion(`mis companion`) | DONE | 같은 묶음 | gap §2.1, §3 | c5c04fe | npm test |
+| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS | — | — | | |
 
 ## M9 — 나머지 이전 제외 기능
 VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
