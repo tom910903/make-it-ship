@@ -45,6 +45,7 @@ import { telemetryCommands } from './telemetry.mjs';
 import { gbrainCommands } from './commands-gbrain.mjs';
 import { designCommands } from './commands-design.mjs';
 import { pairCommands } from './commands-pair.mjs';
+import { helpCommands } from './commands-help.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -779,5 +780,9 @@ function init(args, cwd) {
 }
 
 
-export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands, ...skillCommands, ...ttyCommands, ...flowCommands, ...modelCommands, ...researchCommands, ...opsCommands, ...telemetryCommands, ...gbrainCommands, ...designCommands, ...pairCommands };
+/** Commands by the module that defines them (`mis help` groups by this); later groups override earlier ones. */
+export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel },
+  always: alwaysCommands, browse: browseCommands, team: teamCommands, setup: setupCommands, skill: skillCommands, tty: ttyCommands, flow: flowCommands, models: modelCommands,
+  research: researchCommands, ops: opsCommands, telemetry: telemetryCommands, gbrain: gbrainCommands, design: designCommands, pair: pairCommands, help: helpCommands };
+export const commands = Object.assign({}, ...Object.values(commandGroups));
 export { requiredChecks };

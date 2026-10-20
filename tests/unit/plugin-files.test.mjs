@@ -16,7 +16,7 @@ const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'secu
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
 const SKILLS = ['run', 'plan', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
-  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent'];
+  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent', 'help', 'reference'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {

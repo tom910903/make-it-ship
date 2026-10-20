@@ -103,6 +103,16 @@ export function detectKeywords(prompt, { disabled = [] } = {}) {
   return hits.map(({ name, context }) => ({ name, context }));
 }
 
+// Plain-language trigger of the keywords that detectKeywords matches without their own `re` (shown by `mis help`).
+const RULES = {
+  loop: `only a prompt that starts with a ralph prefix starts the loop: ${LOOP_PREFIX.map((r) => `/${r.source}/`).join(' ')}`,
+  'loop-hint': 'any other mention of ralph (names, questions, "don\'t use ralph"): a hint the model judges in context',
+  clarify: `an execution request with no goal or scope: /${VAGUE_EXEC.source}/`,
+  simplify: `/${SLOP_EXPLICIT.source}/, or /${SLOP_ACTION.source}/ together with /${SLOP_SMELL.source}/`,
+};
+/** Every keyword in priority order with its trigger and the instruction it injects (read live by `mis help`). */
+export const keywordTable = () => KEYWORDS.map((k) => ({ name: k.name, trigger: RULES[k.name] ?? (k.re ? `/${k.re.source}/` : 'rule in detectKeywords'), action: k.context }));
+
 /** Natural-language style changes; returns the new level or null. */
 export function styleSwitch(prompt) {
   // Only a prompt that is just the phrase (like Ponytail): prose mentioning "normal mode" must not change the style.
