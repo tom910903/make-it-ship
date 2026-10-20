@@ -1,8 +1,9 @@
 // Tool modules of the MCP server. Each exports `tools`: [{ name, description, inputSchema, handler(args, {cwd}) }].
-// One line per module so parallel work adds modules without conflicts.
+// One line per module.
 const MODULES = [
   './tools/skills.mjs',
   './tools/memory.mjs',
+  './tools/knowledge.mjs',
 ];
 
 export async function loadTools() {
