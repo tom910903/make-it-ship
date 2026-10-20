@@ -52,7 +52,15 @@ try {
     const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
   } catch { /* no home */ }
-  const r = classify(input, { ...ctx, freezeDir });
+  // M9-B: scan the commits a push would send for secrets; the result goes into the push ask (never blocks silently).
+  let pushScan = null;
+  // Parsed commands, not raw text: a heredoc body (a review that mentions git push) must not trigger a git log -p.
+  const isPush = (c) => c.argv[0]?.endsWith('git') && c.argv.includes('push');
+  if (input.tool_name === 'Bash' && ctx.inRepo && /\bpush\b/.test(String(input.tool_input?.command ?? ''))
+      && (await import('./lib/shell.mjs')).commandsOf(String(input.tool_input.command)).commands.some(isPush)) {
+    try { pushScan = (await import('./lib/redact.mjs')).prePushScan(ctx.repoRoot); } catch (e) { pushScan = { error: e.message.split('\n')[0].slice(0, 120) }; }
+  }
+  const r = classify(input, { ...ctx, freezeDir, pushScan });
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {

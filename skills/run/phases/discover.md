@@ -14,3 +14,11 @@ Goal: understand the repository well enough to plan, without asking the user for
 4. Discovery is read-only: no edits in this phase.
 
 Output to carry forward: a short findings list with `path:line` evidence, the verification commands, and risk signals.
+
+## When the situation calls for more
+
+Use these only when their trigger applies; each is part of discovery, so still no code edits.
+
+- **External docs** (OMC external-context, document-specialist): the request depends on an external library, API or spec whose behavior the code does not show (a new dependency version, an unfamiliar API, a protocol). Dispatch 2-3 `make-it-ship:document-specialist` agents **in one message**, each with one focused question ("how does X paginate", "what changed in Y v5"). Never put repository code in a query. Merge the answers, with source links, into the findings; conflicting sources become an interview question.
+- **deepinit** (OMC deepinit): Full mode on a repository without `AGENTS.md`, or the user asks for codebase docs. Call the `deepinit_manifest` tool with `action: "diff"` (the first time every directory is `added`). For each `added` or `modified` directory write or update its `AGENTS.md`: purpose, key files, how it connects to its parent, conventions, how it is tested; parents link their children. Leave `unchanged` directories alone and remove the `AGENTS.md` of `deleted` ones. Finish with `deepinit_manifest` `action: "save"`, so a re-run only touches directories that changed. Inside a run the `AGENTS.md` files must be in the plan's files; outside a run this is a docs-only change.
+- **Health baseline** (gstack health): Full mode, or the user asks how healthy the code is. `mis health` runs the project's checks and scores them (tests 30, types 25, lint 20, build 15, others 10; BLOCKED checks are left out), appends the result to `docs/make-it-ship/health.jsonl` and shows the trend. It is not run evidence; it shows which checks already fail before you change anything.

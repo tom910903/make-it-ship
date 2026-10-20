@@ -2,6 +2,7 @@
 // Pure functions: detect → instructions; hooks.mjs injects them, `mis test-prompt` shows them.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseSkill } from './skills.mjs';
 
 const K = (name, re, context) => ({ name, re, context });
@@ -16,7 +17,19 @@ const KEYWORDS = [
   K('run', /\b(autopilot|auto[\s-]pilot|full auto)\b|오토파일럿|オートパイロット|\b(build|create|make)\s+me\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bi\s+want\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bhandle\s+it\s+all\b|\bend\s+to\s+end\b|\be2e\s+this\b/i,
     "Invoke /make-it-ship:run with the user's request: plan, approval, test-first implementation, checks, reviews, and an honest report."),
   K('ultragoal', /\bultragoal\b/i,
-    'Invoke /make-it-ship:run and put each goal in the plan as its own task with acceptance criteria; keep going with /make-it-ship:loop until every goal is VERIFIED.'),
+    'Multi-goal work: record each goal with `mis goal add "<title>" --criteria "<a; b>"` (a durable ledger that survives sessions), then work them one at a time through /make-it-ship:run (and /make-it-ship:loop to keep going); after each VERIFIED goal run `mis goal done <id> --evidence <verdict>` and continue with the handoff text it prints.'),
+  K('ralphthon', /\bralphthon\b|랄프톤/i,
+    'Hackathon lifecycle (OMC ralphthon): invoke /make-it-ship:loop in ralphthon order — interview (pin goal and acceptance criteria), loop until VERIFIED, then harden (qa phase, security review, simplify) before the report. Ask the interview questions first; do not start coding before acceptance criteria exist.'),
+  K('clarify', null,
+    'The request asks to execute but names no goal, scope or acceptance criteria (OMC ralplan gate). Unless this conversation already settled them (an approved plan, an active run, or the user said to proceed with defaults), invoke /make-it-ship:interview first and turn the request into testable acceptance criteria before writing code.'),
+  K('deepinit', /\bdeepinit\b|딥\s?이닛/i,
+    `Hierarchical AGENTS.md (OMC deepinit): read ${fileURLToPath(new URL('../../skills/run/phases/discover.md', import.meta.url))} and follow its deepinit step — deepinit_manifest diff, write AGENTS.md only for changed directories, then deepinit_manifest save.`),
+  K('autoplan', /\bautoplan\b|오토플랜/i,
+    'Invoke /make-it-ship:plan-review in autoplan mode: CEO, design, eng and DX lenses in order, intermediate questions auto-decided by the six decision principles, every auto-decision logged, taste decisions left to the user.'),
+  K('office-hours', /\boffice[\s-]hours\b|오피스\s?아워/i,
+    'Invoke /make-it-ship:interview in office-hours mode (startup or builder, ask which if unclear): frame the problem, push on demand and the narrowest wedge, write the design doc, change no code.'),
+  K('audit', /\b(ponytail-audit|cso)\b|\b(audit|review)\s+(the\s+)?(whole|entire)\s+(repo|repository|codebase)\b|전체\s?(코드|저장소)\s?감사/i,
+    'Repository-wide audit, report only: invoke /make-it-ship:review in audit mode (quality and security reviewers over the whole repository, `mis redact scan --history`, `mis debt`); change no files.'),
   K('parallel', /\b(ultrawork|ulw)\b|울트라워크|ウルトラワーク/i,
     'Maximum parallel work: split the request into independent pieces and dispatch them to subagents in a single message (Agent tool). Inside a run use the parallel phase (`mis parallel`, task worktrees). Verify the combined result.'),
   K('second-opinion', /\b(ccg|claude-codex-gemini)\b|씨씨지|シーシージー/i,
@@ -54,6 +67,10 @@ const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*
 const explicitLoop = (text) => LOOP_PREFIX.some((r) => r.test(text));
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 
+// Execution verb + a bare pronoun and nothing else: no goal, no scope, no acceptance criteria. "just do it" is excluded
+// (in the interview it means "stop asking"); "ship it" is a ship request.
+const VAGUE_EXEC = /^\s*(?:please\s+)?(?:(?:just|now|ok(?:ay)?|go)[\s,]+)?(?:build|make|implement|code|write|create)\s+(?:it|this|that|everything|the\s+thing|something)(?:\s+(?:now|please|already|for\s+me))?\s*[.!]*\s*$|^\s*(?:그냥|알아서|일단)\s*(?:다\s*)?(?:만들어|구현해|짜)\s?(?:줘|봐)[.!~]*\s*$/i;
+
 const HELP_QUERY = /\b(what\s+is|what's|how\s+(do\s+i|to)\s+use|explain|describe|tell\s+me\s+about|why)\b|사용법|뭐야|뭐지|무엇|설명|왜/i;
 const DIRECTIVE = /\b(fix|implement|build|add|refactor)\b|해줘|하자|해 줘|부탁|돌려/i;
 
@@ -78,6 +95,7 @@ export function detectKeywords(prompt, { disabled = [] } = {}) {
     ? SLOP_EXPLICIT.test(text) || (SLOP_ACTION.test(text) && SLOP_SMELL.test(text))
     : k.name === 'loop' ? explicitLoop(text)
     : k.name === 'loop-hint' ? mentionsRalph(text)
+    : k.name === 'clarify' ? VAGUE_EXEC.test(text)
     : k.re.test(text));
   hits = hits.filter((k) => !disabled.includes(k.name));
   if (hits.some((k) => k.name === 'cancel')) hits = hits.filter((k) => k.name === 'cancel');

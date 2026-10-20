@@ -31,6 +31,7 @@ function realish(abs, depth = 0) {
 const outsideFreeze = (abs, dir) => !(realish(abs) + sep).startsWith(dir + sep);
 
 import { commandsOf } from './shell.mjs';
+import { describeFindings } from './redact.mjs';
 
 const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
@@ -42,6 +43,15 @@ function gitSub(ws) {
   return { sub: ws[i], rest: ws.slice(i + 1) };
 }
 
+/** Pre-push secret scan result (computed by guard.mjs, M9-B): shown in every push ask; never shows secret values. */
+function scanNote(ctx) {
+  const s = ctx.pushScan;
+  if (!s) return '';
+  if (s.error) return ` [secret scan unavailable: ${s.error}]`;
+  if (!s.findings.length) return ` [secret scan: clean, ${s.commits} unpushed commit(s)]`;
+  return ` [SECRET SCAN: ${s.findings.length} possible secret(s) in unpushed commits: ${describeFindings(s.findings)} — remove and rotate them before pushing]`;
+}
+
 function classifyPush(rest, ctx) {
   const force = rest.some((w) => /^(-f|--force|--force-with-lease)(=|$)/.test(w) || /^-[a-z]*f/.test(w));
   const refs = rest.filter((w) => !w.startsWith('-'));
@@ -49,8 +59,8 @@ function classifyPush(rest, ctx) {
   const plusMain = refs.slice(1).some((r) => r.startsWith('+') && ['main', 'master'].includes(branchName(r)));
   const onMain = targets.some((t) => t === 'main' || t === 'master') || (!targets.length && ['main', 'master'].includes(ctx.currentBranch));
   if ((force && onMain) || plusMain) return deny('force push to the default branch is not allowed');
-  if (force) return ask('force push rewrites remote history; other people may lose work');
-  return ask('remote write (git push) needs your approval');
+  if (force) return ask(`force push rewrites remote history; other people may lose work${scanNote(ctx)}`);
+  return ask(`remote write (git push) needs your approval${scanNote(ctx)}`);
 }
 
 function dangerousRmTarget(t, cwd, repoRoot) {
@@ -135,7 +145,11 @@ function careful(ws, ctx, dir, functions) {
   const g = gitSub(ws);
   if (g?.sub === 'push') {
     const r = classifyPush(g.rest, ctx);
-    return r.decision === 'deny' || /force/.test(r.reason) ? r : allow;
+    // Outside a run a plain push is allowed, unless the pre-push scan found secrets: then the user decides (never a silent block).
+    return r.decision === 'deny' || /force/.test(r.reason) || ctx.pushScan?.findings?.length ? r : allow;
+  }
+  if (g?.sub === 'tag' && g.rest.some((w) => !w.startsWith('-')) && !g.rest.some((w) => ['-l', '--list', '-v', '--verify', '--contains', '--no-contains', '--points-at', '--merged', '--no-merged'].includes(w))) {
+    return ask('creating or deleting a git tag marks a release; confirm the tag');
   }
   if (g?.sub === 'reset' && g.rest.includes('--hard')) return ask('git reset --hard discards local changes');
   if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) return ask('git clean -f deletes untracked files');

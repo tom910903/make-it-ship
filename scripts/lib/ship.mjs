@@ -1,7 +1,14 @@
 // mis ship (Spec §14 ship): PR draft, changelog draft, release checklist. Never pushes; push/PR stay behind the guard.
 import { execFileSync } from 'node:child_process';
+import { currentVersion, versionAt, prTitle } from './release.mjs';
 
 const git = (root, ...a) => { try { return execFileSync('git', a, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+
+/** v<version> prefix only when this run bumped the version (gstack bumps on every ship; Make It Ship only on a release). */
+function releasedVersion(root, base) {
+  const now = currentVersion(root);
+  return now && base && now !== versionAt(root, base) ? now : null;
+}
 
 export function renderShip({ root, state: s, verdict: v, ctx, changes, debt }) {
   const branch = git(root, 'branch', '--show-current');
@@ -19,7 +26,7 @@ export function renderShip({ root, state: s, verdict: v, ctx, changes, debt }) {
   L.push(`# Ship 준비 — ${s.runId}`, '');
   L.push(ready ? '**READY** — 판정 VERIFIED. 아래 체크리스트의 수동 항목과 사용자 승인 후 push·PR을 진행한다.'
     : `**NOT READY** — 판정 ${v.verdict}. 배포 준비 완료 아님. 먼저 해결할 것:\n${v.reasons.map((r) => `  - ${r}`).join('\n')}`, '');
-  L.push('## PR 초안', '', `**제목**: ${s.plan?.goal ?? s.runId}`, '', '**본문**:', '', '### Summary', ...(tasks.map((t) => `- ${t.title} (${t.status})`)), '');
+  L.push('## PR 초안', '', `**제목**: ${prTitle(s.plan?.goal ?? s.runId, releasedVersion(root, base))}`, '', '**본문**:', '', '### Summary', ...(tasks.map((t) => `- ${t.title} (${t.status})`)), '');
   L.push('### Changes', ...(changes.length ? changes.map((c) => `- ${c.status} \`${c.path}\``) : ['- (없음)']), '');
   L.push('### Verification (machine-checked by `mis check`)', ...(checks.length ? checks : ['- (필수 check 없음)']), `- Verdict: **${v.verdict}** (tree \`${ctx.treeHash.slice(0, 12)}\`)`, '');
   const notVerified = [...v.reasons, ...(ctx.surfaces ?? []).filter((p) => !ctx.required.includes(`qa-${p.profile}`)

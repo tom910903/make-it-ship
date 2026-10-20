@@ -32,6 +32,11 @@ import { teamCommands, excludeWorktrees } from './commands-team.mjs';
 import { skillCommands } from './commands-skill.mjs';
 import { ttyCommands } from './commands-tty.mjs';
 import { readLoop, endLoop } from './loop.mjs';
+import { flowCommands, questionPrefs } from './commands-flow.mjs';
+import { parsePlanDoc } from './plandoc.mjs';
+import { filterQuestions } from './questions.mjs';
+import { gitMetrics, renderGitRetro } from './retro.mjs';
+import { listLearnings, distillLearnings } from './learn.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -131,8 +136,10 @@ function beginExecution(s, cwd) {
 // ---------------------------------------------------------------- commands
 
 function start(args, cwd) {
-  const input = flag(args, '--input');
-  if (!input) fail('usage: mis start --input <file|text>');
+  const planDoc = flag(args, '--plan');
+  const input = flag(args, '--input') ?? planDoc;
+  if (!input) fail('usage: mis start --input <file|text> [--plan <plan.md>]');
+  const fromDoc = planDoc ? planFromDoc(cwd, planDoc) : null;
   const root = repoRoot(cwd);
   const prev = loadRun(cwd);
   if (prev && !TERMINAL.includes(prev.state.state)) fail(`active run ${prev.state.runId} is ${prev.state.state}; resume it or \`mis cancel\` first`);
@@ -145,14 +152,23 @@ function start(args, cwd) {
   let baseCommit = null;
   try { baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* no commits yet */ }
   const run = createRun(cwd, { input: inp, baseCommit, configHash: cfg.configHash, maxRuntimeMinutes: cfg.config?.limits.maxRuntimeMinutes ?? 120 });
-  return { runId: run.state.runId, state: run.state.state, config: cfg.exists ? 'ok' : 'missing (run `mis init`)' };
+  const out = { runId: run.state.runId, state: run.state.state, config: cfg.exists ? 'ok' : 'missing (run `mis init`)' };
+  if (fromDoc) Object.assign(out, setPlan(cwd, fromDoc), { tasks: fromDoc.tasks.map((t) => `${t.id}: ${t.title}`) });
+  return out;
 }
 
-function plan([sub, file], cwd) {
-  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file|->');
-  const p = readJsonArg(cwd, file);
-  const errs = validatePlan(p);
+/** Plan JSON from a plan document (docs/make-it-ship/plans/<slug>.md); refuses missing sections and schema errors. */
+function planFromDoc(cwd, file) {
+  const p = resolve(cwd, file);
+  if (!existsSync(p)) fail(`plan document not found: ${file}`);
+  const { plan: pl, missing } = parsePlanDoc(readFileSync(p, 'utf8'));
+  if (missing.length) fail(`plan document is missing: ${missing.join(', ')}`);
+  const errs = validatePlan(pl);
   if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  return pl;
+}
+
+function setPlan(cwd, p) {
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'plan set');
@@ -162,6 +178,23 @@ function plan([sub, file], cwd) {
     settle(s);
     return { event: { type: 'plan', planHash: s.planHash, tasks: p.tasks.length }, result: { state: s.state, planHash: s.planHash, mode: s.mode } };
   });
+}
+
+function plan([sub, file], cwd) {
+  if (sub === 'check' && file) {
+    const p = resolve(cwd, file);
+    if (!existsSync(p)) fail(`plan document not found: ${file}`);
+    const { plan: pl, missing } = parsePlanDoc(readFileSync(p, 'utf8'));
+    const errors = missing.length ? [] : validatePlan(pl);
+    const out = { ok: !missing.length && !errors.length, missing, errors, tasks: pl.tasks.length, howToRun: pl.howToRun };
+    if (!out.ok) { console.log(JSON.stringify(out, null, 2)); process.exitCode = 1; return undefined; }
+    return out;
+  }
+  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file|-> | check <plan.md>');
+  const p = readJsonArg(cwd, file);
+  const errs = validatePlan(p);
+  if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  return setPlan(cwd, p);
 }
 
 function mode([sub, m, ...rest], cwd) {
@@ -184,10 +217,15 @@ function interview([sub, ...rest], cwd) {
     const q = readJsonArg(cwd, rest[0]);
     if (typeof q.question !== 'string' || !q.question.trim()) fail('interview item needs "question"');
     if (!LEVEL_ORDER[q.impact]) fail('interview item needs "impact": HIGH|MED|LOW');
+    if (q.qid !== undefined && !/^[a-z0-9][a-z0-9-]{1,63}$/.test(q.qid)) fail('"qid" must be kebab-case (a stable id for question preferences)');
+    // plan-tune: a skip preference resolves non-HIGH items with their stated default; HIGH items are always asked.
+    const skipped = filterQuestions([q], questionPrefs(cwd)).skip.length > 0;
     return mutate(cwd, (run) => {
       const s = run.state;
       if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
-      const item = { id: `Q${s.interview.length + 1}`, question: q.question, impact: q.impact, why: q.why ?? null, answer: null };
+      const item = { id: `Q${s.interview.length + 1}`, question: q.question, impact: q.impact, why: q.why ?? null, answer: null,
+        ...(q.qid ? { qid: q.qid } : {}), ...(q.default ? { default: q.default } : {}) };
+      if (skipped) Object.assign(item, { answer: `${q.default ?? 'the stated default'} (skipped by the user's question preference)`, skippedByPreference: true });
       s.interview.push(item);
       return { event: { type: 'interview-add', id: item.id, impact: item.impact }, result: item };
     });
@@ -604,21 +642,39 @@ function ship(args, cwd) {
 }
 
 function retro(args, cwd) {
-  const days = flag(args, '--days');
+  const since = flag(args, '--since');
+  let days = flag(args, '--days');
+  if (since) {
+    const m = since.match(/^(\d+)([dw])$/) ?? fail('--since must look like 7d or 2w');
+    days = String(Number(m[1]) * (m[2] === 'w' ? 7 : 1));
+  }
   const root = repoRoot(cwd);
   const metrics = retroMetrics(loadRuns(stateRoot(cwd)), { sinceMs: days ? Date.now() - Number(days) * 86400000 : 0 });
+  const gitm = args.includes('--git') ? gitMetrics(root, Number(days ?? 7)) : null;
   const date = new Date().toISOString().slice(0, 10);
   const rel = `${REPORT_DIR}/retro-${date}.md`;
   mkdirSync(join(root, REPORT_DIR), { recursive: true });
-  writeFileSync(join(root, rel), renderRetro(metrics, date));
-  return { path: rel, metrics };
+  writeFileSync(join(root, rel), renderRetro(metrics, date) + (gitm ? renderGitRetro(gitm) : ''));
+  return { path: rel, metrics, ...(gitm ? { git: gitm } : {}) };
 }
 
-function learn([sub, arg], cwd) {
+function learn([sub, ...rest], cwd) {
   const root = repoRoot(cwd);
   if (sub === 'list') return { entries: refreshLearnings(root) };
-  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, arg)) };
-  return fail('usage: mis learn <add <json|->|list>');
+  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, rest[0])) };
+  if (sub === 'search') {
+    const type = flag(rest, '--type');
+    const q = rest.join(' ').toLowerCase();
+    return { entries: listLearnings(root).filter((e) => (!type || e.type === type) && (!q || `${e.key} ${e.insight} ${(e.files ?? []).join(' ')}`.toLowerCase().includes(q))) };
+  }
+  if (sub === 'distill') {
+    const yes = rest.includes('--yes');
+    const src = rest.find((a) => a !== '--yes');
+    if (!src) fail('usage: mis learn distill <file|-> [--yes]');
+    const text = src === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, src), 'utf8');
+    return distillLearnings(root, text, yes);
+  }
+  return fail('usage: mis learn add <json|-> | list | search <text> [--type t] | distill <file|-> [--yes]');
 }
 
 const OTHER_MODEL_CLIS = ['codex', 'gemini'];
@@ -712,5 +768,5 @@ function init(args, cwd) {
 }
 
 
-export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands, ...skillCommands, ...ttyCommands };
+export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands, ...skillCommands, ...ttyCommands, ...flowCommands };
 export { requiredChecks };

@@ -25,3 +25,14 @@ MIS
 Absorbs: OMC ccg, ask · gstack codex, benchmark-models.
 
 Only when the user asks for it, or in Full mode when `mis second-opinion detect` finds another model CLI (codex, gemini). Running it **sends repository content to an external service**: ask the user first (the guard also asks while a run is active); respect company data policies and never send secrets. Use a read-only mode and a timeout, pass the same brief as the quality reviewer, and record the output verbatim with `mis note second-opinion -`. It appears in the report as model judgment and never changes the verdict. Compare it with the in-house reviews: findings both made, and findings only one made. If no CLI is installed, say "second opinion skipped: not installed".
+
+## Repository-wide audits (report only)
+
+When the user asks to audit the whole repository rather than a change, run the matching mode. In Full mode with risk flags, also run **cso** once before ship. Every mode is read-only: print the report in the conversation and write no files, so `git status` is unchanged afterwards.
+
+| Mode | Absorbs | What |
+|---|---|---|
+| audit | Ponytail ponytail-audit | `make-it-ship:quality-reviewer` over the whole repository, one agent per area in parallel: bugs, security holes, what breaks under real load, risky code without tests, slow paths, what to delete, merge or split. Ranked, each finding in plain English with `file:line`. Add `mis debt`. |
+| cso | gstack cso | `make-it-ship:security-reviewer` over the whole repository: attack surface map, authn/authz, injection, OWASP Top 10, dependencies (read-only audit commands), CI/CD config, and secrets with `mis redact scan --history` (working tree and every commit; values are never shown). |
+| devex | gstack devex-review | Real developer experience: in a scratch clone outside the repository (`git clone <repo> <temp dir>`), follow the README's getting-started steps exactly, time each step and the time to first hello world (TTHW), record every error message and missing step. Score docs, errors and defaults; name the three fixes with the biggest TTHW gain. Delete the scratch clone afterwards. |
+| slop review | OMC ai-slop-cleaner (review-only) | see the simplify phase |
