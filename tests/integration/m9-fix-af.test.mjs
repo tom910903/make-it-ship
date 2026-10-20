@@ -36,6 +36,15 @@ test('D1/D8 end to end: the guard asks before config set of statusLine.chain, a 
   assert.equal(guard(h, { tool_name: 'Write', tool_input: { file_path: join(dir, 'src', 'a.js') }, cwd: dir }).decision, 'allow');
 });
 
+test('D8 end to end: a CLAUDE.md outside the session repository asks (another repo, a missing dir, a non-repo dir); the repo\'s own pass', () => {
+  const h = fakeHome(), dir = makeRepo(), other = makeRepo(), plain = realpathSync(mkdtempSync(join(tmpdir(), 'mis-plain-')));
+  const w = (file_path) => guard(h, { tool_name: 'Write', tool_input: { file_path }, cwd: dir }, dir).decision;
+  for (const p of [join(other, 'CLAUDE.md'), join(h.home, 'notes', 'CLAUDE.md'), join(plain, 'x', 'CLAUDE.md'), join(plain, 'CLAUDE.md')]) assert.equal(w(p), 'ask', p);
+  for (const p of [join(dir, 'CLAUDE.md'), join(dir, 'sub', 'CLAUDE.md')]) assert.equal(w(p), 'allow', p);
+  assert.equal(guard(h, { tool_name: 'Bash', tool_input: { command: `echo x > ${join(other, 'CLAUDE.md')}` }, cwd: dir }, dir).decision, 'ask');
+  assert.equal(guard(h, { tool_name: 'mcp__filesystem__write_file', tool_input: { path: join(other, 'CLAUDE.md') }, cwd: dir }, dir).decision, 'ask');
+});
+
 test('D4: mis config set simplifier.enabled / proactive toggles the hooks; get lists every key with a doc', () => {
   const h = fakeHome(), dir = makeRepo({ 'a.js': '' });
   const editAndStop = (sid) => {

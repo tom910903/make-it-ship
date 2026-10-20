@@ -44,12 +44,13 @@ try {
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
   // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
   const ctx = context(at);
-  let freezeDir = null, debugScope = null;
+  let freezeDir = null, debugScope = null, sessionRoot = cwd; // the session's repository (CLAUDE.md outside it asks)
   try {
     const f = (await import('./lib/home.mjs')).readHome('freeze.json');
     const { realpathSync } = await import('node:fs');
     // Scope by the session's repository (cwd), not the target file's: a frozen session may not write anywhere else.
     const sessionCtx = context(cwd);
+    sessionRoot = sessionCtx.repoRoot;
     const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
     const s = (await import('./lib/home.mjs')).readHome('debug-scope.json');
@@ -63,7 +64,7 @@ try {
       && (await import('./lib/shell.mjs')).commandsOf(String(input.tool_input.command)).commands.some(isPush)) {
     try { pushScan = (await import('./lib/redact.mjs')).prePushScan(ctx.repoRoot); } catch (e) { pushScan = { error: e.message.split('\n')[0].slice(0, 120) }; }
   }
-  const r = classify(input, { ...ctx, freezeDir, debugScope, pushScan });
+  const r = classify(input, { ...ctx, freezeDir, debugScope, pushScan, sessionRoot });
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {

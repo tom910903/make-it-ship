@@ -329,7 +329,7 @@ function lastingChange(ws, m, text, redirects, dir, ctx) {
       const verb = key === 'plugin marketplace' ? ws[3] : ws[2];
       if (CLAUDE_CHANGES[key]?.includes(verb)) return `claude ${key} ${verb} changes your Claude Code configuration for every session`;
     }
-    for (const p of shellTargets(ws, redirects ?? [])) { const w = protectedFile(resolve(dir, expandHome(p)), ctx.repoRoot); if (w) return w; }
+    for (const p of shellTargets(ws, redirects ?? [])) { const w = protectedFile(resolve(dir, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (w) return w; }
     return null;
   })();
   return why ? ask(`${why} — a lasting change outside this repository; needs your approval`) : allow;
@@ -381,7 +381,7 @@ export function globToRegExp(glob) {
 
 /**
  * @param input PreToolUse hook input {tool_name, tool_input, cwd}
- * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null, freezeDir?: string|null, debugScope?: string[]|null}
+ * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null, freezeDir?: string|null, debugScope?: string[]|null, sessionRoot?: string}
  * @returns {{decision:'allow'|'ask'|'deny', reason?:string}}
  */
 export function classify(input, ctx) {
@@ -396,7 +396,7 @@ export function classify(input, ctx) {
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
     if (ctx.freezeDir && outsideFreeze(abs, ctx.freezeDir)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
     if (ctx.debugScope?.length && outsideScope(abs, ctx.debugScope)) return ask(`${abs} is outside the debug scope (${ctx.debugScope.join(', ')}); a fix outside the hypothesis widens the change (mis debug scope --clear to lift)`);
-    const pf = protectedFile(abs, ctx.repoRoot);
+    const pf = protectedFile(abs, ctx.sessionRoot ?? ctx.repoRoot); // the target's own repo would always contain it
     if (pf) return ask(`${pf} — a lasting configuration change; needs your approval`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
@@ -409,7 +409,7 @@ export function classify(input, ctx) {
   }
   if (tool.startsWith('mcp__') && /write|edit|create|update|move|copy|rename|replace|delete|append|save|put/i.test(tool.split('__').slice(2).join('__'))) {
     const paths = Object.entries(ti).filter(([k]) => /path|file|dest|target/i.test(k)).flatMap(([, v]) => [].concat(v)).filter((v) => typeof v === 'string');
-    for (const p of paths) { const pf = protectedFile(resolve(cwd, expandHome(p)), ctx.repoRoot); if (pf) return ask(`${pf} — a lasting configuration change (${tool}); needs your approval`); }
+    for (const p of paths) { const pf = protectedFile(resolve(cwd, expandHome(p)), ctx.sessionRoot ?? ctx.repoRoot); if (pf) return ask(`${pf} — a lasting configuration change (${tool}); needs your approval`); }
   }
   if (tool.startsWith(OWN_MCP)) {
     const name = tool.slice(OWN_MCP.length);

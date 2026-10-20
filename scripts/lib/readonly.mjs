@@ -61,7 +61,7 @@ function pathsSafe(name, args, cwd, root) {
     if (w !== pattern && GLOB.test(w)) return false; // the shell expands it to names we cannot see (cat .e* → .env)
     if (secret(w)) return false;
     const real = realish(resolve(cwd, w.replace(/^~(?=\/|$)/, homedir())));
-    return (real + sep).startsWith(root + sep) && !real.split(sep).some((c) => SECRET.test(c));
+    return (real + sep).startsWith(root + sep) && !real.slice(root.length).split(sep).some((c) => SECRET.test(c));
   });
 }
 
