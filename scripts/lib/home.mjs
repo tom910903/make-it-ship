@@ -5,6 +5,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 export const homeDir = () => process.env.MIS_STATE_HOME || join(homedir(), '.make-it-ship');
+/** Claude Code's config directory (settings.json, CLAUDE.md, rules/, plugins/). */
+export const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
 
 const DEFAULTS = { style: { default: 'full' }, keywords: { disabled: [] }, subagentMatcher: null };
 

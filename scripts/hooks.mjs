@@ -46,6 +46,15 @@ const handlers = {
       try { const f = (await import('./lib/home.mjs')).readHome('freeze.json'); if (f?.dir && !f.root) parts.push(`Edits are frozen to ${f.dir}: Write/Edit outside it are denied until the user runs mis unfreeze.`); } catch { /* no home */ }
     }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
+    // M9-A: daily cleanup of finished state, config check, update notice (cache only), status-line hint. Each fails open.
+    try { (await import('./lib/update.mjs')).dailyMaintenance((await import('./lib/state.mjs')).stateRoot(cwd)); } catch { /* outside a repo */ }
+    try {
+      const { loadConfig } = await import('./lib/config.mjs');
+      const c = loadConfig((await import('./lib/tree-hash.mjs')).repoRoot(cwd));
+      if (c.exists && c.errors.length) parts.push(`.make-it-ship.json is invalid (${c.errors.slice(0, 3).join('; ')}): mis start and mis check refuse it until it is fixed. Tell the user.`);
+    } catch { /* outside a repo */ }
+    try { parts.push((await import('./lib/update.mjs')).updateNotice()); } catch { /* fail-open */ }
+    try { parts.push((await import('./lib/install.mjs')).statusLineNotice()); } catch { /* fail-open */ }
     try {
       const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');
       try { (await import('./lib/state.mjs')).stateRoot(cwd); mem.projectEnsure(cwd); } catch { /* outside a repo: nothing to detect */ }
@@ -157,13 +166,16 @@ const handlers = {
   },
 };
 
+let input = {};
 try {
   let raw = '';
   for await (const c of process.stdin) raw += c;
-  let input = {};
   try { input = raw.trim() ? JSON.parse(raw.replace(/^﻿/, '')) : {}; } catch { input = {}; }
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd: input.cwd, hook: process.argv[2], tool: input.tool_name }); } catch { /* tracing is optional */ }
   const out = await handlers[process.argv[2]]?.(input);
   if (out) process.stdout.write(JSON.stringify(out) + '\n');
-} catch { /* fail-open */ }
+} catch (e) {
+  // fail-open; recorded so `mis doctor session` can show recent hook errors
+  try { (await import('./lib/trace.mjs')).appendTrace({ cwd: input?.cwd || process.cwd(), hook: process.argv[2], error: String(e?.message ?? e).slice(0, 300) }); } catch { /* nothing */ }
+}
 process.exit(0);

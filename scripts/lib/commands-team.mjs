@@ -15,7 +15,7 @@ const SERVER = join(PLUGIN_ROOT, 'scripts', 'lib', 'companion-server.mjs');
 const WORKERS = ['claude', 'codex', 'gemini'];
 const HEARTBEAT_MS = 5000, STALE_MS = 30_000;
 // The lead's Claude Code session vars leak into tmux panes; a worker must be its own session, not a nested child.
-const SESSION_VARS = /^(CLAUDECODE|CLAUDE_CODE_(SESSION_ID|ENTRYPOINT|CHILD_SESSION|SESSION_ATTENDED|MESSAGING_\w+|EXECPATH)|CLAUDE_PID|CMUX_CLAUDE_PID)$/;
+export const SESSION_VARS = /^(CLAUDECODE|CLAUDE_CODE_(SESSION_ID|ENTRYPOINT|CHILD_SESSION|SESSION_ATTENDED|MESSAGING_\w+|EXECPATH)|CLAUDE_PID|CMUX_CLAUDE_PID)$/;
 
 const fail = (msg) => { throw new Error(msg); };
 const gitOut = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

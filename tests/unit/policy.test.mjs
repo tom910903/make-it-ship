@@ -250,3 +250,21 @@ test('M9-C: what mis tty runs or types is classified like the same Bash command;
   assert.equal(d(bash(`${mis} tty send sh 'cat .git/make-it-ship/runs/r/state.json'`)), 'deny');
   for (const c of [`${mis} tty start calc -- node repl.mjs`, `${mis} tty send calc '2+3'`, `${mis} tty expect calc '^5$'`, `${mis} skill test a s.json`]) assert.equal(d(bash(c)), 'allow', c);
 });
+
+test('M9-A: mis commands that change files outside the repo (settings, CLAUDE.md, MCP config, the plugin) ask with or without a run; their dry runs pass', () => {
+  const idle = { ...ctx, activeRun: false };
+  const M = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
+  for (const c of [ctx, idle]) {
+    for (const cmd of [`${M} setup --write`, `${M} setup --apply`, `${M} doctor --fix`, `${M} mcp-setup add context7 --write`,
+      `${M} upgrade --yes`, `${M} uninstall --yes`, `${M} uninstall --yes --purge-runs`]) {
+      assert.equal(d(bash(cmd), c), 'ask', cmd);
+      assert.match(classify(bash(cmd), c).reason, /outside this repository|approval/);
+    }
+    for (const cmd of [`${M} setup`, `${M} doctor`, `${M} doctor --json`, `${M} doctor session`, `${M} mcp-setup list`, `${M} mcp-setup add context7`,
+      `${M} upgrade`, `${M} uninstall`, `${M} uninstall --dry-run`, `${M} update-check`, `${M} version`, `${M} config get`, `${M} cancel --all`]) {
+      assert.equal(d(bash(cmd), c), 'allow', cmd);
+    }
+  }
+  assert.equal(d(bash(`${M} setup team --write`), ctx), 'ask', 'writes .make-it-ship.json during a run');
+  assert.equal(d(bash(`${M} setup team --write`), idle), 'allow');
+});

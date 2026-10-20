@@ -104,6 +104,7 @@ function classifyBash(cmd, ctx, cwd) {
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
     if (r.decision === 'allow') r = misInner(misSub(ws, functions), text, ctx, dir);
     if (r.decision === 'allow') r = externalMis(misSub(ws, functions));
+    if (r.decision === 'allow') r = outsideRepoMis(misSub(ws, functions));
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -153,7 +154,7 @@ function runOnly(ws, ctx, functions) {
   const g = gitSub(ws);
   const mis = misSub(ws, functions);
   if (mis?.[0] === 'approve') return ask('approval is recorded only when you confirm this command');
-  if (mis?.[0] === 'init' && mis.includes('--write')) return ask('writing .make-it-ship.json changes verification rules');
+  if ((mis?.[0] === 'init' || (mis?.[0] === 'setup' && mis[1] === 'team')) && mis.includes('--write')) return ask('writing .make-it-ship.json changes verification rules');
   if (g?.sub === 'push') return classifyPush(g.rest, ctx);
   if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) return ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
   if (isInstall(ws)) return ask('package install needs your approval (supply chain)');
@@ -178,6 +179,20 @@ function misInner(mis, text, ctx, dir) {
   if (mis[1] === 'start' && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
   if (mis[1] === 'send') return classifyBash(mis.slice(3).filter((w) => w !== '--no-enter').join(' '), ctx, dir);
   return allow;
+}
+
+// M9-A: mis subcommands that change files outside this repository (~/.claude settings and CLAUDE.md, MCP config,
+// the installed plugin, ~/.make-it-ship) always ask, with or without a run. Their default (dry) forms only print.
+function outsideRepoMis(m) {
+  if (!m) return allow;
+  const [sub, a] = m, has = (f) => m.includes(f);
+  const why = (sub === 'setup' && a !== 'team' && (has('--write') || has('--apply'))) ? 'mis setup --write edits ~/.claude/settings.json and ~/.claude/CLAUDE.md (review the diff from `mis setup` first)'
+    : (sub === 'doctor' && has('--fix')) ? 'mis doctor --fix repairs ~/.claude/settings.json and Make It Ship state'
+    : (sub === 'mcp-setup' && a === 'add' && has('--write')) ? 'mis mcp-setup add --write registers an MCP server in your Claude Code config'
+    : (sub === 'upgrade' && has('--yes')) ? 'mis upgrade --yes updates the installed plugin'
+    : (sub === 'uninstall' && has('--yes')) ? 'mis uninstall --yes deletes Make It Ship state and settings entries (see `mis uninstall` for the list)'
+    : null;
+  return why ? ask(`${why} — changes files outside this repository; needs your approval`) : allow;
 }
 
 function otherModelTeam(mis, text) {

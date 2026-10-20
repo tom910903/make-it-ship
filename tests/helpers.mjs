@@ -40,3 +40,12 @@ export function mis(cwd, args, opts = {}) {
   let json; try { json = JSON.parse(r.stdout); } catch { /* not json */ }
   return { code: r.status, out: r.stdout, err: r.stderr, json };
 }
+
+/** Temp HOME with CLAUDE_CONFIG_DIR, MIS_STATE_HOME and a stub bin dir first on PATH: never the real ~/.claude or ~/.make-it-ship. */
+export function fakeHome() {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'mis-home-')));
+  const claude = join(home, '.claude'), state = join(home, '.make-it-ship'), bin = join(home, 'bin');
+  mkdirSync(claude, { recursive: true }); mkdirSync(bin);
+  const env = { HOME: home, CLAUDE_CONFIG_DIR: claude, MIS_STATE_HOME: state, CLAUDE_PLUGIN_ROOT: '', PATH: `${bin}:${process.env.PATH}` };
+  return { home, claude, state, bin, env };
+}
