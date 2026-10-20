@@ -45,7 +45,9 @@ try {
   try {
     const f = (await import('./lib/home.mjs')).readHome('freeze.json');
     const { realpathSync } = await import('node:fs');
-    const root = ctx.inRepo ? realpathSync(ctx.repoRoot) : null;
+    // Scope by the session's repository (cwd), not the target file's: a frozen session may not write anywhere else.
+    const sessionCtx = context(cwd);
+    const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
   } catch { /* no home */ }
   const r = classify(input, { ...ctx, freezeDir });
