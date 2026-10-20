@@ -1,6 +1,6 @@
 ---
 name: resume
-description: Resume an interrupted Make It Ship run after a crash, closed session, limit, or failure - re-checks what changed since the last recorded step, which evidence went stale, and what is still open, then continues safely.
+description: Resume interrupted work - a Make It Ship run after a crash, closed session, limit, or failure (re-checks what changed, which evidence went stale, what is still open), or, outside a run, a saved working context (branch, notes, uncommitted files) with a warning when the branch differs. Also save context before stopping, and find recent Claude Code sessions across all projects.
 ---
 
 Absorbs: gstack context-restore/context-save · OMC cancel, notepad, state.
@@ -18,5 +18,11 @@ Absorbs: gstack context-restore/context-save · OMC cancel, notepad, state.
    - AWAITING_APPROVAL: present the plan again and run `mis approve plan`.
 4. Whenever you stop (finished, blocked by a limit, or waiting for approval), run `mis verdict` (or `mis status`) **at that moment** and quote that verdict — never one you saw earlier in the session.
 5. Then continue the normal flow from the right phase of `/make-it-ship:run` (read `${CLAUDE_PLUGIN_ROOT}/skills/run/SKILL.md`). Stale evidence must be re-run before any verdict.
+
+## Outside a run (gstack context-save / context-restore, global-discover)
+
+- Save before stopping: `mis context save <name> --note "<where you are, what is next, open decisions>"` (branch, HEAD and changed files are captured).
+- Restore: `mis context restore [<name>]` (latest when no name). If it warns about a branch mismatch or new commits, tell the user and ask before continuing on the current branch.
+- `mis context list` shows saved contexts; `mis context sessions` lists recent Claude Code sessions of every project on this machine (from the Claude config directory), to find where some work happened.
 
 Never edit `.git/make-it-ship/` directly. Never claim a step finished unless `mis status` shows it.

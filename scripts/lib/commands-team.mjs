@@ -8,6 +8,7 @@ import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { repoRoot } from './tree-hash.mjs';
 import { stateRoot, newRunId, pidAlive } from './state.mjs';
+import { loadConfig, requiredChecks } from './config.mjs';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
 const MIS = join(PLUGIN_ROOT, 'scripts', 'mis.mjs');
@@ -287,7 +288,7 @@ function session([sub, ...args], cwd) {
   if (sub !== 'create') fail('usage: mis session create <issue|pr|feature> <ref> [--base <ref>] [--remote <name>] [--tmux] | list | remove <name>');
   const base = flag(args, '--base') ?? 'HEAD', remote = flag(args, '--remote') ?? 'origin';
   const wantTmux = args.includes('--tmux');
-  const [kind, ref] = args.filter((a) => a !== '--tmux');
+  const [kind, ref] = args.filter((a) => a !== '--tmux' && a !== '--no-baseline');
   if ((kind === 'issue' || kind === 'pr') && !/^\d+$/.test(ref ?? '')) fail(`usage: mis session create ${kind} <number>`);
   const slug = kind === 'feature' ? (ref ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : ref;
   if (!['issue', 'pr', 'feature'].includes(kind) || !slug) fail('usage: mis session create <issue|pr|feature> <ref>');
@@ -309,7 +310,23 @@ function session([sub, ...args], cwd) {
     const r = tmux('new-session', '-d', '-s', tmuxName, '-c', path);
     if (r.status !== 0) fail(`worktree created at ${path}, but tmux failed: ${r.stderr.trim()}`);
   }
-  return { name, kind, branch, path, base: kind === 'pr' ? `${remote} pull/${ref}/head` : base, tmux: tmuxName, ...(tmuxName ? { attach: attachHint(tmuxName) } : {}) };
+  return { name, kind, branch, path, base: kind === 'pr' ? `${remote} pull/${ref}/head` : base, tmux: tmuxName, ...(tmuxName ? { attach: attachHint(tmuxName) } : {}),
+    baseline: args.includes('--no-baseline') ? null : baseline(path, root) };
+}
+
+/** Superpowers using-git-worktrees: run the quick checks in a new worktree so later failures are known to be new.
+ *  Not run evidence (no run is involved); the worktree's own config wins, else the main tree's. */
+function baseline(path, root) {
+  const cfg = [loadConfig(path), loadConfig(root)].find((c) => c.config);
+  if (!cfg) return { status: 'BLOCKED', reason: 'no valid .make-it-ship.json (mis init) — baseline not run' };
+  const checks = requiredChecks(cfg.config, 'quick').map((name) => {
+    const def = cfg.config.checks[name];
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: path, encoding: 'utf8', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, env: { CI: '1', ...process.env } });
+    const status = r.error ? 'BLOCKED' : r.status === 0 ? 'PASS' : 'FAIL';
+    return { name, argv: def.argv, status, exitCode: r.status, tail: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n') };
+  });
+  return { status: checks.every((c) => c.status === 'PASS') ? 'PASS' : checks.some((c) => c.status === 'FAIL') ? 'FAIL' : 'BLOCKED', checks,
+    note: 'baseline before any change: a FAIL here already existed on the base; tell the user before starting work' };
 }
 
 // ---------------------------------------------------------------- visual companion

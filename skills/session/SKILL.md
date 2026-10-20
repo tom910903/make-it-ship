@@ -1,6 +1,6 @@
 ---
 name: session
-description: Make It Ship project session manager (psm, absorbs OMC project-session-manager) - an isolated git worktree (and optional tmux session) per issue, pull request review, or feature, outside a Make It Ship run. Use when the user asks to start work on an issue/PR/feature in its own worktree, says psm, or wants to list or clean up such sessions.
+description: Make It Ship project session manager (psm, absorbs OMC project-session-manager and Superpowers using-git-worktrees) - an isolated git worktree (and optional tmux session) per issue, pull request review, or feature, outside a Make It Ship run, with a baseline run of the quick checks. Use when the user asks to start work on an issue/PR/feature in its own worktree, says psm, or wants to list or clean up such sessions.
 ---
 
 # Make It Ship — session (psm)
@@ -16,6 +16,7 @@ Absorbs: OMC project-session-manager / psm (worktree-first sessions for issues, 
 | `mis session create feature "<name>" [--base <ref>]` | `.worktrees/feat-<slug>` | `feature/<slug>` |
 
 - `--tmux` also opens a detached tmux session `mis-<name>` in the worktree; the output has the attach command. Without tmux this reports BLOCKED (the worktree is not created).
+- After creating the worktree, `mis session create` runs the quick checks there (the worktree's `.make-it-ship.json`, else the main tree's) and prints them as `baseline`; `--no-baseline` skips that. Tell the user about a baseline FAIL before starting: it existed before any change.
 - `mis session list` shows each session's path, branch, uncommitted changes (`dirty`) and tmux session.
 - `mis session remove <name>` removes the worktree and closes its tmux session. It refuses while the worktree has uncommitted changes and always keeps the branch.
 - `.worktrees/` is excluded locally (`.git/info/exclude`), so sessions never show up in the main tree's status.

@@ -15,7 +15,7 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester', 'analyst', 'planner', 'tracer'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills'];
+const SKILLS = ['run', 'plan', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -240,4 +240,41 @@ test('M9-C C3: skill authoring skills write only learned-skill locations and tes
   const readme = read('README.md');
   assert.match(readme, /## Skill authoring/);
   for (const a of Object.keys(M9C_AGENTS)) assert.match(readme, new RegExp(`\`${a}\``), `README lists ${a}`);
+});
+
+// M9-B (B0 decision): planning/review/design/doc/audit/release/memory features live in the phase where they apply,
+// with a trigger, and are reachable from existing skills; only `plan` is a new skill.
+test('M9-B features are blended into phases with triggers, artifact paths and real mis commands', () => {
+  const ph = (p) => read(`skills/run/phases/${p}.md`);
+  const expect = {
+    discover: [/deepinit_manifest/, /action: "save"/, /document-specialist/, /mis health/],
+    interview: [/docs\/make-it-ship\/traces\/<slug>\.md/, /docs\/make-it-ship\/specs\/<slug>\.md/, /office-hours/, /\*Startup\*/, /\*Builder\*/, /mis profile/, /mis question log/, /"qid"/, /HIGH items are always asked/, /no code changes/],
+    plan: [/docs\/make-it-ship\/plans\/<slug>\.md/, /mis plan check/, /mis start --plan/, /mis goal add/, /\/goal/],
+    'product-review': [/## Review: CEO/, /## Review: DX/, /plan-eng-review/, /six decision principles/, /mis decision add/, /Taste decisions/],
+    design: [/mis diagram/, /\.excalidraw/, /mis browse screenshot/, /mis decision search/],
+    'design-explore': [/mis taste show/, /mis design-board/, /data-choice/, /mis taste approve/, /design-html/, /Outside a run/],
+    implement: [/subagent-driven-development/, /spec-reviewer.*then.*quality-reviewer/s],
+    debug: [/make-it-ship:tracer/, /same message/, /docs\/make-it-ship\/traces\/<slug>\.md/],
+    simplify: [/mis debt/, /review-only|Review-only/, /change nothing/],
+    review: [/ponytail-audit/, /cso/, /devex-review/, /mis redact scan --history/, /write no files/],
+    verify: [/mis health/],
+    ship: [/mis version-bump/, /mis next-version/, /mis diff-scope/, /mis repo-mode/, /release-rules\.md/, /mis redact scan/, /document-generate/, /without a run/],
+    retro: [/mis retro --git --since 7d/, /hit rate/, /mis learn search/, /mis learn distill/, /--yes/, /mis decision supersede/, /mis jsonl-merge install/],
+    parallel: [/baseline/],
+  };
+  for (const [p, res] of Object.entries(expect)) for (const re of res) assert.match(ph(p), re, `${p}: ${re}`);
+  const plan = read('skills/plan/SKILL.md');
+  for (const re of [/docs\/make-it-ship\/plans\/<slug>\.md/, /mis plan check/, /mis start --plan/, /No run is started/]) assert.match(plan, re);
+  assert.match(read('skills/loop/SKILL.md'), /Ralphthon[\s\S]*Interview[\s\S]*Loop[\s\S]*Harden/);
+  for (const re of [/mis context save/, /mis context restore/, /branch mismatch/, /mis context sessions/]) assert.match(read('skills/resume/SKILL.md'), re);
+  for (const [s, re] of [['plan-review', /autoplan/], ['review', /cso/], ['interview', /office hours/i], ['ship', /without a run/], ['retro', /decision/], ['status', /mis health/], ['session', /baseline/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
+  // every agent a phase dispatches exists
+  for (const f of readdirSync(join(ROOT, 'skills/run/phases'))) for (const m of read(`skills/run/phases/${f}`).matchAll(/make-it-ship:([a-z][a-z-]*)/g)) {
+    if (['run', 'plan', 'plan-review', 'review', 'interview', 'debug', 'qa', 'ship', 'retro', 'resume', 'team', 'session', 'loop', 'status'].includes(m[1])) continue;
+    assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), `${f}: agent ${m[1]}`);
+  }
+  const run = read('skills/run/SKILL.md');
+  assert.match(run, /Situational steps/);
+  assert.match(run, /Partial requests/);
+  assert.match(read('README.md'), /## Planning, review, design, docs and release inside the flow/);
 });
