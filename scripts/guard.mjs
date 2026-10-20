@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { classify } from './lib/policy.mjs';
 import { loadRun } from './lib/state.mjs';
 
+const TEAM_WORKER = Boolean(process.env.MIS_TEAM_ID);
 const out = (permissionDecision, permissionDecisionReason) =>
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision, permissionDecisionReason } }));
 
@@ -23,9 +24,10 @@ function context(cwd) {
     const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
     const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? [])
       : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
-    return { repoRoot, inRepo: true, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
+    // A team worker (MIS_TEAM_ID, set by `mis team` for its worker processes) gets run-level rules: push/PR/install ask.
+    return { repoRoot, inRepo: true, activeRun: (!!run && run.state.state !== 'CANCELLED') || TEAM_WORKER, currentBranch, plannedFiles };
   } catch {
-    return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo
+    return { repoRoot: cwd, activeRun: TEAM_WORKER, currentBranch: null }; // not a git repo
   }
 }
 

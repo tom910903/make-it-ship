@@ -15,7 +15,7 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -174,4 +174,18 @@ test('M8-A: web QA uses the built-in browser (report-only, design loop, page ben
   const b = read('skills/browse/SKILL.md');
   for (const re of [/snapshot -i/, /stale ref/, /--remote/, /mis browse cdp/, /mis browse resume/, /mis pdf/, /BLOCKED/]) assert.match(b, re);
   assert.match(read('skills/qa/SKILL.md'), /report only|qa-only/i);
+});
+
+test('M8-B: team pipeline, session manager and visual companion are wired into skills, phases and README', () => {
+  const team = read('skills/team/SKILL.md');
+  for (const re of [/mis team start/, /mis team wait/, /mis team shutdown/, /mis check/, /mis verdict/, /Agent tool/, /plan.*exec.*verify.*fix/is, /mis task <id> retry/, /only when (the user )?explicitly/i, /omc-teams/])
+    assert.match(team, re);
+  const session = read('skills/session/SKILL.md');
+  assert.match(frontmatter(session).description, /psm/);
+  for (const re of [/mis session create/, /mis session list/, /mis session remove/, /approv/i]) assert.match(session, re);
+  for (const p of ['design-explore', 'interview', 'design']) assert.match(read(`skills/run/phases/${p}.md`), /mis companion start/, p);
+  assert.match(read('skills/run/phases/parallel.md'), /skills\/team|\/make-it-ship:team/);
+  const readme = read('README.md');
+  assert.match(readme, /## Teams and sessions/);
+  for (const re of [/mis team/, /mis session/, /mis companion/]) assert.match(readme, re);
 });

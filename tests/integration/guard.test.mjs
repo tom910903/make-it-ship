@@ -21,6 +21,19 @@ test('guard: no active run → push passes silently, forgery denied', () => {
   assert.equal(r.out.hookEventName, 'PreToolUse');
 });
 
+test('guard: a team worker process (MIS_TEAM_ID) gets run-level rules without a run: push and installs ask (M8-B)', () => {
+  const dir = makeRepo();
+  const worker = (command) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify(bash(dir, command)), encoding: 'utf8', env: { ...process.env, MIS_TEAM_ID: 't1' } });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(worker('git push origin feature'), 'ask');
+  assert.equal(worker('npm install lodash'), 'ask');
+  assert.equal(worker('gh pr create --fill'), 'ask');
+  assert.equal(worker('npm test'), 'allow');
+  assert.equal(run(bash(dir, 'git push origin feature')).out, null, 'the lead without a run is unchanged');
+});
+
 test('guard: active run → push asks, npm test passes', () => {
   const dir = makeRepo();
   createRun(dir, { input: { kind: 'text', text: 'x' } });

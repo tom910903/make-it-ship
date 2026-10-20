@@ -113,3 +113,8 @@ test('M6 R3 (user decision): explicit forms start the loop, off-requests cancel,
   assert.ok(names('stop the loop in parser.js and add a test first').includes('tdd'), 'a coding sentence about a loop is not a cancel');
   assert.ok(!names('stop the loop in parser.js and add a test first').includes('cancel'));
 });
+
+test('M8: team and session skills are explicit-only (no always-on keyword for "team")', () => {
+  for (const p of ['our team wants csv export', 'ask the team to review this', 'omc-teams', 'team 3 fix the build', 'psm review pr 12'])
+    assert.deepEqual(names(p), [], p);
+});
