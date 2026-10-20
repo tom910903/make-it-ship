@@ -144,10 +144,11 @@ test('M5 features are reachable from the flow and docs (M5 D-2, L-2, L-6)', () =
   const qa = read('skills/run/phases/qa.md');
   assert.match(qa, /mis ios devices/);
   assert.match(qa, /ios-debug-bridge/);
-  assert.match(qa, /bsp/);
+  assert.doesNotMatch(qa, /bsp/i);
   assert.match(read('skills/run/phases/ship.md'), /mis ios bridge-scan/);
   const readme = read('README.md');
-  for (const re of [/mis bench/, /mis learn/, /BSP|bsp/, /second opinion/i, /ios-debug-bridge/, /adapters\/codex/]) assert.match(readme, re);
+  assert.doesNotMatch(readme, /BSP/);
+  for (const re of [/mis bench/, /mis learn/, /second opinion/i, /ios-debug-bridge/, /adapters\/codex/]) assert.match(readme, re);
   for (const m of read('adapters/codex/AGENTS.md').matchAll(/agents\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), m[0]);
   assert.match(read('adapters/codex/AGENTS.md'), /spec-reviewer/);
 });

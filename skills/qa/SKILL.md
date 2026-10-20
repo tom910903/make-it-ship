@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Make It Ship real-use QA on its own - detects the CLI, API, web, iOS (simulator; device via the debug bridge) and BSP surfaces, designs user scenarios, turns them into runnable qa-* checks, and reports BLOCKED where something cannot be exercised.
+description: Make It Ship real-use QA on its own - detects the CLI, API, web, iOS (simulator; device via the debug bridge) surfaces, designs user scenarios, turns them into runnable qa-* checks, and reports BLOCKED where something cannot be exercised.
 ---
 
 Run the qa phase standalone. `mis` = `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"`.

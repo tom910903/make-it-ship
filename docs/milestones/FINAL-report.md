@@ -12,7 +12,7 @@
 | M2 | 신뢰성: resume, 재시도·시간 상한, debug, 보안 리뷰, simplify, doctor, 범위 밖 편집, HUD | 2차 PASS — `M2-report.md` | `m2-verified` |
 | M3 | 선택형 협업: worktree 병렬, 파일 소유권, product-review·design·design-explore, 상태 저장 재검토(ADR-0002) | 2차 PASS — `M3-report.md` | `m3-verified` |
 | M4 | 제품화: qa 프로파일(CLI·API·Web·iOS 시뮬레이터), ship, 문서 단계, 데모 C, 파일럿 8종 | 3차 PASS — `M4-report.md` | `m4-verified` |
-| M5 | 확장: retro, learn, second opinion, iOS 실기기 브리지, BSP 프로파일, 벤치마크, 토큰 예산(표시), Codex 어댑터 | 3차 PASS — `M5-report.md` | `m5-verified` |
+| M5 | 확장: retro, learn, second opinion, iOS 실기기 브리지, ~~BSP 프로파일~~(사후 제거), 벤치마크, 토큰 예산(표시), Codex 어댑터 | 3차 PASS — `M5-report.md` | `m5-verified` |
 
 모든 마일스톤은 같은 순서로 진행했다.
 1. 작업마다 실패 테스트를 먼저 쓰고, 최소 구현 뒤 `npm test` 전체 통과를 확인하고 커밋했다.
@@ -73,7 +73,7 @@
 | NH-6 | iOS 실기기 디버그 브리지 설치·조회·제거 | `M5-e2e.md`, `templates/ios-debug-bridge/README.md` |
 | NH-7 | second opinion 실제 호출(외부 모델 서비스, 사내 정책 확인 필요) | `M5-e2e.md` |
 | NH-8 | Codex 어댑터 실사용 | `M5-e2e.md` |
-| NH-9 | BSP 실제 빌드와 타깃 보드 검증 | `M5-e2e.md` |
+| NH-9 | 해당 없음 — 2026-10-20 사용자 결정으로 BSP QA 프로파일(M5-05) 제거 | — |
 
 모든 헤드리스 검증에서 승인 단계는 운영자가 터미널에서 대리 실행했다. 이것은 확인 창 동작을 증명하지 않는다.
 
@@ -102,7 +102,6 @@ guard의 범위(Spec §7 위협 모델은 부주의·습관만 다룬다)
 - **체인지로그 분류**: 키워드 기반이다. 증상만 적은 버그 수정은 Added로 분류될 수 있다. 초안이므로 반영 전에 고친다.
 - **SwiftPM STALE**: `.build`가 `.gitignore`에 없으면 check가 통과 직후 STALE이 된다(안전한 쪽 오류).
 - **bridge-scan**: Markdown 파일을 제외한다. DocC 안에 들어 있는 코드는 놓친다.
-- **BSP 빌드 제안**: 보드에 맞게 수정해야 한다. 타깃 검증 없이는 VERIFIED가 될 수 없다.
 
 검증 환경
 - 모든 실사용 검증은 macOS arm64, Claude Code 2.1.292, Node 22.20, 외부 플러그인을 끈 설정(`--setting-sources project --strict-mcp-config`)에서 했다. Linux는 확인하지 않았다.

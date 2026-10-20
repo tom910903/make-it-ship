@@ -23,7 +23,7 @@ NH-1~4는 Claude가 tmux 대화형 세션으로 자동 확인했다(`NH-auto-che
 | NH-6 | | | |
 | NH-7 | | | |
 | NH-8 | | | |
-| NH-9 | | | |
+| NH-9 | 해당 없음 — 기능 제거 | 2026-10-20 | 사용자 결정으로 BSP QA 프로파일 삭제 |
 
 ## NH-1 대화형 승인 확인 창 (`mis approve plan`)
 
@@ -148,25 +148,6 @@ PASS 조건: 4번에서 확인 창이 뜬다. 거절하면 호출되지 않고, 
 
 PASS 조건: 3번의 세 항목이 모두 확인된다. Codex가 `mis approve plan`을 사용자 확인 없이 직접 실행하면 FAIL이다.
 
-## NH-9 BSP 실제 빌드와 타깃 검증
+## NH-9 (삭제됨)
 
-준비물:
-- 공개 BSP 트리. 예: 공개 Yocto `poky`에 공개 BSP 레이어, 또는 공개 커널 트리와 해당 보드. **사내 BSP 코드는 사용하지 않는다.**
-- 실제 보드. 합의했다면 QEMU 머신도 된다.
-- 직렬 콘솔 또는 SSH 접근
-
-1. 트리 루트에서 `node $MIS/scripts/mis.mjs qa detect`를 실행한다. `bsp` 프로필, `build-bsp` 제안, 타깃 BLOCKED 사유가 나오는지 확인한다.
-2. `.make-it-ship.json`에 다음 두 check를 정의한다:
-   - `build-bsp`: 제안 명령을 보드에 맞게 수정한다(MACHINE/defconfig/ARCH/CROSS_COMPILE).
-   - `qa-bsp`: 보드에 이미지를 올리고 부팅 후 확인하는 스크립트. 예:
-     ```
-     qa/target-check.sh: flash → 부팅 대기 → ssh/serial로 `uname -a`, 대상 드라이버/서비스 상태 확인 → 실패 시 exit 1
-     ```
-3. `claude --plugin-dir $MIS`를 실행하고 BSP 변경 요청(예: 커널 설정 옵션 하나 활성화)으로 `/make-it-ship:run`을 실행한다. 위험 플래그는 `hardware`, 모드는 Standard 이상이어야 한다.
-4. 다음을 확인한다:
-   - (a) `qa-bsp` 없이는 판정이 VERIFIED가 될 수 없다.
-   - (b) 보드를 분리하면 `qa-bsp`가 FAIL/BLOCKED로 기록되고 보고서 6절에 "타깃 미검증"이 나온다.
-   - (c) 보드를 연결하면 `qa-bsp` PASS로 VERIFIED가 된다.
-5. 빌드 통과만으로 "하드웨어 동작 확인"이라고 보고하지 않는지 확인한다.
-
-PASS 조건: 4번 (a)(b)(c)와 5번이 모두 기대대로다.
+2026-10-20 사용자 결정으로 BSP QA 프로파일(M5-05) 제거. 확인할 기능이 없다.

@@ -49,7 +49,6 @@ More tools:
 - `mis retro` aggregates metrics across runs.
 - `mis learn add|list` records project learnings.
 - For a second opinion from another model, `mis second-opinion detect` finds codex/gemini CLIs. Calling them sends code to an external service, so it happens only with your approval.
-- `mis qa detect` also covers BSP trees. A build alone never counts as target verification.
 - iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`. `mis ios devices` lists devices and `mis ios bridge-scan` finds leftover bridge code.
 - Codex users: see `adapters/codex/AGENTS.md`. Its flow is the same, but no guard enforces it.
 

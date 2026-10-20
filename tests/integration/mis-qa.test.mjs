@@ -51,30 +51,10 @@ test('standard/full: a detected user-facing surface makes its qa-* check require
   assert.ok(v.reasons.some((r) => /qa-cli/.test(r)), v.reasons.join());
 });
 
-test('BSP: Yocto / Buildroot / kernel trees → build check proposal, target verification BLOCKED (build ≠ hardware)', () => {
-  const y = by(detectQa(makeRepo({ 'conf/local.conf': 'MACHINE ?= "qemuarm64"\n', 'meta-demo/conf/layer.conf': 'BBFILE_COLLECTIONS += "demo"\n', 'oe-init-build-env': '#!/bin/sh\n' })));
-  assert.equal(y.bsp.kind, 'yocto');
-  assert.deepEqual(y.bsp.check.argv, ['bash', '-c', '. ./oe-init-build-env build >/dev/null && bitbake core-image-minimal']);
-  assert.equal(y.bsp.check.name, 'build-bsp');
-  assert.match(y.bsp.blocked, /target hardware/);
-  const br = by(detectQa(makeRepo({ 'Config.in': 'menu "Target"\n', 'package/Config.in': '', Makefile: 'BR2_VERSION := 2024.02\nall:\n' })));
-  assert.equal(br.bsp.kind, 'buildroot');
-  assert.deepEqual(br.bsp.check.argv, ['make']);
-  const k = by(detectQa(makeRepo({ Kbuild: 'obj-y += kernel/\n', Kconfig: 'mainmenu "Linux"\n', 'arch/arm64/Kconfig': '' })));
-  assert.equal(k.bsp.kind, 'kernel');
-  assert.deepEqual(k.bsp.check.argv, ['make', '-j8'], 'native build; set ARCH/CROSS_COMPILE in the config for cross builds');
-  assert.match(k.bsp.how, /ARCH/);
-});
-
-test('BSP in standard mode: qa-bsp (target) is required, so a build-only run cannot be VERIFIED', () => {
-  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { 'build-bsp': { argv: ['node', '-e', '0'] } } }, Kbuild: 'obj-y += x/\n', Kconfig: '', 'arch/arm/Kconfig': '' });
-  ok(mis(dir, ['start', '--input', 'x']));
-  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }], riskFlags: ['hardware'] }) }));
-  ok(mis(dir, ['mode', 'set', 'standard', '--reason', 'hardware risk']));
-  ok(mis(dir, ['check', 'build-bsp']));
-  const v = ok(mis(dir, ['verdict']));
-  assert.equal(v.checks['qa-bsp'], 'MISSING');
-  assert.notEqual(v.verdict, 'VERIFIED');
+test('BSP QA profile was removed by user decision: Yocto / Buildroot / kernel trees get no bsp surface', () => {
+  for (const files of [{ 'conf/local.conf': '', 'oe-init-build-env': '' }, { 'Config.in': '', 'package/Config.in': '', Makefile: 'BR2_VERSION := 1\n' }, { Kbuild: '', Kconfig: '', 'arch/arm64/Kconfig': '' }]) {
+    assert.equal(by(detectQa(makeRepo(files))).bsp, undefined);
+  }
 });
 
 test('iOS scheme discovery reads project or workspace listings (SwiftPM has no .xcodeproj) (M4 D4)', async () => {

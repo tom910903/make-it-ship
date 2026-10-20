@@ -101,7 +101,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | M5-02 | learn: `mis learn add/list` — 스키마 검증, 추가 전용, 최신 우선, 참조 파일 삭제 시 STALE 표시 → `docs/make-it-ship/learnings.md`; 프로세스 변경은 제안만 | DONE | `tests/integration/mis-learn.test.mjs` | §14 learn | 3f13c8a | mis-learn.test.mjs |
 | M5-03 | second opinion: `mis second-opinion detect`(codex/gemini CLI 탐지), 결과는 판정에 영향 없는 노트로 기록; 실제 외부 모델 호출은 사용자 승인 대상 | DONE | `tests/integration/mis-second.test.mjs`(PATH 가짜 바이너리) | §14 second opinion | be03d58 | mis-second.test.mjs; 실제 외부 모델 호출은 NEEDS_HUMAN |
 | M5-04 | iOS 실기기 브리지: `templates/ios-debug-bridge/`(SPM, 모든 소스 `#if DEBUG`, 루프백 전용) + `mis ios bridge-scan`; ship은 브리지 코드가 남으면 NOT READY; 실기기 check는 기기 없으면 BLOCKED | DONE | `tests/integration/mis-ios.test.mjs`(템플릿 불변식·스캔·ship 연동), 시뮬레이터 SDK 타입체크는 E2E 기록 | §14 ios(M5) | ad3d11c | mis-ios.test.mjs; 시뮬레이터 SDK DEBUG 타입체크 OK, Release 심볼 0; 실기기 NEEDS_HUMAN |
-| M5-05 | BSP QA 프로파일: Yocto/Buildroot/커널 트리 탐지 → 빌드 check 제안 + 타깃 검증은 BLOCKED("빌드 통과 ≠ 하드웨어 동작") | DONE | `tests/integration/mis-qa.test.mjs` 확장(합성 트리) | §11 M5, PRD 10.2 | 659c27e | mis-qa.test.mjs BSP 2건 |
+| M5-05 | ~~BSP QA 프로파일~~ **(2026-10-20 사용자 결정으로 제거)**: Yocto/Buildroot/커널 트리 탐지 → 빌드 check 제안 + 타깃 검증은 BLOCKED("빌드 통과 ≠ 하드웨어 동작") | DONE | `tests/integration/mis-qa.test.mjs` 확장(합성 트리) | §11 M5, PRD 10.2 | 659c27e | mis-qa.test.mjs BSP 2건 |
 | M5-06 | 성능 벤치마크: `mis bench <check> --runs N` 중앙값 기록, 같은 run의 이전 측정 대비 +20% 경고·+50% 회귀 표시, 보고서 반영 | DONE | `tests/integration/mis-bench.test.mjs` | §11 M5 | f5a322c | mis-bench.test.mjs (5회 반복 안정) |
 | M5-07 | 토큰 예산(호스트 지원 시): HUD가 statusLine 입력의 비용 값을 표시, 강제는 미지원으로 보고서·doctor에 명시 | DONE | `statusline.test.mjs` 확장 | §3-4, §11 M5 | 7056685 | statusline.test.mjs (cost.total_cost_usd 필드는 공식 문서 statusline.md 확인) |
 | M5-08 | Codex 어댑터: `adapters/codex/AGENTS.md` — mis CLI 기반 동일 흐름, guard 훅 부재(강제력 차이) 명시 | DONE | `plugin-files.test.mjs`(참조 명령 존재) | §11 M5, PRD 10.1 | 7056685 | plugin-files.test.mjs; Codex 실행은 NEEDS_HUMAN |
@@ -111,7 +111,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 
 ## NEEDS_HUMAN
 전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님).
-- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용, BSP 실제 빌드·타깃. 절차: `docs/milestones/M5-e2e.md`. 미확인
+- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 미확인
 - **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: `docs/milestones/NEEDS_HUMAN.md` NH-5. 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
@@ -123,6 +123,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (사용자 결정, 2026-10-20) Spec §11 M5의 "BSP QA 프로파일"을 제거했다. `scripts/lib/qa.mjs`의 Yocto/Buildroot/커널 탐지와 `build-bsp`/`qa-bsp` 제안, QA 스킬 문서, README 항목을 삭제했고 NH-9는 해당 없음이다. Spec 문서 본문은 수정하지 않았다. 일반 위험 플래그 `hardware`는 유지한다. 회귀 테스트: `mis-qa.test.mjs` "BSP QA profile was removed".
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
 - (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING, BLOCKED 포함)에서만 적용한다.
