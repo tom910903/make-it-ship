@@ -90,3 +90,26 @@ test('Stop lets the session stop while the run waits for the user (AWAITING_APPR
   assert.match(r.systemMessage, /waiting for the user/i);
   assert.equal(ok(mis(dir, ['loop', 'status'])).iteration, 0);
 });
+
+test('Stop pauses a stalled loop: 3 re-entrant stops with no change in run state or verdict', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['loop', 'start', 'x']));
+  ok(mis(dir, ['start', '--input', 'x']));
+  assert.equal(stop(dir).decision, 'block', 'first stop of the turn');
+  assert.equal(stop(dir, { stop_hook_active: true }).decision, 'block');
+  assert.equal(stop(dir, { stop_hook_active: true }).decision, 'block');
+  const p = stop(dir, { stop_hook_active: true });
+  assert.equal(p?.decision, undefined);
+  assert.match(p.systemMessage, /no progress/i);
+  assert.equal(ok(mis(dir, ['loop', 'status'])).active, true, 'paused, not ended');
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  assert.equal(stop(dir, { stop_hook_active: true }).decision, 'block', 'progress resets the stall count');
+});
+
+test('SessionStart announces an active loop', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['loop', 'start', '--max', '9', 'port the parser']));
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT;
+  const r = spawnSync(process.execPath, [HOOKS, 'SessionStart'], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /active Make It Ship loop.*port the parser.*0\/9.*mis loop cancel/s);
+});

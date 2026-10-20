@@ -22,6 +22,8 @@ const handlers = {
       if (run && !TERMINAL.includes(run.state.state)) {
         parts.push(`There is an active Make It Ship run ${run.state.runId} (state ${run.state.state}). To continue it, invoke /make-it-ship:resume; to drop it, run mis cancel.`);
       }
+      const loop = (await import('./lib/loop.mjs')).readLoop(cwd);
+      if (loop.active) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
     } catch { /* not a git repo */ }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
@@ -54,9 +56,10 @@ const handlers = {
           v = verdict(run.state, verdictContext(run, cwd));
         }
       } catch { /* not a repo or no run */ }
-      const d = loopDecision(loop, run, v);
+      const d = loopDecision(loop, run, v, input.stop_hook_active === true);
       if (d.end) endLoop(cwd, d.end);
-      if (d.iterate) { writeLoop(cwd, { ...loop, iteration: d.iterate }); return { decision: 'block', reason: d.block }; }
+      else if (d.save || d.iterate) writeLoop(cwd, { ...loop, ...d.save, ...(d.iterate ? { iteration: d.iterate } : {}) });
+      if (d.iterate) return { decision: 'block', reason: d.block };
       return { systemMessage: d.message };
     }
     const pct = contextPercent(input.transcript_path);
