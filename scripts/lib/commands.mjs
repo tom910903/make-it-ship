@@ -16,7 +16,7 @@ import { writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
-import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
+import { detectConfig, writeConfig, projectType } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
@@ -26,6 +26,7 @@ import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
+import { setupCommands, cancelAll } from './commands-setup.mjs';
 import { browseCommands } from './commands-browse.mjs';
 import { teamCommands, excludeWorktrees } from './commands-team.mjs';
 import { readLoop, endLoop } from './loop.mjs';
@@ -682,6 +683,11 @@ function qa([sub], cwd) {
 }
 
 function cancel(args, cwd) {
+  if (args.includes('--all')) return cancelAll(args, cwd, cancelRun);
+  return cancelRun(cwd);
+}
+
+function cancelRun(cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
     try { if (readLoop(cwd).active) endLoop(cwd, 'cancelled'); } catch { /* no loop */ }
@@ -691,7 +697,7 @@ function cancel(args, cwd) {
 
 function init(args, cwd) {
   const root = repoRoot(cwd);
-  const r = detectConfig(root);
+  const r = { ...detectConfig(root), ...projectType(root) };
   r.hud = {
     statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
@@ -703,7 +709,6 @@ function init(args, cwd) {
   return r;
 }
 
-const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands };
+export const commands = { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...setupCommands };
 export { requiredChecks };

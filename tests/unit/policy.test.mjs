@@ -241,3 +241,21 @@ test('M9 D0: registered external mis subcommands ask with or without a run; tele
     }
   } finally { EXTERNAL_MIS.pop(); }
 });
+
+test('M9-A: mis commands that change files outside the repo (settings, CLAUDE.md, MCP config, the plugin) ask with or without a run; their dry runs pass', () => {
+  const idle = { ...ctx, activeRun: false };
+  const M = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
+  for (const c of [ctx, idle]) {
+    for (const cmd of [`${M} setup --write`, `${M} setup --apply`, `${M} doctor --fix`, `${M} mcp-setup add context7 --write`,
+      `${M} upgrade --yes`, `${M} uninstall --yes`, `${M} uninstall --yes --purge-runs`]) {
+      assert.equal(d(bash(cmd), c), 'ask', cmd);
+      assert.match(classify(bash(cmd), c).reason, /outside this repository|approval/);
+    }
+    for (const cmd of [`${M} setup`, `${M} doctor`, `${M} doctor --json`, `${M} doctor session`, `${M} mcp-setup list`, `${M} mcp-setup add context7`,
+      `${M} upgrade`, `${M} uninstall`, `${M} uninstall --dry-run`, `${M} update-check`, `${M} version`, `${M} config get`, `${M} cancel --all`]) {
+      assert.equal(d(bash(cmd), c), 'allow', cmd);
+    }
+  }
+  assert.equal(d(bash(`${M} setup team --write`), ctx), 'ask', 'writes .make-it-ship.json during a run');
+  assert.equal(d(bash(`${M} setup team --write`), idle), 'allow');
+});
