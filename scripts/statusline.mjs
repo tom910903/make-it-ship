@@ -49,18 +49,21 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       model: input.model?.display_name,
       ctxPct: contextPercent(input.transcript_path),
       frozen: await part(async () => {
-        const dir = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir;
-        if (!dir) return null;
+        const f = (await import('./lib/home.mjs')).readHome('freeze.json');
+        const { realpathSync } = await import('node:fs');
+        let root = null; try { root = realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)); } catch { /* outside a repo */ }
+        if (!f?.dir || (f.root ?? null) !== root) return null;
+        const dir = f.dir;
         const { relative } = await import('node:path');
-        const rel = relative((await import('./lib/tree-hash.mjs')).repoRoot(cwd), dir);
+        const rel = root ? relative(root, dir) : dir;
         return rel && !rel.startsWith('..') ? rel : dir;
       }),
     });
     // statusLine.chain: keep another status line (e.g. the one you had before) after ours, fed the same input.
     const chain = await part(async () => (await import('./lib/home.mjs')).globalConfig().statusLine?.chain);
     let tail = '';
-    if (chain) {
-      const r = await part(() => execFileSync('sh', ['-c', chain], { input: raw, encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'ignore'] }));
+    if (chain && !process.env.MIS_STATUSLINE_CHAINED) {
+      const r = await part(() => execFileSync('sh', ['-c', chain], { input: raw, encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, MIS_STATUSLINE_CHAINED: '1' } }));
       if (r?.trim()) tail = ` | ${r.trim().split('\n')[0]}`;
     }
     console.log(head + extras + tail);

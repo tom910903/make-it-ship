@@ -6,7 +6,7 @@ import { join } from 'node:path';
 const K = (name, re, context) => ({ name, re, context });
 // Priority order: earlier wins in conflict resolution.
 const KEYWORDS = [
-  K('cancel', /\b(cancelomc|stopomc|cancel[\s-]?mis|stop[\s-]?mis)\b|\b(stop|cancel|kill|halt)\s+(the\s+)?(ralph|loop|ultrawork)\b|(랄프|루프)\s?(멈춰|그만|취소)/i,
+  K('cancel', /\b(cancelomc|stopomc|cancel[\s-]?mis|stop[\s-]?mis)\b|\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?(ralph|loop|ultrawork)\b|\bralph\s+(stop|off|cancel)\b|(ralph|랄프|루프)\s?(멈춰|그만|취소|꺼|끄|중지)|ラルフを?(止め|やめ)/i,
     'Cancel active Make It Ship modes: run `mis loop cancel`. If the user also wants to drop the current run, run `mis cancel`.'),
   K('loop', /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/gi,
     "Invoke /make-it-ship:loop with the user's task. It keeps working (plan → implement → verify) until `mis verdict` is VERIFIED or the iteration limit is reached; do not stop early."),
@@ -43,17 +43,21 @@ const KEYWORDS = [
 const SLOP_EXPLICIT = /\b(ai[\s-]?slop|anti[\s-]?slop|de[\s-]?slop)\b/i;
 const SLOP_ACTION = /\b(clean(?:\s*up)?|cleanup|refactor|simplify|dedupe|prune)\b/i;
 const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abstract\w*|wrapper\s+layers?|needless\s+abstractions?|tech\s+debt)\b/i;
-// "ralph" is also a name and a word people complain about; it starts a loop only when clearly invoked.
-const INVOKE_BEFORE = /(?:^|\b(?:use|using|run|start|enable|activate|with|in|via)\s+(?:the\s+)?|^\s*\/)$/i;
-const INVOKE_AFTER = /^(?:\s*[:,]|\s+(?:mode|loop)\b(?!ing)|\s*(?:으로|로|모드)|\s*(?:で|モード)|\s*$)/i;
-const NAME_AFTER = /^(?:'s\b|\s+(?:from|said|says|asked|is|was|and|wrote|told|wants|reported|thinks)\b|(?:가|는|이|씨|님|한테|에게|의|랑|하고)(?:\s|$)|(?:さん|が|は|の))/i;
-const COMPLAINT_AFTER = /^\s+(?:keeps?|loops|looping|is\s+(?:stuck|broken|looping|failing))\b|^\s*(?:계속|반복|が止まら)/i;
+// "ralph" is also a name and a word people complain about: it starts a loop only on a clear invocation, and any
+// stop/off word next to it means the opposite (cancel).
+const START_AFTER = /^(?:\s*[:,]|\s+mode\b(?!\s+(?:is|was|keeps?)\b)|\s+(?!(?:loop|mode|is|was|keeps?)\b)[a-z])/;
+const VERB_BEFORE = /\b(?:use|using|run|start|enable|activate|with|via|please)\s+(?:the\s+)?$/i;
+const PARTICLE_AFTER = /^(?:\s*(?:으로|로)|\s*모드로|\s*(?:켜|시작)|\s*で)/;
+const OFF_NEAR = /\b(?:stop|off|cancel|disable|kill|halt|end|pause|no\s+more|turn)\b|그만|멈|꺼|끄|중지|止め|やめ/i;
+const NAME_AFTER = /^(?:'s\b|,|\s+[A-Z][a-z]+|\s+(?:from|said|says|asked|is|was|and|wrote|told|wants|reported|thinks)\b|\s*(?:가|는|이|씨|님|한테|에게|의|랑|하고)(?:\s|$)|(?:さん|が|は|の))/;
 
 function invoked(text, re) {
   for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) {
-    const before = text.slice(0, m.index).trimStart(), after = text.slice(m.index + m[0].length);
-    if (NAME_AFTER.test(after) || COMPLAINT_AFTER.test(after)) continue;
-    if (INVOKE_BEFORE.test(before) || INVOKE_AFTER.test(after) || (!before && /^\s+\w/.test(after))) return true;
+    const before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
+    if (OFF_NEAR.test(before.slice(-20)) || OFF_NEAR.test(after.slice(0, 20)) || NAME_AFTER.test(after)) continue;
+    const first = /^\s*\/?\s*$/.test(before);
+    if (!first && m[0] === 'Ralph') continue; // capitalized mid-sentence: a person
+    if ((first && START_AFTER.test(after)) || VERB_BEFORE.test(before) || PARTICLE_AFTER.test(after) || /\bwith\s+$/i.test(before)) return true;
   }
   return false;
 }

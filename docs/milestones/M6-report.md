@@ -271,3 +271,134 @@ statusline: 빈 입력, `garbage`, `[]`, `null`, 없는 디렉터리, 숫자 모
 - **원본에 있는 loop 예외가 없다**: OMC에 있는 컨텍스트 한도·사용자 중단 예외가 loop에는 없다. 호스트가 이런 상황에서 Stop을 부르면 block될 수 있다.
 - **호스트 알림**: Stop block마다 호스트가 "Stop hook error occurred" 알림을 띄운다. 사용자가 오류로 오해할 수 있다.
 - **cwd 의존**: 저장소 밖 cwd에서 훅이 git stderr를 남긴다. verbose 모드에서만 보인다.
+
+## 2차 검증 (round 2)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD 7dbe475) · Claude Code 2.1.292
+- 검증자: 독립 verifier (구현에 참여하지 않음). 커밋 메시지의 수정 주장은 믿지 않고, 1차 재현 절차와 변형을 직접 다시 실행했다.
+- 모든 실험은 저장소 밖 scratchpad에서 했고 `MIS_STATE_HOME`을 임시 디렉터리로 지정했다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 주의: 검증자 자신이 Claude Code 세션 안에서 돌기 때문에 셸에 `CLAUDE_CODE_SESSION_ID`가 이미 있다. 세션 관련 시험에서는 이 값을 명시적으로 지정하거나 `env -u`로 지웠다.
+
+### 판정
+
+**DEFECTS FOUND** — 1차 결함 12건 중 FIXED 7 · PARTIAL 5. 남은 문제와 새 문제: HIGH 1 · MEDIUM 3 · LOW 4.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | tests 360 · pass 360 · fail 0 · skipped 0 · todo 0 · exit 0 (1차 348 → 360) |
+| `claude plugin validate .` | `✔ Validation passed` · exit 0 |
+| 세션 ID 실측 (헤드리스 `claude -p`, 훅이 입력을 파일로 저장) | Bash의 `$CLAUDE_CODE_SESSION_ID` = `9cbffa3f-…` = Stop·SessionStart 훅 입력의 `session_id` = stream-json `session_id`. 호스트가 Bash에 값을 넘기고, 그 값은 훅의 값과 같다. |
+| 헤드리스 dogfood (데모 d) | 15턴, $0.47, 80초. 아래 절 참조 |
+| OMC 대조 | `keyword-detector.mjs` 4.15.6에 MIS가 loop로 판정한 문장 21개를 넣음. 양성 대조 2개(`ralph fix the auth bug`, `fix the auth bug with ralph`)는 RALPH로 트리거됨. 21개는 하나도 트리거되지 않음 |
+
+### 1차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| D1 loop 세션 범위 | **PARTIAL** | 고쳐진 부분: 세션 A가 시작한 loop에서 같은 저장소의 다른 세션 B나 worktree가 보낸 Stop은 block되지 않는다. A는 worktree에서도 block된다. 저장소 밖 NR1에서 A가 시작하면 NR2의 세션 C는 block되지 않는다. statusline은 `/nonexistent`·세션 C에서 loop를 숨기고, A에서는 `loop 0/20`을 보인다.<br>남은 문제는 R2-1 (SessionStart 안내가 다른 세션에도 나감)과 R2-6 (터미널에서 시작한 loop를 아무 세션이나 가져감). |
+| D2 ralph 오탐 | **PARTIAL (남은 문제 HIGH)** | 1차 문장 9개는 모두 고쳐졌다. 이름·따옴표·"keeps looping"은 `[]`이고, "stop the ralph loop"는 `cancel`이다.<br>하지만 같은 종류의 변형에서 여전히 loop가 시작된다. R2-2 참조. |
+| D3 스타일 전역 저장 | FIXED | 세션 S1에서 `mis style lite`, 이어서 `mis style default ultra` 실행 → 새 세션 S2는 `level: ultra`, S1(compact·resume)은 `lite`, S1의 서브에이전트는 `lite`.<br>세션 밖에서 `mis style lite`를 실행하면 오류 메시지와 함께 exit 1 (default 사용을 안내함). |
+| D4 산문 속 "normal mode" | FIXED | `"the router falls back to normal mode when wifi drops; fix it"` → 변경 없음, 레벨 ultra 유지. `normal mode`·`Normal mode.`·`please normal mode`·`스타일 꺼줘` → off. `go back to normal mode`·`normal mode, then fix the bug` → 변경 없음. S4에서 끄면 S4만 꺼지고 S5는 영향 없음. |
+| D5 이전 run의 VERIFIED로 종료 | **PARTIAL (남은 문제 MEDIUM)** | 1차 재현(REPORTED·VERIFIED run 위에서 loop 시작 후 바로 Stop) → block. 메시지 "Run … was reported before this loop started, so it is not evidence for this task: start a new run". 고쳐졌다.<br>변형: 같은 옛 run에 `mis report`를 다시 실행하면(코드 변경도 새 run도 없음) 다음 Stop에서 `endReason: verified`로 끝난다. R2-3 참조. |
+| D6 cancel 연동 | FIXED | `mis loop start x; mis start --input in.txt; mis cancel` → loop `active:false, endReason:"cancelled"`. 이후 Stop 출력 없음. `cancelomc`·`랄프 멈춰`는 cancel로 판정된다. |
+| D7 `uw` | FIXED | `the UW campus map is broken`·`uw` → `[]`. `ulw …`·`ultrawork: …` → parallel. |
+| D8 `git restore --staged .` | FIXED | `--staged .`, `-S .` → allow. `--staged --worktree .`, `-SW .`, `restore .`, `checkout .` → ask. |
+| D9 일본어 | FIXED | `ラルフ 起動して直して` → loop. `コードレビューして` → review. `ウルトラワークで直して` → parallel. `セキュリティレビューして` → security-review. `オートパイロットで作って` → run. |
+| D10 freeze 실경로 | **PARTIAL (LOW)** | 1차 재현: frozen `src/` 안의 `src/escape`(밖을 가리키는 링크)를 통한 Write → deny. 고쳐졌다.<br>심볼릭 링크 cwd(`Flink → F`)에서 내부 쓰기(새 깊은 디렉터리 포함)와 `/tmp` 별칭 경로 → allow. 외부 쓰기와 `src/../x.js` → deny. 오탐이 고쳐졌다.<br>남은 문제는 R2-7. |
+| D11 statusLine (freeze 배지·체이닝만) | **PARTIAL (MEDIUM)** | 배지: 저장소 cwd에서 `frozen src`가 표시되고, 링크 cwd에서도 같다.<br>체이닝: 성공하면 첫 줄이 ` \| OTHER-LINE`으로 붙는다. `exit 3`, `echo partial; exit 1`, 없는 명령, 숫자, 배열 → 꼬리 없이 정상 출력, exit 0. `sleep 10` → 2.06초에 타임아웃되고 MIS 줄만 출력된다.<br>새 문제는 R2-4 (체인 자기 참조). 에이전트 수·todo는 PROGRESS에 따라 M9로 넘어갔으므로 보지 않았다. |
+| D12 홈 쓰기 실패 | FIXED (LOW 메모) | `MIS_STATE_HOME`이 파일일 때: `style lite` 프롬프트 → exit 0. `ralph: fix the parser` → loop 맥락이 주입된다. PostToolUse·Stop·statusline → exit 0.<br>메모: 쓰기에 실패해도 "Style level is now lite"라고 알린다(R2-8). |
+
+### 남은 문제와 새 문제
+
+**R2-1 · MEDIUM · SessionStart의 loop 안내가 세션을 가리지 않는다 (D1의 잔여)**
+- 위치: `scripts/hooks.mjs` SessionStart (`readLoop(cwd)`. `loopForSession`이나 `loop.session` 비교가 없음).
+- 재현:
+  1. 저장소 R에서 `CLAUDE_CODE_SESSION_ID=sessA mis loop start "A task"`.
+  2. 같은 저장소(또는 worktree. git common dir를 공유한다)에서 SessionStart `{"session_id":"sessB"}`를 보낸다.
+  3. 결과: `There is an active Make It Ship loop: "A task" … Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`
+- 영향:
+  - README는 loop가 "holds only the session that started it"이라고 한다. 그런데 무관한 세션 B가 시작하자마자 A의 작업을 계속하라는 지시를 받는다.
+  - B가 `mis loop cancel`을 실행하면 A의 loop가 꺼진다. 세션 확인이 없다(실측 `endReason: cancelled`).
+
+**R2-2 · HIGH · ralph 오탐: 끄기 요청·이름·불만이 여전히 loop를 시작한다 (D2의 잔여)**
+- 위치: `scripts/lib/keywords.mjs` `invoked`.
+  - `INVOKE_BEFORE`의 `^$` 분기 때문에 프롬프트 첫 단어가 ralph이면 거의 항상 성립한다.
+  - `INVOKE_AFTER`의 `\s*$` 때문에 문장 끝의 ralph도 성립한다. `\s+(?:mode|loop)` 때문에 "ralph loop/mode"에 대한 불만도 성립한다.
+- `mis test-prompt` → `["loop"]`. 아래 21개 문장을 모두 OMC 원본에 넣어 대조했고, OMC는 하나도 트리거되지 않았다.
+  - 끄기 요청 (사용자 의도와 정반대): `turn off ralph`, `disable ralph`, `ralph stop`, `ralph off`, `ralph cancel`, `end ralph`, `no more ralph`, `ralph 그만`, `ralph 멈춰`, `랄프 꺼줘`, `랄프 꺼`, `ラルフ止めて`, `ラルフを止めて`
+  - 불만: `the ralph loop is stuck again`, `the ralph mode is annoying, disable it`
+  - 이름: `Ralph Smith reported a bug in login, fix it`, `Ralph Lauren product page is broken, fix it`, `Ralph, Mike and Sue need a login page`, `Thanks Ralph`, `I talked with Ralph`, `랄프 씨가 만든 모듈 고쳐줘`
+- 영향:
+  - README의 "`ralph` starts a loop only when clearly invoked …, not as a name or in a complaint"와 모순된다.
+  - 특히 loop를 끄려는 문장이 "do not stop early" 지시를 주입하고 loop 스킬을 부른다. 1차 HIGH와 같은 종류이므로 HIGH를 유지한다.
+- 양성 판정은 정상이다: `ralph: …`, `ralph fix …`, `use ralph …`, `/ralph …`, `랄프로 …`, `랄프 켜줘`, `ラルフで直して`, `fix … with ralph`, `ralph mode: …`.
+- 놓치는 경우(참고): `please ralph this: …`, `can you ralph the auth fix`, `/make-it-ship:loop …`(스킬 직접 호출이므로 무관).
+
+**R2-3 · MEDIUM · 옛 run에 `mis report`를 다시 쓰면 loop가 VERIFIED로 끝난다 (D5의 잔여)**
+- 위치: `scripts/lib/loop.mjs` `loopDecision` (`fresh = reportedAt >= loop.startedAt`. loop가 runId나 시작 시점의 treeHash에 묶여 있지 않음).
+- 재현: dogfood 저장소 사본(REPORTED·VERIFIED) → `CLAUDE_CODE_SESSION_ID=X mis loop start "add feature X: export CSV"` → Stop은 block(정상) → `mis report`(옛 run, 코드 변경 없음) → Stop → `{"systemMessage":"Make It Ship loop finished: run 20261020-1323-1ff2 is REPORTED with verdict VERIFIED."}`, `endReason: verified`.
+- 영향:
+  - "export CSV" 작업을 전혀 하지 않았는데도 loop가 증거 기반 완료로 끝난다.
+  - 이 경우의 block 메시지는 "start a new run"을 안내한다. 하지만 모델이 그 안내를 무시하고 일반 명령인 `mis report`만 다시 실행해도 loop가 끝난다. 이를 막는 장치가 없다. 일반 진행 메시지의 "write the report with mis report once the verdict is VERIFIED"도 이런 행동을 부추긴다.
+  - ADR-0003 "증거 없이 완료라고 하지 않는다"와 어긋난다.
+
+**R2-4 · MEDIUM · `statusLine.chain`이 MIS statusline 자신을 가리키면 프로세스가 스스로 끝나지 않는다**
+- 위치: `scripts/statusline.mjs` (체인 실행에 재귀 방지가 없음. 타임아웃은 직계 `sh`만 죽이고, 그 아래 node는 고아가 되어 계속 체인을 이어 간다).
+- 재현: `config.json`에 `{"statusLine":{"chain":"MIS_STATE_HOME=… node …/scripts/statusline.mjs"}}`를 넣고 statusline을 **한 번만** 실행.
+  - 결과: 2.07초에 출력하고 종료한다.
+  - 고아가 된 프로세스들이 스스로 끝나지 않고, 자기 자신을 계속 이어서 실행한다.
+  - `pgrep -f scripts/statusline.mjs` 수: 14 → 12 → 8 → 12 → 14 → 30. 약 40초 동안 8~30개 사이를 오갔다.
+  - config를 지워야 0개로 사라졌다.
+- 영향:
+  - README는 "To keep a status line you already had, put its command in `statusLine.chain`"이라고 안내한다. 이전 statusLine이 MIS 자신(`mis init`의 `hud.statusLine`)이면 그대로 따라 하기 쉽다.
+  - 호스트는 statusline을 자주 다시 그린다. 그때마다 끝나지 않는 체인이 하나씩 더해진다.
+
+**R2-5 · LOW · style 스킬 문구가 세션 단위 변경과 맞지 않는다**
+- 위치: `skills/style/SKILL.md:7`.
+- 문구 "The rules apply from the next session start"는 이제 틀렸다. 새 세션은 default로 시작한다. 같은 세션의 compact·resume에서만 적용된다.
+
+**R2-6 · LOW · 세션 없이(터미널에서) 저장소 밖에서 시작한 loop는 컴퓨터의 아무 세션이나 가져간다**
+- 재현: NR1에서 `env -u CLAUDE_CODE_SESSION_ID mis loop start "terminal task"` → 무관한 NR2의 세션 sessC가 Stop → block, `session: "sessC"`로 묶인다.
+- 저장소 안에서는 설계대로 동작함을 실측했다. R8에서 세션 없이 시작한 loop는 sessB가 Stop하면 block되면서 `session:"sessB"`로 묶인다. 이어서 sessC가 Stop하면 block되지 않는다.
+- 저장소 밖은 전역 홈 하나를 쓰므로 범위가 컴퓨터 전체가 된다.
+
+**R2-7 · LOW · freeze 잔여 (D10)**
+- 끊어진 심볼릭 링크 `src/dang → 밖/notyet`에 Write → allow. 대상 파일이 frozen 경계 밖에 생긴다. gstack 원본(`pwd -P` 부모)과 같은 수준이다.
+- 링크 cwd에서 `rm -rf node_modules` → 여전히 ask "outside the repository". careful 경로는 실경로화하지 않는다.
+- freeze는 전역(사용자 홈)이다. 저장소 F의 `src`를 freeze하면 무관한 다른 저장소 R7의 Write도 deny된다(실측). 다른 세션이나 다른 저장소의 편집까지 막는 셈으로, D1과 같은 종류의 세션 간 영향이다.
+- 저장소 밖 cwd에서도 Write가 deny된다. 그런데 그곳에서는 SessionStart 안내와 statusline 배지가 모두 나오지 않는다. 안내가 `loadRun` try 블록 안에 있고, 배지는 `repoRoot`가 실패하면 null이 되기 때문이다.
+
+**R2-8 · LOW · 홈 쓰기 실패 시 스타일 변경 성공을 잘못 알린다**
+- `hooks.mjs` UserPromptSubmit은 `setStyle` 예외를 삼킨 뒤에도 `style` 값을 그대로 맥락에 넣는다. 그래서 "Style level is now lite."라고 알리지만 레벨은 바뀌지 않았다.
+
+### 헤드리스 dogfood (데모 d)
+
+- 명령: `MIS_STATE_HOME=<tmp>/doghome claude -p "ralph: do the task in TASK.md (quick mode; I approve writing .make-it-ship.json with mis init --write)" --plugin-dir … --setting-sources project --strict-mcp-config --permission-mode bypassPermissions --output-format stream-json --verbose`
+  - 상속된 `CLAUDE_CODE_SESSION_ID`는 `env -u`로 지웠다.
+- init 플러그인: make-it-ship + builtin뿐 (ADR-0003 단독 설치).
+- 모델의 진행: Skill `make-it-ship:loop` → `mis loop start` → Skill `make-it-ship:run` → `init --write` → `start` → `plan set` → root-cause 기록 → `Math.floor`를 `Math.round`로 수정 → `task T1 done` → quality-reviewer 서브에이전트 → `review add` → `mis report`.
+  - 첫 `mis loop start`는 모델이 zsh에서 `$M` 변수에 명령을 담아 실행하는 바람에 실패했다(MIS 문제 아님). 두 번째 시도에서 성공했다.
+- 결과: 15턴, $0.47, 80초. 마지막에 호스트 알림 "Stop says: Make It Ship loop finished: run 20261020-1323-1ff2 is REPORTED with verdict VERIFIED."
+- 직접 확인한 상태:
+  - `mis loop status`: `active:false`, `endReason:"verified"`, `iteration:0`, `session:"94e61870-bea2-4d9a-8476-fbbfa537c881"`. 이 값은 그 실행의 init·result `session_id`와 같다. 또 `mis loop start`의 출력에 처음부터 `"session": "94e61870-…"`이 찍혀 있었다. 즉 Stop 때 가져간 것이 아니라, 시작할 때 env로 묶였다.
+  - `mis verdict`: VERIFIED (unit PASS, reasons 없음, state REPORTED).
+  - `mis status`: 1/1 DONE, quality 0 blocking.
+  - 데모 `npm test`: pass 3 / fail 0.
+- 판정: PASS.
+- 참고: 1차와 마찬가지로 iteration 0으로 끝났다. 이 실행에서 Stop block 경로는 일어나지 않았다.
+
+### 기타 회귀 검사
+
+- 이상한 `session_id` 값(`null`, `123`, 객체, `"../../etc"`, `""`) × 이벤트 5종 → 모두 exit 0.
+  - `"A"`, `null`, `""`일 때만 A의 loop가 block된다. `null`과 `""`는 세션 없음으로 처리되는데, 호스트는 항상 값을 보내므로 무해하다.
+  - 세션 파일 이름은 안전하게 치환된다(`_object_Object_.json`).
+- 세션 ID 연동은 실측으로 확인했다: 호스트가 Bash에 `CLAUDE_CODE_SESSION_ID`를 넘기고, 그 값은 훅 입력의 `session_id`와 같다. dogfood에서도 loop의 `session`이 그 실행의 ID로 묶였다.
+- 미검증:
+  - 서브에이전트 안의 Bash에서 `CLAUDE_CODE_SESSION_ID` 값
+  - `!` 셸 접두사로 실행할 때의 값
+  - 대화형 resume 시 session_id 유지 여부
+  - Linux 환경
+
+ROUND2: DEFECTS FOUND

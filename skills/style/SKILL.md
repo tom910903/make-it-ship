@@ -4,7 +4,7 @@ description: Set the Make It Ship always-on coding style level - off, lite, full
 argument-hint: "[off|lite|full|ultra] | default <level>"
 ---
 
-- With a level argument: run `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" style <level>` and confirm the new level in one line. The rules apply from the next session start and to new subagents; follow them yourself from now on.
+- With a level argument: run `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" style <level>` and confirm the new level in one line. It applies to this session only (new subagents included); follow it yourself from now on. New sessions start at the default level.
 - `default <level>`: run `mis style default <level>` to store the level used when no session level is set.
 - No argument: run `mis style` and show the current level and default.
 

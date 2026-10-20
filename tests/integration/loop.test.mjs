@@ -127,7 +127,7 @@ test('M6 D1: an unbound loop is claimed by the first session that stops; outside
   const nr1 = mkdtempSync(join(tmpdir(), 'mis-nr-')), nr2 = mkdtempSync(join(tmpdir(), 'mis-nr-'));
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const env = { MIS_STATE_HOME: home };
-  ok(mis(nr1, ['loop', 'start', 'x'], { env }));
+  ok(mis(nr1, ['loop', 'start', 'x'], { env: { ...env, CLAUDE_CODE_SESSION_ID: 'A' } }));
   const s = (cwd, session_id) => {
     const e = { ...process.env, ...env }; delete e.NODE_TEST_CONTEXT; delete e.CLAUDE_CODE_SESSION_ID;
     const r = spawnSync(process.execPath, [HOOKS, 'Stop'], { input: JSON.stringify({ cwd, session_id }), encoding: 'utf8', env: e });
@@ -160,4 +160,43 @@ test('M6 D6: mis cancel also ends the loop', () => {
   const l = ok(mis(dir, ['loop', 'status']));
   assert.deepEqual([l.active, l.endReason], [false, 'cancelled']);
   assert.equal(stop(dir), null);
+});
+
+test('M6 R2-1: another session is not told to continue the loop and cannot cancel it', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['loop', 'start', 'A task'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } }));
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT; delete env.CLAUDE_CODE_SESSION_ID;
+  const ss = (sid) => JSON.parse(spawnSync(process.execPath, [HOOKS, 'SessionStart'], { input: JSON.stringify({ cwd: dir, session_id: sid }), encoding: 'utf8', env }).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ss('B'), /active Make It Ship loop/);
+  assert.match(ss('A'), /active Make It Ship loop/);
+  assert.equal(mis(dir, ['loop', 'cancel'], { env: { CLAUDE_CODE_SESSION_ID: 'B' } }).code, 1);
+  assert.equal(ok(mis(dir, ['loop', 'status'])).active, true);
+  assert.equal(ok(mis(dir, ['loop', 'cancel'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } })).active, false);
+});
+
+test('M6 R2-3: re-reporting an old run is not evidence; a new run with checks after the loop started is required', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['report']));
+  ok(mis(dir, ['loop', 'start', 'export CSV']));
+  ok(mis(dir, ['report']));
+  assert.equal(stop(dir).decision, 'block', 'only a re-report');
+  ok(mis(dir, ['start', '--input', 'export CSV']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['report']));
+  assert.match(stop(dir).systemMessage, /VERIFIED/, 'a new run with fresh checks ends it');
+});
+
+test('M6 R2-6: outside a repo a loop needs a session', () => {
+  const nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
+  assert.equal(mis(nr, ['loop', 'start', 'x'], { env: { MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) } }).code, 1);
 });

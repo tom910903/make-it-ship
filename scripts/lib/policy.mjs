@@ -1,7 +1,7 @@
 // Guard policy (Spec §7): pure classification of a PreToolUse call.
 // Threat model: careless/habitual mistakes, not an adversarial model (obfuscation is out of scope).
 import { resolve, sep, dirname, basename, join } from 'node:path';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 const R = 'make-it-ship';
@@ -19,9 +19,13 @@ const OWN_MCP = 'mcp__plugin_make-it-ship_mis__';
 const FILE_WRITERS = ['ast_grep_replace', 'lsp_rename', 'lsp_code_action_resolve'];
 
 /** Real path of a possibly not-yet-existing file: resolve symlinks of the nearest existing ancestor. */
-function realish(abs) {
+function realish(abs, depth = 0) {
   let base = abs, rest = '';
-  while (!existsSync(base) && dirname(base) !== base) { rest = rest ? join(basename(base), rest) : basename(base); base = dirname(base); }
+  while (!existsSync(base) && dirname(base) !== base) {
+    // a dangling symlink still decides where a write lands
+    try { if (depth < 8 && lstatSync(base).isSymbolicLink()) return realish(join(resolve(dirname(base), readlinkSync(base)), rest), depth + 1); } catch { /* not a link */ }
+    rest = rest ? join(basename(base), rest) : basename(base); base = dirname(base);
+  }
   try { return rest ? join(realpathSync(base), rest) : realpathSync(base); } catch { return abs; }
 }
 const outsideFreeze = (abs, dir) => !(realish(abs) + sep).startsWith(dir + sep);
@@ -51,8 +55,8 @@ function classifyPush(rest, ctx) {
 
 function dangerousRmTarget(t, cwd, repoRoot) {
   if (t === '/' || t.startsWith('~') || /\$\{?HOME\b/.test(t)) return true;
-  const abs = resolve(cwd, t);
-  if (abs === resolve(homedir())) return true;
+  const abs = realish(resolve(cwd, t));
+  if (abs === realish(resolve(homedir()))) return true;
   return abs === repoRoot || !(abs + sep).startsWith(repoRoot + sep);
 }
 

@@ -3,7 +3,7 @@ import { currentStyle, setStyle, normalizeStyle } from './style.mjs';
 import { globalConfig, setGlobalConfig, homeDir, envSession } from './home.mjs';
 import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './keywords.mjs';
 import { repoRoot } from './tree-hash.mjs';
-import { readLoop, startLoop, endLoop } from './loop.mjs';
+import { readLoop, startLoop, cancelLoop } from './loop.mjs';
 import { readHome, writeHome } from './home.mjs';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -34,7 +34,7 @@ function loop([sub, ...rest], cwd) {
     if (rest[0] === '--max') { max = Number(rest[1]); rest = rest.slice(2); }
     return startLoop(cwd, rest.join(' ').trim(), max, envSession());
   }
-  if (sub === 'cancel') return endLoop(cwd, 'cancelled');
+  if (sub === 'cancel') return cancelLoop(cwd, envSession());
   if (sub === 'status' || sub === undefined) return readLoop(cwd);
   throw new Error('usage: mis loop start [--max N] <task> | status | cancel');
 }
@@ -45,7 +45,8 @@ function freeze([d], cwd) {
   const abs = resolve(cwd, d);
   if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`not a directory: ${d}`);
   const dir = realpathSync(abs);
-  writeHome('freeze.json', { dir, at: new Date().toISOString() });
+  let root = null; try { root = realpathSync(repoRoot(cwd)); } catch { /* outside a repo: applies everywhere outside repos */ }
+  writeHome('freeze.json', { dir, root, at: new Date().toISOString() });
   return { freezeDir: dir };
 }
 
