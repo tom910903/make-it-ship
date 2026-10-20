@@ -230,3 +230,14 @@ test('M8: team workers on other models ask (code leaves the company), with or wi
   }
   assert.match(classify(bash('node /p/scripts/mis.mjs team start 2 "x" --worker codex'), ctx).reason, /external model/);
 });
+
+test('M9 D0: registered external mis subcommands ask with or without a run; telemetry is off by default', async () => {
+  const { EXTERNAL_MIS } = await import('../../scripts/lib/policy.mjs');
+  EXTERNAL_MIS.push([['example-sync', 'push'], 'example sync uploads data']);
+  try {
+    for (const c of [ctx, { ...ctx, activeRun: false }]) {
+      assert.equal(d(bash('node /p/scripts/mis.mjs example-sync push --all'), c), 'ask');
+      assert.equal(d(bash('node /p/scripts/mis.mjs example-sync status'), c), 'allow');
+    }
+  } finally { EXTERNAL_MIS.pop(); }
+});

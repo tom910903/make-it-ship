@@ -102,6 +102,7 @@ function classifyBash(cmd, ctx, cwd) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     let r = careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
+    if (r.decision === 'allow') r = externalMis(misSub(ws, functions));
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -159,6 +160,15 @@ function runOnly(ws, ctx, functions) {
 }
 
 /** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
+// M9 D0: mis subcommands that send data outside the company boundary always ask, with or without a run.
+// Each entry: [mis argv prefix, reason]. Groups adding an external command register it here (and test it).
+export const EXTERNAL_MIS = [];
+function externalMis(mis) {
+  if (!mis) return allow;
+  for (const [prefix, why] of EXTERNAL_MIS) if (prefix.every((w, i) => mis[i] === w)) return ask(`${why} — data leaves this machine; needs your approval`);
+  return allow;
+}
+
 function otherModelTeam(mis, text) {
   if (mis?.[0] !== 'team' || mis[1] !== 'start') return allow;
   const w = mis.find((a, i) => a.startsWith('--worker=') || mis[i - 1] === '--worker');

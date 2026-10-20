@@ -150,6 +150,18 @@ VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
 
 ## M9 — 나머지 이전 제외 기능
 VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
+범위·묶음·수용 기준: `docs/research/m9-plan.md` (M9-00 재감사, 17b3ab0). 묶음별 진행은 아래 행으로 관리한다.
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M9-00 | 갭 매트릭스 재감사(ABSORBED 168) + 묶음 계획 | DONE | — | m9-plan.md | 17b3ab0 | 문서 |
+| M9-B0 | 결정: 계획·리뷰 기능은 개발 흐름에 녹임 | DONE | — | SPEC_CHANGES | 35e50d3 | — |
+| M9-D0 | 외부 전송 mis 명령 공통 ask 규칙(`EXTERNAL_MIS`) | DONE | `tests/unit/policy.test.mjs` | m9-plan D0 | (이 커밋) | npm test |
+| M9-A | 설치·수명주기 | TODO | | m9-plan A | | |
+| M9-B | 계획·리뷰·디자인·문서 기능을 흐름에 녹임 | TODO | | m9-plan B | | |
+| M9-C | 빠진 에이전트·스킬 작성 | TODO | | m9-plan C | | |
+| M9-D | 연구·운영·배포·외부([정책] 항상 ask) | TODO | | m9-plan D | | |
+| M9-E | 브라우저 자격 증명·고급 | TODO | | m9-plan E | | |
+| M9-F | 남은 훅 | TODO | | m9-plan F | | |
 
 ## M10 — 원본 대비 비교 + HTML 보고서
 VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
