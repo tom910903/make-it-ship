@@ -179,3 +179,19 @@ test('freeze boundary (M6-07): edits outside the frozen directory are denied, wi
   assert.equal(w(`${REPO}/README.md`, { ...frozen, activeRun: true }), 'deny');
   assert.match(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/x.js` }, cwd: REPO }, frozen).reason, /mis unfreeze/);
 });
+
+test('own MCP tools (M7): memory-style writes are not treated as external writes; file-writing tools ask in a run and respect freeze', () => {
+  const t = (name, input = {}, c = ctx) => d({ tool_name: `mcp__plugin_make-it-ship_mis__${name}`, tool_input: input, cwd: REPO }, c);
+  for (const n of ['notepad_write_priority', 'state_write', 'wiki_delete', 'shared_memory_delete', 'project_memory_write']) assert.equal(t(n), 'allow', n);
+  assert.equal(d({ tool_name: 'mcp__other__wiki_delete', tool_input: {}, cwd: REPO }), 'ask', 'other servers keep the external-write rule');
+  assert.equal(t('ast_grep_replace', { apply: false }), 'allow', 'dry run');
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src'] }), 'ask');
+  assert.equal(t('lsp_rename', { apply: true }), 'ask');
+  assert.equal(t('lsp_code_action_resolve', {}), 'ask');
+  const idle = { ...ctx, activeRun: false };
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src'] }, idle), 'allow');
+  const frozen = { ...idle, freezeDir: `${REPO}/src` };
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src/a.js'] }, frozen), 'allow');
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['lib'] }, frozen), 'deny');
+  assert.equal(t('lsp_rename', { apply: true, file: `${REPO}/src/a.js` }, frozen), 'deny', 'rename may touch any file → frozen means no');
+});

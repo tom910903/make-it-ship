@@ -13,6 +13,9 @@ const STATE_PATH = /\.git\/(?:.*\/)?make-it-ship\/(?:runs\/|current$)/;
 const BASH_STATE = /make-it-ship\/(?:runs|current)\b/; // §7: state paths; `cd` into the state dir is checked separately
 const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|write/i;
 const CONFIG = '.make-it-ship.json';
+// The plugin's own MCP server (M7): its memory/state/wiki writes are local, not external; file rewriters are checked.
+const OWN_MCP = 'mcp__plugin_make-it-ship_mis__';
+const FILE_WRITERS = ['ast_grep_replace', 'lsp_rename', 'lsp_code_action_resolve'];
 
 import { commandsOf } from './shell.mjs';
 
@@ -193,6 +196,16 @@ export function classify(input, ctx) {
       if (!ctx.plannedFiles.some((g) => globToRegExp(g).test(rel))) return ask(`${rel} is outside the approved plan's files; editing it widens the scope`);
     }
     return allow;
+  }
+  if (tool.startsWith(OWN_MCP)) {
+    const name = tool.slice(OWN_MCP.length);
+    const writes = name === 'lsp_code_action_resolve' || (FILE_WRITERS.includes(name) && ti.apply === true);
+    if (!writes) return allow;
+    if (ctx.freezeDir) {
+      const paths = name === 'ast_grep_replace' ? [].concat(ti.paths ?? []) : [];
+      if (!paths.length || paths.some((p) => !(resolve(cwd, p) + sep).startsWith(ctx.freezeDir + sep))) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
+    }
+    return ctx.activeRun ? ask(`${name} rewrites files outside the plan's per-file check; confirm the change`) : allow;
   }
   if (tool.startsWith('mcp__')) {
     const name = tool.split('__').slice(2).join('__');

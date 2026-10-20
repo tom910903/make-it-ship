@@ -129,7 +129,14 @@ VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아
 | M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | TODO | — | VERIFIER_PROMPT | | |
 
 ## M7 — MCP 도구 서버
-VERIFY: PENDING — 범위: gap-matrix §7 M7 행.
+VERIFY: PENDING — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서버 cwd=세션 cwd, `CLAUDE_PROJECT_DIR`·`CLAUDE_PLUGIN_DATA` 제공(2026-10-20 probe). `--strict-mcp-config`에서는 로드 안 됨(ADR-0003).
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M7-01 | MCP 서버 골격(stdio JSON-RPC, registry), `.mcp.json`, 스킬 도구 3개(list_skills, load_skills_local/global), guard: 자체 MCP 도구 허용·파일 재작성 도구 ask/freeze | DONE | `tests/integration/mcp-server.test.mjs`, `tests/unit/policy.test.mjs` | gap §2.4 skills, §6.3 | (이 커밋) | npm test 352 |
+| M7-02 | 기억 도구 20개: notepad_*(6), project_memory_*(4), state_*(5), shared_memory_*(5) + `<remember>` 태그 + SessionStart 주입 + PreCompact 보존 | TODO | `tests/integration/mcp-memory.test.mjs` | gap §2.3·§2.4 | | |
+| M7-03 | wiki_*(7)+wiki 키워드, session_search, trace_timeline/summary, deepinit_manifest, merge_readiness_*(5) | TODO | `tests/integration/mcp-knowledge.test.mjs` | gap §2.4 | | |
+| M7-04 | lsp_*(12), ast_grep_search/replace, python_repl (설치된 언어 서버·sg·python3 사용, 없으면 BLOCKED 안내) | TODO | `tests/integration/mcp-code.test.mjs` | gap §2.4 | | |
+| M7-05 | 훅 연결(SessionStart·PreCompact·Stop·PostToolUse), README 도구 절, 실사용(헤드리스, strict 없이) + 독립 검증 → `m7-verified` | TODO | — | ADR-0003 | | |
 
 ## M8 — 브라우저·팀·문서 변환
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
