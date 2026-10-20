@@ -2,6 +2,7 @@
 // Always-on hooks (M6): SessionStart, SubagentStart, ... One entry, event name in argv[2].
 // Fail-open by design: any error or bad input prints nothing and exits 0 so a session is never blocked.
 // (guard.mjs is the separate fail-closed PreToolUse hook.)
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleRules, currentStyle } from './lib/style.mjs';
@@ -9,6 +10,19 @@ import { globalConfig } from './lib/home.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = (event, text) => text ? { hookSpecificOutput: { hookEventName: event, additionalContext: text } } : null;
+
+/** Context use from the last assistant usage in the transcript (shortcut: assumes a 200k window). */
+function contextPercent(path) {
+  if (!path) return 0;
+  try {
+    const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
+    for (let i = lines.length - 1; i >= 0 && i >= lines.length - 200; i--) {
+      const u = JSON.parse(lines[i])?.message?.usage;
+      if (u) return Math.round(((u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) / 2000);
+    }
+  } catch { /* unreadable transcript */ }
+  return 0;
+}
 
 const handlers = {
   async SessionStart(input) {
@@ -36,6 +50,29 @@ const handlers = {
     try { const { repoRoot } = await import('./lib/tree-hash.mjs'); root = repoRoot(input.cwd || process.cwd()); } catch { /* not a repo */ }
     const text = promptContext(detectKeywords(prompt, { disabled: globalConfig().keywords.disabled }), style, learnedSkills(prompt, root, homeDir()));
     return context('UserPromptSubmit', text);
+  },
+  async Stop(input) {
+    const cwd = input.cwd || process.cwd();
+    const { readLoop, writeLoop, endLoop, loopDecision } = await import('./lib/loop.mjs');
+    const loop = readLoop(cwd);
+    if (loop.active) {
+      let run = null, v = null;
+      try {
+        const { loadRun } = await import('./lib/state.mjs');
+        run = loadRun(cwd);
+        if (run) {
+          const { verdictContext } = await import('./lib/commands.mjs');
+          const { verdict } = await import('./lib/verdict.mjs');
+          v = verdict(run.state, verdictContext(run, cwd));
+        }
+      } catch { /* not a repo or no run */ }
+      const d = loopDecision(loop, run, v);
+      if (d.end) endLoop(cwd, d.end);
+      if (d.iterate) { writeLoop(cwd, { ...loop, iteration: d.iterate }); return { decision: 'block', reason: d.block }; }
+      return { systemMessage: d.message };
+    }
+    const pct = contextPercent(input.transcript_path);
+    return pct >= 75 ? { systemMessage: `Context is about ${pct}% full. Consider /compact or a fresh session; run state is kept (mis status / /make-it-ship:resume).` } : null;
   },
   SubagentStart(input) {
     const rules = styleRules(currentStyle());

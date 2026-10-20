@@ -3,6 +3,7 @@ import { currentStyle, setStyle, normalizeStyle } from './style.mjs';
 import { globalConfig, setGlobalConfig, homeDir } from './home.mjs';
 import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './keywords.mjs';
 import { repoRoot } from './tree-hash.mjs';
+import { readLoop, startLoop, endLoop } from './loop.mjs';
 
 function style([a, b]) {
   if (a === 'default') {
@@ -24,4 +25,15 @@ function testPrompt(args, cwd) {
   return { matches: matches.map((m) => m.name), style, skills: skills.map((s) => s.name), context: promptContext(matches, style, skills) };
 }
 
-export const alwaysCommands = { style, 'test-prompt': testPrompt };
+function loop([sub, ...rest], cwd) {
+  if (sub === 'start') {
+    let max = 20;
+    if (rest[0] === '--max') { max = Number(rest[1]); rest = rest.slice(2); }
+    return startLoop(cwd, rest.join(' ').trim(), max);
+  }
+  if (sub === 'cancel') return endLoop(cwd, 'cancelled');
+  if (sub === 'status' || sub === undefined) return readLoop(cwd);
+  throw new Error('usage: mis loop start [--max N] <task> | status | cancel');
+}
+
+export const alwaysCommands = { style, 'test-prompt': testPrompt, loop };
