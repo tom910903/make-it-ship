@@ -86,8 +86,8 @@ async function lspDirectory(dir) {
   }
   const errorCount = diagnostics.filter((d) => d.severity === 'error').length, warningCount = diagnostics.filter((d) => d.severity === 'warning').length;
   return {
-    strategy: 'lsp', success: errorCount === 0 && skipped.length === 0, errorCount, warningCount, filesChecked, diagnostics, skipped, installHints: [...hints],
-    summary: `LSP: ${errorCount} errors, ${warningCount} warnings in ${filesChecked} file(s)${skipped.length ? `; ${skipped.length} file(s) NOT checked` : ''}`,
+    strategy: 'lsp', success: errorCount === 0 && skipped.length === 0 && filesChecked > 0, errorCount, warningCount, filesChecked, diagnostics, skipped, installHints: [...hints],
+    summary: `LSP: ${errorCount} errors, ${warningCount} warnings in ${filesChecked} file(s)${skipped.length ? `; ${skipped.length} file(s) NOT checked` : ''}${filesChecked ? '' : '; nothing was checked'}`,
   };
 }
 

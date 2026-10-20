@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, exi
 import { join, resolve } from 'node:path';
 
 export function stateRoot(cwd) {
-  const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8' }).trim();
+  const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   return join(resolve(cwd, common), 'make-it-ship');
 }
 

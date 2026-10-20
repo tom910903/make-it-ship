@@ -45,10 +45,18 @@ export function repl({ action, code = '', id = 'default', timeoutMs = 300000, di
   }
   if (!['execute', 'reset', 'get_state'].includes(action)) throw new Error(`unknown action ${action}; use execute, interrupt, reset or get_state`);
   if (action === 'execute' && !code) throw new Error('code is required for execute');
-  const s = sessions.get(id) ?? start(id, dir);
+  let s = sessions.get(id);
+  if (s && (s.proc.exitCode !== null || s.proc.signalCode !== null)) { sessions.delete(id); s = null; }
+  s ??= start(id, dir);
   const run = async () => {
-    const r = await ask(s, { action, code }, action === 'execute' ? timeoutMs : 10000);
-    if (r === null) return { session: id, error: 'python process exited; it will be restarted on the next call (state lost)' };
+    let r = await ask(s, { action, code }, action === 'execute' ? timeoutMs : 10000);
+    if (r === null) {
+      // the interpreter died before answering (killed from outside): the code never ran, so run it once in a fresh one
+      sessions.delete(id); s = start(id, dir);
+      r = await ask(s, { action, code }, action === 'execute' ? timeoutMs : 10000);
+      if (r === null) return { session: id, error: 'python process exited; it will be restarted on the next call (state lost)' };
+      if (r !== undefined) return { session: id, restarted: true, note: 'the previous interpreter had died; state was lost', ...(action === 'execute' ? { execution: ++s.count } : {}), ...r };
+    }
     if (r !== undefined) return { session: id, ...(action === 'execute' ? { execution: ++s.count } : {}), ...r };
     s.proc.kill('SIGINT');
     const after = await late(s, 2000);

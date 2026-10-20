@@ -53,6 +53,7 @@ export function setPriority(cwd, content, now = new Date()) {
 export function addEntry(cwd, section, content, now = new Date()) {
   const t = text('content', content, 4000);
   const n = notepad(cwd);
+  if (n[section].some((e) => e.text === t)) return { section, chars: t.length, duplicate: true };
   n[section] = [...n[section], { at: now.toISOString(), text: t }];
   if (section === 'working') n.working = n.working.filter((e) => new Date(e.at) >= new Date(now - WORKING_DAYS * 864e5));
   saveNotepad(cwd, n);
@@ -267,4 +268,13 @@ export function preCompactContext(cwd) {
     if (loop.active) out.push(`## Active loop\nloop on "${loop.task}", iteration ${loop.iteration}/${loop.max}.`);
     return out.length ? `# Make It Ship context (preserved across compaction)\n\n${out.join('\n\n')}` : '';
   } catch { return ''; }
+}
+
+/** PostToolUse: remember a test command that just succeeded, if the project has none recorded yet. */
+export function learnTestCommand(cwd, command) {
+  const m = projectEnsure(cwd);
+  const cmd = String(command ?? '').trim().slice(0, 200);
+  if (!cmd || m.build?.testCommand) return false;
+  projectSave(cwd, { ...m, build: { ...m.build, testCommand: cmd } });
+  return true;
 }

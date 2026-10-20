@@ -48,8 +48,10 @@ const handlers = {
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     try {
       const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');
-      parts.push(mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
-      if (input.source === 'compact') parts.push(mem.preCompactContext(cwd), wiki.wikiPreCompact(cwd));
+      try { mem.projectEnsure(cwd); } catch { /* not a repo */ }
+      // After compaction the preserved block already carries the priority notes and directives.
+      parts.push(input.source === 'compact' ? mem.preCompactContext(cwd) : mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
+      if (input.source === 'compact') parts.push(wiki.wikiPreCompact(cwd));
     } catch { /* memory and wiki are optional context */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
     parts.push(buildCodeMap(cwd));
@@ -112,10 +114,15 @@ const handlers = {
       sess.edits = (sess.edits ?? 0) + 1;
       if (sess.edits % EDIT_REMINDER_EVERY === 0) out.push(`${sess.edits} edits since the last test run: run the tests (or mis check) and read the output before claiming progress.`);
     }
-    if (input.tool_name === 'Bash' && isTestCommand(ti.command)) { sess.edits = 0; sess.failures = {}; }
+    if (input.tool_name === 'Bash' && isTestCommand(ti.command)) {
+      sess.edits = 0; sess.failures = {};
+      try { (await import('./lib/memory.mjs')).learnTestCommand(input.cwd || process.cwd(), ti.command); } catch { /* best effort */ }
+    }
     // <remember> tags count only in subagent results (the model's own words), never in files or command output it read.
     if (['Agent', 'Task'].includes(input.tool_name)) {
-      try { (await import('./lib/memory.mjs')).extractRemember(JSON.stringify(input.tool_response ?? ''), input.cwd || process.cwd()); } catch { /* best effort */ }
+      const r = input.tool_response;
+      const text = typeof r === 'string' ? r : Array.isArray(r?.content) ? r.content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n') : typeof r?.result === 'string' ? r.result : '';
+      try { (await import('./lib/memory.mjs')).extractRemember(text, input.cwd || process.cwd()); } catch { /* best effort */ }
     }
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
     return context('PostToolUse', out.join('\n\n'));

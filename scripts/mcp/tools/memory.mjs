@@ -1,12 +1,24 @@
 // Memory tools (absorbs OMC notepad_* / project_memory_* / state_* / shared_memory_*). Storage: scripts/lib/memory.mjs.
 import * as M from '../../lib/memory.mjs';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { stateRoot } from '../../lib/state.mjs';
+
+/** Like OMC: a workingDirectory in another repository falls back to the session's; a missing path is an error. */
+function wdOf(a, cwd) {
+  if (!a.workingDirectory) return cwd;
+  const p = resolve(cwd, a.workingDirectory);
+  if (!existsSync(p)) throw new Error(`workingDirectory not found: ${a.workingDirectory}`);
+  const root = (d) => { try { return stateRoot(d); } catch { return null; } };
+  return root(p) === root(cwd) ? p : cwd;
+}
 
 const WD = { workingDirectory: { type: 'string', description: 'Working directory (defaults to the project dir)' } };
 const SID = { session_id: { type: 'string', description: 'Accepted for OMC compatibility; mode state is per repo, not per session' } };
 const str = (description) => ({ type: 'string', description });
 const tool = (name, description, properties, required, run) => ({
   name, description, inputSchema: { type: 'object', properties: { ...properties, ...WD }, required },
-  handler: (a, { cwd }) => run(a, a.workingDirectory || cwd),
+  handler: (a, { cwd }) => run(a, wdOf(a, cwd)),
 });
 
 const notepad = [
