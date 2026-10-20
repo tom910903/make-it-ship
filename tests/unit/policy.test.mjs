@@ -194,4 +194,8 @@ test('own MCP tools (M7): memory-style writes are not treated as external writes
   assert.equal(t('ast_grep_replace', { apply: true, paths: ['src/a.js'] }, frozen), 'allow');
   assert.equal(t('ast_grep_replace', { apply: true, paths: ['lib'] }, frozen), 'deny');
   assert.equal(t('lsp_rename', { apply: true, file: `${REPO}/src/a.js` }, frozen), 'deny', 'rename may touch any file → frozen means no');
+test('M6 D8: unstaging is not a discard', () => {
+  assert.equal(d(bash('git restore --staged .')), 'allow');
+  assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
+  assert.equal(d(bash('git restore -S .')), 'allow');
 });

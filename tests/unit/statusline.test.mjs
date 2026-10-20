@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { renderHud } from '../../scripts/statusline.mjs';
 import { makeRepo, mis, ROOT } from '../helpers.mjs';
@@ -22,8 +22,8 @@ test('HUD one-liner format', () => {
 
 test('statusline script: idle line without a run, run line plus extras with one', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
-  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) };
-  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, ...extra }), encoding: 'utf8', env });
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')), CLAUDE_CODE_SESSION_ID: 'S' };
+  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, session_id: 'S', ...extra }), encoding: 'utf8', env });
   assert.equal(sl(dir).stdout, 'MIS ▸ idle · style full · main\n');
   mis(dir, ['start', '--input', 'x']);
   assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL · style full · main\n?$/);
@@ -55,4 +55,18 @@ test('doctor states that token budgets are not enforceable by a plugin', () => {
   const tb = r.json.checks.find((c) => c.name === 'token-budget');
   assert.equal(tb.status, 'warn');
   assert.match(tb.detail, /not supported/);
+});
+
+test('M6 D11: freeze shows in the line; statusLine.chain appends another status line command', () => {
+  const dir = makeRepo({ 'src/a.js': '' });
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  mis(dir, ['freeze', 'src'], { env });
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('OTHER '+JSON.parse(s).model.display_name))\"" } }));
+  const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, model: { display_name: 'M' } }), encoding: 'utf8', env });
+  assert.match(r.stdout, /· frozen src · /);
+  assert.match(r.stdout, / \| OTHER M\n$/);
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: 'exit 3' } }));
+  const bad = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
+  assert.match(bad.stdout, /^MIS ▸ idle/, 'a failing chained command is ignored');
 });

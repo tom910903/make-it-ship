@@ -15,13 +15,15 @@ const handlers = {
   async SessionStart(input) {
     const cwd = input.cwd || process.cwd();
     const { disciplineText } = await import('./lib/discipline.mjs');
-    const parts = [disciplineText(ROOT), styleRules(currentStyle())];
+    const parts = [disciplineText(ROOT), styleRules(currentStyle(input.session_id))];
     try {
       const { loadRun, TERMINAL } = await import('./lib/state.mjs');
       const run = loadRun(cwd);
       if (run && !TERMINAL.includes(run.state.state)) {
         parts.push(`There is an active Make It Ship run ${run.state.runId} (state ${run.state.state}). To continue it, invoke /make-it-ship:resume; to drop it, run mis cancel.`);
       }
+      const frozen = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir;
+      if (frozen) parts.push(`Edits are frozen to ${frozen}: Write/Edit outside it are denied until the user runs mis unfreeze.`);
       const loop = (await import('./lib/loop.mjs')).readLoop(cwd);
       if (loop.active) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
     } catch { /* not a git repo */ }
@@ -35,7 +37,7 @@ const handlers = {
     const { homeDir } = await import('./lib/home.mjs');
     const prompt = String(input.prompt ?? '');
     const style = styleSwitch(prompt);
-    if (style) { const { setStyle } = await import('./lib/style.mjs'); setStyle(style); }
+    if (style) { try { (await import('./lib/style.mjs')).setStyle(style, input.session_id || 'default'); } catch { /* unwritable home: still inject the context */ } }
     let root = null;
     try { const { repoRoot } = await import('./lib/tree-hash.mjs'); root = repoRoot(input.cwd || process.cwd()); } catch { /* not a repo */ }
     const text = promptContext(detectKeywords(prompt, { disabled: globalConfig().keywords.disabled }), style, learnedSkills(prompt, root, homeDir()));
@@ -43,8 +45,8 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
-    const { readLoop, writeLoop, endLoop, loopDecision } = await import('./lib/loop.mjs');
-    const loop = readLoop(cwd);
+    const { loopForSession, writeLoop, endLoop, loopDecision, lastReportAt } = await import('./lib/loop.mjs');
+    const loop = loopForSession(cwd, input.session_id);
     if (loop.active) {
       let run = null, v = null;
       try {
@@ -56,7 +58,7 @@ const handlers = {
           v = verdict(run.state, verdictContext(run, cwd));
         }
       } catch { /* not a repo or no run */ }
-      const d = loopDecision(loop, run, v, input.stop_hook_active === true);
+      const d = loopDecision(loop, run, v, input.stop_hook_active === true, run ? lastReportAt(run) : null);
       if (d.end) endLoop(cwd, d.end);
       else if (d.save || d.iterate) writeLoop(cwd, { ...loop, ...d.save, ...(d.iterate ? { iteration: d.iterate } : {}) });
       if (d.iterate) return { decision: 'block', reason: d.block };
@@ -87,7 +89,7 @@ const handlers = {
       if (sess.edits % EDIT_REMINDER_EVERY === 0) out.push(`${sess.edits} edits since the last test run: run the tests (or mis check) and read the output before claiming progress.`);
     }
     if (input.tool_name === 'Bash' && isTestCommand(ti.command)) { sess.edits = 0; sess.failures = {}; }
-    writeSession(input.session_id, sess);
+    try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
     return context('PostToolUse', out.join('\n\n'));
   },
   async PostToolUseFailure(input) {
@@ -102,7 +104,7 @@ const handlers = {
       : null;
   },
   SubagentStart(input) {
-    const rules = styleRules(currentStyle());
+    const rules = styleRules(currentStyle(input.session_id));
     if (!rules) return null;
     let re = null;
     try { if (globalConfig().subagentMatcher) re = new RegExp(globalConfig().subagentMatcher, 'i'); } catch { re = null; }

@@ -16,10 +16,11 @@ export function renderHud(s, ctx, cost) {
   return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}${usd}`;
 }
 
-export function renderExtras({ style, loop, branch, model, ctxPct }) {
+export function renderExtras({ style, loop, frozen, branch, model, ctxPct }) {
   return [
     style && style !== 'off' ? `style ${style === 'ultra' ? 'ULTRA' : style}` : null,
     loop?.active ? `loop ${loop.iteration}/${loop.max}` : null,
+    frozen ? `frozen ${frozen}` : null,
     branch || null,
     model || null,
     ctxPct ? `ctx ${ctxPct}%` : null,
@@ -42,12 +43,26 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), input.cost)
       : 'MIS ▸ idle';
     const extras = renderExtras({
-      style: await part(() => currentStyle()),
-      loop: await part(() => readLoop(cwd)),
+      style: await part(() => currentStyle(input.session_id)),
+      loop: await part(() => { const l = readLoop(cwd); return !l.session || !input.session_id || l.session === input.session_id ? l : null; }),
       branch: await part(() => execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()),
       model: input.model?.display_name,
       ctxPct: contextPercent(input.transcript_path),
+      frozen: await part(async () => {
+        const dir = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir;
+        if (!dir) return null;
+        const { relative } = await import('node:path');
+        const rel = relative((await import('./lib/tree-hash.mjs')).repoRoot(cwd), dir);
+        return rel && !rel.startsWith('..') ? rel : dir;
+      }),
     });
-    console.log(head + extras);
+    // statusLine.chain: keep another status line (e.g. the one you had before) after ours, fed the same input.
+    const chain = await part(async () => (await import('./lib/home.mjs')).globalConfig().statusLine?.chain);
+    let tail = '';
+    if (chain) {
+      const r = await part(() => execFileSync('sh', ['-c', chain], { input: raw, encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'ignore'] }));
+      if (r?.trim()) tail = ` | ${r.trim().split('\n')[0]}`;
+    }
+    console.log(head + extras + tail);
   } catch { /* a status line must never break the session; print nothing */ }
 }

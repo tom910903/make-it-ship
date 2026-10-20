@@ -31,7 +31,7 @@ test('style rules: off is empty; each level keeps the shared rules and only its 
 });
 
 test('mis style: shows, sets the session level, and stores the default; bad levels fail', () => {
-  const dir = makeRepo(), h = home(), env = { MIS_STATE_HOME: h };
+  const dir = makeRepo(), h = home(), env = { MIS_STATE_HOME: h, CLAUDE_CODE_SESSION_ID: 'S' };
   assert.equal(mis(dir, ['style'], { env }).json.level, 'full', 'default level is full');
   assert.equal(mis(dir, ['style', 'ultra'], { env }).json.level, 'ultra');
   assert.equal(mis(dir, ['style'], { env }).json.level, 'ultra');

@@ -4,11 +4,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { globToRegExp } from './policy.mjs';
-import { readHome, writeHome, homeDir } from './home.mjs';
+import { homeDir } from './home.mjs';
 
-const sid = (id) => `sessions/${String(id || 'default').replace(/[^\w.-]/g, '_')}.json`;
-export const readSession = (id) => readHome(sid(id), {}) ?? {};
-export const writeSession = (id, s) => writeHome(sid(id), s);
+export { readSession, writeSession } from './home.mjs';
 
 // Claude Code loads .claude/rules and ~/.claude/rules natively, so only the formats it does not read are injected here.
 const RULE_DIRS = [['.cursor', 'rules'], ['.github', 'instructions']];

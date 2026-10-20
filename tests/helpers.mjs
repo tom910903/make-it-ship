@@ -32,7 +32,9 @@ export function write(dir, files) {
 
 /** Run mis CLI; returns {code, out, err, json} */
 export function mis(cwd, args, opts = {}) {
-  const env = { ...process.env, ...opts.env };
+  const env = { ...process.env };
+  delete env.CLAUDE_CODE_SESSION_ID; // tests run inside a Claude Code session; never inherit its id
+  Object.assign(env, opts.env);
   delete env.NODE_TEST_CONTEXT; // else a nested `node --test` check reports to this runner instead of failing
   const r = spawnSync(process.execPath, [MIS, ...args], { cwd, encoding: 'utf8', env, input: opts.input });
   let json; try { json = JSON.parse(r.stdout); } catch { /* not json */ }

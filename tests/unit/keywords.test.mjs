@@ -66,9 +66,32 @@ test('learned skills: frontmatter triggers in repo and home dirs, at most 3', ()
 
 test('mis test-prompt shows matches, style switch, and the injected context without changing state', () => {
   const dir = makeRepo(), env = { MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) };
-  const r = mis(dir, ['test-prompt', 'ralph fix it, normal mode'], { env }).json;
+  const r = mis(dir, ['test-prompt', 'ralph fix it'], { env }).json;
   assert.deepEqual(r.matches, ['loop']);
-  assert.equal(r.style, 'off');
   assert.match(r.context, /make-it-ship:loop/);
+  assert.equal(mis(dir, ['test-prompt', 'normal mode'], { env }).json.style, 'off');
   assert.equal(mis(dir, ['style'], { env }).json.level, 'full', 'test-prompt is a dry run');
+});
+
+test('M6 D2/D7: names, quotes, complaints and casual words do not start modes', () => {
+  for (const p of [
+    'Ralph from QA reported a bug in login, fix it', 'Our new intern Ralph wrote this module', 'Rename the ralph variable to worker',
+    'He said "ralph" was the codename', '랄프가 어제 회의에서 말한 버그 고쳐줘', 'ralph keeps looping, make it stop', '랄프가 계속 반복돼, 멈춰줘',
+    'the UW campus map is broken',
+  ]) assert.deepEqual(names(p), [], p);
+  assert.deepEqual(names('stop the ralph loop'), ['cancel']);
+  for (const p of ['ralph: fix the importer', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode on the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘'])
+    assert.deepEqual(names(p), ['loop'], p);
+});
+
+test('M6 D9: Japanese variants', () => {
+  const cases = { loop: 'ラルフで直して', run: 'オートパイロットで作って', parallel: 'ウルトラワークで', 'second-opinion': 'シーシージー', 'plan-consensus': 'ラルプランして', interview: 'ディープインタビューしよう', tdd: 'テストファーストで', review: 'コードレビューして', 'security-review': 'セキュリティレビューして', think: 'ウルトラシンク', search: 'ディープサーチして', analyze: 'ディープアナライズして' };
+  for (const [n, p] of Object.entries(cases)) assert.ok(names(p).includes(n), `${n} ← ${p}: ${names(p)}`);
+});
+
+test('M6 D4: style phrases only when the prompt is just the phrase', () => {
+  assert.equal(styleSwitch('the router falls back to normal mode when wifi drops; fix it'), null);
+  assert.equal(styleSwitch('Normal mode.'), 'off');
+  assert.equal(styleSwitch('please stop ponytail'), 'off');
+  assert.equal(styleSwitch('use ponytail ultra for the parser rewrite'), null);
 });

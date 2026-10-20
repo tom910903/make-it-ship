@@ -26,6 +26,7 @@ import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
+import { readLoop, endLoop } from './loop.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -678,6 +679,7 @@ function qa([sub], cwd) {
 function cancel(args, cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
+    try { if (readLoop(cwd).active) endLoop(cwd, 'cancelled'); } catch { /* no loop */ }
     return { event: { type: 'cancel' }, result: { state: 'CANCELLED' } };
   });
 }

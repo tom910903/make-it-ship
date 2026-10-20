@@ -9,7 +9,7 @@ import { makeRepo, mis, ROOT } from '../helpers.mjs';
 const HOOKS = join(ROOT, 'scripts', 'hooks.mjs');
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const stop = (cwd, extra = {}) => {
-  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT; delete env.CLAUDE_CODE_SESSION_ID;
   const r = spawnSync(process.execPath, [HOOKS, 'Stop'], { input: JSON.stringify({ hook_event_name: 'Stop', cwd, ...extra }), encoding: 'utf8', env });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout.trim() ? JSON.parse(r.stdout) : null;
@@ -112,4 +112,52 @@ test('SessionStart announces an active loop', () => {
   const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT;
   const r = spawnSync(process.execPath, [HOOKS, 'SessionStart'], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
   assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /active Make It Ship loop.*port the parser.*0\/9.*mis loop cancel/s);
+});
+
+test('M6 D1: the loop belongs to the session that started it', () => {
+  const dir = makeRepo();
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT;
+  ok(mis(dir, ['loop', 'start', '--max', '5', 'port parser'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } }));
+  assert.equal(ok(mis(dir, ['loop', 'status'])).session, 'A');
+  assert.equal(stop(dir, { session_id: 'B' }), null, 'another session is not held by the loop');
+  assert.equal(stop(dir, { session_id: 'A' }).decision, 'block');
+});
+
+test('M6 D1: an unbound loop is claimed by the first session that stops; outside a repo too', () => {
+  const nr1 = mkdtempSync(join(tmpdir(), 'mis-nr-')), nr2 = mkdtempSync(join(tmpdir(), 'mis-nr-'));
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { MIS_STATE_HOME: home };
+  ok(mis(nr1, ['loop', 'start', 'x'], { env }));
+  const s = (cwd, session_id) => {
+    const e = { ...process.env, ...env }; delete e.NODE_TEST_CONTEXT; delete e.CLAUDE_CODE_SESSION_ID;
+    const r = spawnSync(process.execPath, [HOOKS, 'Stop'], { input: JSON.stringify({ cwd, session_id }), encoding: 'utf8', env: e });
+    return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  };
+  assert.equal(s(nr1, 'A').decision, 'block');
+  assert.equal(s(nr2, 'B'), null);
+});
+
+test('M6 D5: a run reported before the loop started does not finish the loop', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
+  ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['report']));
+  ok(mis(dir, ['loop', 'start', 'add feature X']));
+  const r = stop(dir);
+  assert.equal(r.decision, 'block');
+  assert.match(r.reason, /reported before this loop started|new run/i);
+});
+
+test('M6 D6: mis cancel also ends the loop', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['loop', 'start', 'x']));
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['cancel']));
+  const l = ok(mis(dir, ['loop', 'status']));
+  assert.deepEqual([l.active, l.endReason], [false, 'cancelled']);
+  assert.equal(stop(dir), null);
 });

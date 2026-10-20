@@ -10,7 +10,7 @@ import { buildCodeMap } from '../../scripts/lib/codemap.mjs';
 const HOOKS = join(ROOT, 'scripts', 'hooks.mjs');
 const home = () => mkdtempSync(join(tmpdir(), 'mis-home-'));
 const hook = (event, input, env = {}) => {
-  const e = { ...process.env, ...env }; delete e.NODE_TEST_CONTEXT;
+  const e = { ...process.env }; delete e.CLAUDE_CODE_SESSION_ID; Object.assign(e, env); delete e.NODE_TEST_CONTEXT;
   const r = spawnSync(process.execPath, [HOOKS, event], { input: typeof input === 'string' ? input : JSON.stringify(input), encoding: 'utf8', env: e });
   let json = null; try { json = JSON.parse(r.stdout); } catch { /* none */ }
   return { code: r.status, out: r.stdout, err: r.stderr, json, ctx: json?.hookSpecificOutput?.additionalContext ?? '' };
@@ -29,8 +29,8 @@ test('SessionStart: skill discipline, always-on rules, style at the session leve
   assert.match(r.ctx, /level: full/);
   assert.match(r.ctx, /src\/: slugify, MAX/);
   assert.doesNotMatch(r.ctx, /hidden/, 'test files are not in the map');
-  mis(dir, ['style', 'off'], { env: { MIS_STATE_HOME: h } });
-  const off = hook('SessionStart', { source: 'startup', cwd: dir }, { MIS_STATE_HOME: h });
+  mis(dir, ['style', 'off'], { env: { MIS_STATE_HOME: h, CLAUDE_CODE_SESSION_ID: 'S' } });
+  const off = hook('SessionStart', { source: 'startup', cwd: dir, session_id: 'S' }, { MIS_STATE_HOME: h });
   assert.doesNotMatch(off.ctx, /MAKE IT SHIP STYLE/);
   assert.match(off.ctx, /make-it-ship:run/, 'discipline stays even when style is off');
 });
@@ -51,8 +51,8 @@ test('SubagentStart: style rules reach subagents; subagentMatcher limits them; o
   assert.match(hook('SubagentStart', { agent_type: 'make-it-ship:implementer' }, { MIS_STATE_HOME: h }).ctx, /level: full/);
   writeFileSync(join(h, 'config.json'), JSON.stringify({ subagentMatcher: '(' }));
   assert.match(hook('SubagentStart', { agent_type: 'x' }, { MIS_STATE_HOME: h }).ctx, /level: full/, 'a bad matcher fails open (inject)');
-  mis(makeRepo(), ['style', 'off'], { env: { MIS_STATE_HOME: h } });
-  assert.equal(hook('SubagentStart', { agent_type: 'x' }, { MIS_STATE_HOME: h }).out, '');
+  mis(makeRepo(), ['style', 'off'], { env: { MIS_STATE_HOME: h, CLAUDE_CODE_SESSION_ID: 'S' } });
+  assert.equal(hook('SubagentStart', { agent_type: 'x', session_id: 'S' }, { MIS_STATE_HOME: h }).out, '');
 });
 
 test('always-on hooks fail open: bad input or an unknown event exits 0 without blocking', () => {
@@ -78,8 +78,28 @@ test('UserPromptSubmit: keyword context injected, style phrase persists the leve
   const r = hook('UserPromptSubmit', { prompt: 'ralph: fix the importer', cwd: dir }, { MIS_STATE_HOME: h });
   assert.equal(r.json.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(r.ctx, /make-it-ship:loop/);
-  const s = hook('UserPromptSubmit', { prompt: 'normal mode from now', cwd: dir }, { MIS_STATE_HOME: h });
+  const s = hook('UserPromptSubmit', { prompt: 'normal mode', cwd: dir, session_id: 'S' }, { MIS_STATE_HOME: h });
   assert.match(s.ctx, /Style level is now off/);
-  assert.equal(mis(dir, ['style'], { env: { MIS_STATE_HOME: h } }).json.level, 'off');
+  assert.equal(mis(dir, ['style'], { env: { MIS_STATE_HOME: h, CLAUDE_CODE_SESSION_ID: 'S' } }).json.level, 'off');
   assert.equal(hook('UserPromptSubmit', { prompt: 'rename the variable', cwd: dir }, { MIS_STATE_HOME: h }).out, '');
+});
+
+test('M6 D3: the style level is per session; the default applies to new sessions', () => {
+  const dir = makeRepo(), h = home(), env = { MIS_STATE_HOME: h };
+  hook('UserPromptSubmit', { prompt: 'normal mode', cwd: dir, session_id: 'A' }, env);
+  assert.doesNotMatch(hook('SessionStart', { cwd: dir, session_id: 'A' }, env).ctx, /MAKE IT SHIP STYLE/, 'session A is off');
+  assert.match(hook('SessionStart', { cwd: dir, session_id: 'B' }, env).ctx, /level: full/, 'session B gets the default');
+  mis(dir, ['style', 'default', 'ultra'], { env });
+  assert.match(hook('SessionStart', { cwd: dir, session_id: 'C' }, env).ctx, /level: ultra/);
+  // `mis style lite` run by the model in session D (the host exports CLAUDE_CODE_SESSION_ID to Bash) applies to D only
+  mis(dir, ['style', 'lite'], { env: { ...env, CLAUDE_CODE_SESSION_ID: 'D' } });
+  assert.match(hook('SubagentStart', { cwd: dir, session_id: 'D', agent_type: 'x' }, env).ctx, /level: lite/);
+  assert.match(hook('SubagentStart', { cwd: dir, session_id: 'E', agent_type: 'x' }, env).ctx, /level: ultra/);
+});
+
+test('M6 D12: an unwritable home does not drop the keyword context', () => {
+  const dir = makeRepo(), f = join(home(), 'file');
+  writeFileSync(f, 'x');
+  const r = hook('UserPromptSubmit', { prompt: 'tdd this', cwd: dir, session_id: 'A' }, { MIS_STATE_HOME: f });
+  assert.match(r.ctx, /TDD mode/);
 });
