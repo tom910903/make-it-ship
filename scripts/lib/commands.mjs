@@ -633,6 +633,12 @@ function secondOpinion([sub], cwd) {
 }
 
 /** mis bench <check> [--runs N]: wall-clock median of N runs, compared with the run's first measurement of that check. */
+/** +20% → WARN, +50% → REGRESSION against the run's first measurement. */
+export function benchStatus(medianMs, baseMs, failed = null) {
+  const deltaPct = baseMs && !failed ? Math.round(((medianMs - baseMs) / baseMs) * 100) : null;
+  return { deltaPct, status: failed ? 'FAILED' : !baseMs ? 'BASELINE' : deltaPct > 50 ? 'REGRESSION' : deltaPct > 20 ? 'WARN' : 'OK' };
+}
+
 function bench(args, cwd) {
   const runs = Number(flag(args, '--runs') ?? 5);
   const [name] = args;
@@ -653,8 +659,7 @@ function bench(args, cwd) {
   return mutate(cwd, (run) => {
     const s = run.state;
     const base = s.notes.find((n) => n.kind === 'bench' && n.check === name && n.status !== 'FAILED');
-    const deltaPct = base && !failed ? Math.round(((medianMs - base.medianMs) / base.medianMs) * 100) : null;
-    const status = failed ? 'FAILED' : !base ? 'BASELINE' : deltaPct > 50 ? 'REGRESSION' : deltaPct > 20 ? 'WARN' : 'OK';
+    const { deltaPct, status } = benchStatus(medianMs, base?.medianMs, failed);
     const rec = { kind: 'bench', check: name, runs: times.length, medianMs, minMs: Math.round(times[0]), maxMs: Math.round(times.at(-1)),
       baselineMs: base?.medianMs ?? null, deltaPct, status, error: failed, treeHash: treeHash(root), at: new Date().toISOString() };
     s.notes.push(rec);
