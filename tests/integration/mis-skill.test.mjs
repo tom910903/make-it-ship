@@ -76,11 +76,11 @@ test('lint: warnings do not fail, errors do; lint with no name checks every lear
 test('list and search cover project, user and plugin skills', () => {
   const { dir, env } = setup();
   ok(mis(dir, ['skill', 'add', '-'], { env, input: skill('proj-one') }));
-  ok(mis(dir, ['skill', 'add', '-', '--scope', 'user'], { env, input: skill('user-one', { triggers: '[deploy freeze]', body: '# U\n\nCheck the canary dashboard.\n' }) }));
+  ok(mis(dir, ['skill', 'add', '-', '--scope', 'user'], { env, input: skill('user-one', { triggers: '[deploy freeze]', body: '# U\n\nCheck the zebra-quokka dashboard.\n' }) }));
   const list = ok(mis(dir, ['skill', 'list'], { env })).skills;
   assert.deepEqual(list.filter((s) => s.scope !== 'plugin').map((s) => `${s.scope}:${s.name}`), ['project:proj-one', 'user:user-one']);
   assert.ok(list.some((s) => s.scope === 'plugin' && s.name === 'run'));
-  assert.deepEqual(ok(mis(dir, ['skill', 'search', 'canary'], { env })).skills.map((s) => s.name), ['user-one'], 'body text');
+  assert.deepEqual(ok(mis(dir, ['skill', 'search', 'zebra-quokka'], { env })).skills.map((s) => s.name), ['user-one'], 'body text');
   assert.deepEqual(ok(mis(dir, ['skill', 'search', 'retry storm'], { env })).skills.map((s) => s.name), ['proj-one'], 'triggers');
 });
 

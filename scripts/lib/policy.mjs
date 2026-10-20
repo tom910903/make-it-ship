@@ -191,22 +191,52 @@ function runOnly(ws, ctx, functions) {
 
 /** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
 // M9 D0: mis subcommands that send data outside the company boundary always ask, with or without a run.
-// Each entry: [mis argv prefix, reason]. Groups adding an external command register it here (and test it).
+// Each entry: [mis argv prefix, reason, {when?: flag that must be present, unless?: flag that exempts}].
+// Groups adding an external command register it here as a literal (guard.mjs loads only this file) and test it.
+const OTHER_MODEL = 'sends your prompt and repository content to another model service (codex/gemini/claude CLI); company policy may forbid it';
 export const EXTERNAL_MIS = [
   [['browse', 'download'], "mis browse download requests a remote URL with the browser's cookies"],
   [['browse', 'scrape'], "mis browse scrape requests every media URL of the page with the browser's cookies"],
+  [['ask'], `mis ask ${OTHER_MODEL}`],
+  [['ccg'], `mis ccg ${OTHER_MODEL}`],
+  [['benchmark-models'], `mis benchmark-models ${OTHER_MODEL}`],
+  [['interop'], `mis interop starts a Codex pane that ${OTHER_MODEL}`],
+  [['telemetry', 'sync'], 'mis telemetry sync uploads local usage events to the configured endpoint'],
+  [['telemetry', 'dashboard'], 'mis telemetry dashboard queries an external aggregate endpoint'],
+  ...['init', 'import', 'sync', 'query', 'restore', 'artifacts-init'].map((s) => [['gbrain', s], `mis gbrain ${s} talks to gbrain (its engine, MCP or git remote may be outside this machine)`]),
+  [['gbrain', 'ingest'], 'mis gbrain ingest writes session and artifact text into gbrain', { unless: '--probe' }],
+  ...['generate', 'variants', 'iterate', 'evolve'].map((s) => [['design', s], `mis design ${s} sends your design brief (and images) to the OpenAI image API`]),
+  [['pair-agent', 'start'], 'mis pair-agent start lets another AI agent drive your browser (and opens a public tunnel unless --local)'],
+  [['ios', 'daemon', 'start'], 'mis ios daemon start --tailnet exposes the iOS QA relay on your tailnet', { when: '--tailnet' }],
+  [['ios', 'mint'], 'mis ios mint grants a remote agent a token for the iOS QA relay on your tailnet'],
 ];
+// M9-D: local actions that change the project or touch a deployment only after the user confirms (never silently).
+export const APPROVAL_MIS = [
+  [['approve', 'proposal'], 'mis approve proposal applies a self-improve change to process or skill files'],
+  [['deploy', 'setup'], 'mis deploy setup --write saves the deploy configuration (commands that land-and-deploy will run)', { when: '--write' }],
+  [['deploy', 'run'], 'mis deploy run merges and deploys (runs the configured deploy commands)', { unless: '--dry-run' }],
+  [['canary'], 'mis canary loads your deployed site repeatedly in the browser'],
+  [['ios', 'sync'], 'mis ios sync --apply overwrites the debug bridge files in this project', { when: '--apply' }],
+];
+const hit = (mis) => ([prefix, , o = {}]) => prefix.every((w, i) => mis[i] === w) && (!o.when || mis.includes(o.when)) && (!o.unless || !mis.includes(o.unless));
 function externalMis(mis) {
   if (!mis) return allow;
-  for (const [prefix, why] of EXTERNAL_MIS) if (prefix.every((w, i) => mis[i] === w)) return ask(`${why} — data leaves this machine; needs your approval`);
-  return allow;
+  const e = EXTERNAL_MIS.find(hit(mis));
+  if (e) return ask(`${e[1]} — data leaves this machine; needs your approval`);
+  const l = APPROVAL_MIS.find(hit(mis));
+  return l ? ask(`${l[1]} — needs your approval`) : allow;
 }
 
 /** M9-C: `mis tty start -- <cmd>` runs and `mis tty send <text>` types a command line: classify it as that Bash command. */
 function misInner(mis, text, ctx, dir) {
   if (mis?.[0] === 'skill' && mis[1] === 'test' && /\bMIS_SKILL_TEST_CMD=/.test(text)) return ask('a custom skill-test agent command (MIS_SKILL_TEST_CMD) may send the skill and scenarios to another service — needs your approval');
-  if (mis?.[0] !== 'tty') return allow;
   const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
+  // M9-D: commands that mis runs for you later are classified like the same Bash command now.
+  if (['wait', 'detach'].includes(mis?.[0]) && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
+  const inline = (f) => { const i = mis.findIndex((w) => w === f || w.startsWith(`${f}=`)); return i < 0 ? null : mis[i].startsWith(`${f}=`) ? mis[i].slice(f.length + 1) : mis[i + 1] ?? null; };
+  const later = mis?.[0] === 'self-improve' && mis[1] === 'tournament' ? inline('--bench') : mis?.[0] === 'autoresearch' && mis[1] === 'init' ? inline('--eval') : null;
+  if (later) return classifyBash(later, ctx, dir);
+  if (mis?.[0] !== 'tty') return allow;
   if (mis[1] === 'start' && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
   if (mis[1] === 'send') return classifyBash(mis.slice(3).filter((w) => w !== '--no-enter').join(' '), ctx, dir);
   return allow;

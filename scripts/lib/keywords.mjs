@@ -33,7 +33,7 @@ const KEYWORDS = [
   K('parallel', /\b(ultrawork|ulw)\b|울트라워크|ウルトラワーク/i,
     'Maximum parallel work: split the request into independent pieces and dispatch them to subagents in a single message (Agent tool). Inside a run use the parallel phase (`mis parallel`, task worktrees). Verify the combined result.'),
   K('second-opinion', /\b(ccg|claude-codex-gemini)\b|씨씨지|シーシージー/i,
-    'Second opinion from other models: run `mis second-opinion detect`. Calling an external model CLI sends code outside the company boundary, so it needs the user\'s approval (the guard asks). Record it with `mis note second-opinion`; it never changes the verdict.'),
+    'Second opinion from other models: invoke /make-it-ship:ask (`mis second-opinion probe`, then `mis ccg "<question>"` for codex+gemini and synthesize). Calling an external model CLI sends code outside the company boundary, so it needs the user\'s approval (the guard asks; company policy may forbid it). Record it with `mis note second-opinion`; it never changes the verdict.'),
   K('plan-consensus', /\bralplan\b|랄플랜|ラルプラン/i,
     'Consensus planning: write the plan, then invoke /make-it-ship:plan-review; revise and repeat until the critic returns ACCEPT (at most 3 rounds), then show the plan to the user for approval.'),
   K('interview', /\b(deep[\s-]interview|ouroboros)\b|딥\s?인터뷰|ディープ\s?インタビュー/i,

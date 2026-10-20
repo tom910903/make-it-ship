@@ -223,6 +223,8 @@ export const CONFIG_KEYS = {
   'update.check': (v) => typeof v === 'boolean',
   'update.source': (v) => v === null || typeof v === 'string',
   'maintenance.retainDays': (v) => Number.isInteger(v) && v >= 0,
+  'telemetry.enabled': (v) => typeof v === 'boolean', // M9-D: off by default, local JSONL only
+  'telemetry.endpoint': (v) => v === null || (typeof v === 'string' && /^https?:\/\//.test(v)),
 };
 
 function config([sub, key, raw]) {

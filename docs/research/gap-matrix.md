@@ -55,14 +55,14 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | M9-A 설치·수명주기 | 33 | 0 |
 | M9-B 단독 계획·리뷰 스킬 | 1 (58행 완료) | 0 |
 | M9-C 에이전트·스킬 작성 | 0 (16행 완료) | 0 |
-| M9-D 연구·운영·배포·외부 | 58 | 39 |
+| M9-D 연구·운영·배포·외부 | 29 (58행 중 29행 ABSORBED) | 22 |
 | M9-E 브라우저 자격 증명·고급 | 6 (13행 완료, 6행 PARTIAL: 정확히 빠진 부분은 각 행) | 0 |
 | M9-F 남은 훅 | 19 | 0 |
 | **합계** | **130** | **39** |
 
 읽는 법:
 - ABSORBED가 20개에서 242개(62%)로 늘었다. M9-B(계획·리뷰·디자인·문서·감사·릴리스·기억 기능을 run 단계와 기존 스킬에 녹임) 58개가 더해졌다. 그 전 M9-C(에이전트 11개, qa-tester tmux 조작, skill·skillify·learner·writing-skills) 16개가 더해졌다. 그 전 168개까지 늘어난 148개는 M6(상시 훅·키워드·스타일·loop·careful/freeze·상태줄) 58개, M7(MCP 도구 54개와 기억·wiki 훅) 65개, M8(브라우저·QA·팀·세션·companion·pdf) 24개, 기존 기능 재판정 1개다.
-- MISSING 85개 중 58개가 M9-D(대부분 [정책] 외부 전송·gbrain 계열)이고, 나머지는 설치·업그레이드 명령, 브라우저 자격 증명 기능이다.
+- MISSING 46개 중 7개가 M9-D(gbrain 계열 중 핵심 흐름 밖: brain cache·consumer·reader·MCP 확인·source wireup·Supabase 2개)이고, 나머지는 대부분 브라우저 자격 증명 기능과 M9-B·F 항목이다. M9-D의 PARTIAL 22개는 각 행 "남음"에 빠진 부분을 적었다.
 - M9-B는 단독 명령을 늘리지 않고(B0 결정) 각 기능을 상황에 맞는 run 단계와 기존 스킬·키워드 라우터에 녹였다. 남은 M9-B 1행은 gstack-redact의 개인정보·법률 문구 검사와 자동 가림이다.
 - 결함 이력: M6 1~5차, M7 1~2차 검증 결함은 수정 커밋이 있으나 재검증 전이고, M8은 아직 검증 보고서가 없다. 재검증에서 특정 기능의 결함이 남으면 그 행을 PARTIAL로 되돌린다.
 
@@ -75,11 +75,11 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | 원본 | 기능 | 종류 | 한 줄 설명 | MIS 상태 | MIS 대응 위치 | 남은 작업 |
 |---|---|---|---|---|---|---|
 | OMC | ai-slop-cleaner | skill | 삭제 우선·회귀 안전 방식으로 AI 슬롭 코드를 정리한다. 리뷰 전용 모드가 있다. | ABSORBED | `phases/simplify.md` "On request" (리뷰 전용 모드, 사용자 지정 범위 정리), `deslop` 키워드, `/make-it-ship:review` (M9-B) | M9-B 흡수 |
-| OMC | ask | skill | `omc ask`로 Claude·Codex·Gemini 등 다른 모델에 자문하고 결과 파일을 남긴다. | PARTIAL | `mis second-opinion detect`, `mis note second-opinion` (`lib/commands.mjs`) | 남음: 실제 호출 실행기와 결과 파일 저장, 호출마다 guard ask [정책] → M9-D |
+| OMC | ask | skill | `omc ask`로 Claude·Codex·Gemini 등 다른 모델에 자문하고 결과 파일을 남긴다. | ABSORBED | `mis ask codex\|gemini\|claude` → `.make-it-ship/ask/second-opinion-*.md` (`lib/commands-models.mjs`), `skills/ask/SKILL.md`, guard ask (`EXTERNAL_MIS`), `tests/integration/mis-models.test.mjs` | M9-D [정책] |
 | OMC | autopilot | skill | 아이디어부터 동작하는 코드까지 자율 실행한다. | ABSORBED | `skills/run/SKILL.md`, `autopilot` 키워드 (M6), 지속은 `/make-it-ship:loop` (`lib/loop.mjs`) | M6 흡수. 지속 실행은 loop로 감싼다(OMC처럼 autopilot 자체가 Stop을 막지는 않음) |
-| OMC | autoresearch | skill | 평가 계약·결정 로그·최대 실행 시간이 있는 단일 목표 개선 루프. | MISSING | — | 평가기 계약, 반복 루프, 시간 제한 중단 → M9-D |
+| OMC | autoresearch | skill | 평가 계약·결정 로그·최대 실행 시간이 있는 단일 목표 개선 루프. | ABSORBED | `mis autoresearch init\|start\|eval\|status\|stop` (`lib/commands-research.mjs`: evaluator.json 계약, `{pass,score}` 결과 검증, 최대 실행 시간·반복 수에서 정지, `decision-log.md`·`iteration-*.json`), `skills/research/SKILL.md`, `tests/integration/mis-research.test.mjs` | M9-D. cron은 사용자 스케줄러로 `mis autoresearch` 실행(스킬 안내) |
 | OMC | cancel | skill | 활성 OMC 모드(autopilot·ralph·ultrawork·ultraqa·team 등)를 모두 취소한다. | ABSORBED | `mis cancel --all [--run]` (`lib/commands-setup.mjs` cancelAll: loop·team shutdown·merge-readiness, run은 `--run`일 때만), `skills/cancel/SKILL.md`, `tests/integration/mis-lifecycle.test.mjs` | M9-A |
-| OMC | ccg | skill | Codex·Gemini 결과를 받아 Claude가 종합한다. | PARTIAL | `ccg` 키워드 (M6), `phases/review.md` second opinion 절 | M6: 키워드만. 남음: 두 모델 호출 실행기와 종합 절차, 호출마다 guard ask [정책] → M9-D |
+| OMC | ccg | skill | Codex·Gemini 결과를 받아 Claude가 종합한다. | ABSORBED | `mis ccg` (codex·gemini 실행 + 종합 파일 `ccg-*.md`, 빠진 쪽 명시), `skills/ask/SKILL.md`, `ccg` 키워드가 `/make-it-ship:ask`로 연결, `tests/integration/mis-models.test.mjs` | M9-D [정책] |
 | OMC | configure-notifications | skill | Telegram·Discord·Slack 알림을 설정한다. | EXCLUDED-BY-USER | — | 없음 (알림 제외) |
 | OMC | debug | skill | 로그·trace·상태로 현재 OMC 세션·저장소 상태를 진단한다. | ABSORBED | `mis doctor session` (run·loop·team·freeze·merge-readiness·최근 훅 오류; `hooks.mjs`가 훅 예외를 trace에 기록), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | OMC | deep-dive | skill | trace(원인 조사) 결과를 deep-interview에 주입하는 2단계 파이프라인. | ABSORBED | `phases/debug.md` "Competing hypotheses" → `docs/make-it-ship/traces/<slug>.md`, `phases/interview.md` deep-dive 3지점 주입 (M9-B) | M9-B 흡수 |
@@ -101,8 +101,8 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | OMC | ralplan | skill | Planner·Architect·Critic 합의 계획. 모호한 실행 요청을 자동으로 계획 단계로 돌린다. | ABSORBED | `clarify` 키워드 게이트(모호한 실행 요청 → interview, `lib/keywords.mjs`), `ralplan` 키워드, `phases/plan-critique.md` (M9-B) | M9-B 흡수 |
 | OMC | release | skill | 저장소 릴리스 규칙을 분석·캐시하고 릴리스를 안내한다. | ABSORBED | `phases/ship.md` "Release details" (release-rules.md 캐시, `mis version-bump`, 태그 guard ask) (M9-B) | M9-B 흡수 |
 | OMC | remember | skill | 지식을 project memory·notepad·문서 중 어디에 둘지 정한다. | ABSORBED | `notepad_*`, `project_memory_*`, `wiki_*`, `<remember>` 태그 (M7) | M7 흡수 |
-| OMC | sciomc | skill | scientist 에이전트를 병렬로 돌려 분석한다. | MISSING | — | 병렬 분석 오케스트레이션 → M9-D |
-| OMC | self-improve | skill | 토너먼트 선택 방식의 자율 진화 코드 개선. | MISSING | — | 토너먼트 개선 루프, 적용 전 사용자 승인 → M9-D |
+| OMC | sciomc | skill | scientist 에이전트를 병렬로 돌려 분석한다. | ABSORBED | `mis research start\|add\|status\|list\|report\|cancel` (태그 추출·근거/신뢰도 검사·반복·시간 제한), scientist 에이전트를 한 메시지에 N개 병렬 위임(`skills/research/SKILL.md`), `tests/integration/mis-research.test.mjs` | M9-D |
+| OMC | self-improve | skill | 토너먼트 선택 방식의 자율 진화 코드 개선. | ABSORBED | `mis self-improve propose\|tournament\|list\|show\|reject` (후보 패치를 임시 worktree에서 벤치마크로 채점), 적용은 `mis approve proposal <id>`만(guard 항상 ask, `APPROVAL_MIS`), 대상은 프로세스·스킬 파일만, `tests/integration/mis-research.test.mjs` | M9-D. 사용자 결정(ADR-0003): 자동 적용 대신 제안 + 승인 후 적용, 코드가 아닌 프로세스·스킬 변경만 |
 | OMC | setup | skill | setup·doctor·MCP 요청을 알맞은 흐름으로 보낸다. | ABSORBED | `skills/setup/SKILL.md` (setup·doctor·mcp-setup·config·update·uninstall 라우터) | M9-A |
 | OMC | skill | skill | 로컬 스킬 목록·추가·삭제·검색·편집. | ABSORBED | `skills/skill/SKILL.md`, `mis skill list\|search\|add\|edit\|remove\|lint` (`lib/commands-skill.mjs`, `lib/skills.mjs`) | M9-C 흡수. 프로젝트·사용자 위치만 쓰고 플러그인 스킬은 읽기 전용. setup 마법사는 없음 |
 | OMC | skillify | skill | 반복 작업을 재사용 스킬 초안으로 만든다. | ABSORBED | `skills/skillify/SKILL.md`, `mis skill add`, `mis test-prompt`로 triggers 확인 | M9-C 흡수. 만든 SKILL.md의 triggers가 `learnedSkills`에 매칭됨(테스트) |
@@ -114,7 +114,7 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | OMC | verify | skill | 완료 주장 전에 실제로 동작하는지 확인한다. | ABSORBED | `mis check`, `mis verdict`, SessionStart 검증 규율 (M6) | — |
 | OMC | visual-verdict | skill | 스크린샷을 기준 이미지와 비교해 구조화된 판정을 낸다. | ABSORBED | `mis visual-verdict` (0~100 점수, 90 통과, `lib/commands-browse.mjs`, M8) | M8 흡수 |
 | OMC | wiki | skill | 세션을 넘어 쌓이는 마크다운 지식베이스. | ABSORBED | `wiki_*` 7개, wiki 키워드, SessionStart·PreCompact·SessionEnd 훅 (M7) | M7 흡수 |
-| OMC | writer-memory | skill | 소설가용 인물·관계·장면 기억 시스템. | MISSING | — | 인물·관계·장면 기억 저장소 → M9-D |
+| OMC | writer-memory | skill | 소설가용 인물·관계·장면 기억 시스템. | ABSORBED | `mis writer-memory` (인물·관계·장면·테마·세계 CRUD, query, export, 변경 전 자동 백업; `.make-it-ship/writer-memory/`), `skills/writer-memory/SKILL.md`, `tests/integration/mis-research.test.mjs` | M9-D. 대사 검증·시놉시스는 저장 데이터로 모델이 수행(스킬 절차) |
 | OMC | compact | command | 수동 `/compact` 전에 OMC 맥락을 정리한다. | ABSORBED | PreCompact 훅 + compact 후 SessionStart 재주입 (`hooks.mjs`, M7) | M7 흡수 (명령의 일인 compact 전 맥락 정리를 훅이 자동 처리. TODO 체크포인트는 pre-compact.mjs 행) |
 | OMC | psm | command | project-session-manager 별칭. | ABSORBED | `mis session` (M8) | M8 흡수 |
 
@@ -135,7 +135,7 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | OMC | git-master | agent | 원자적 커밋·rebase·이력 관리. | ABSORBED | `agents/git-master.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | planner | agent | 인터뷰 포함 전략 계획 (Opus). | ABSORBED | `agents/planner.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | qa-tester | agent | tmux로 CLI를 실제 조작해 테스트한다. | ABSORBED | `agents/qa-tester.md` + `mis tty start\|send\|keys\|expect\|capture\|save\|stop` (`lib/commands-tty.mjs`) | M9-C 흡수. tmux로 대화형 CLI를 조작하고 `qa/*.sh` 재생 스크립트를 남김. tmux 없으면 BLOCKED |
-| OMC | scientist | agent | 데이터 분석·연구 실행. | MISSING | — | 분석 에이전트 (`python_repl`은 M7에 있음) → M9-D |
+| OMC | scientist | agent | 데이터 분석·연구 실행. | ABSORBED | `agents/scientist.md` (읽기 전용 + `python_repl`, FINDING/EVIDENCE/CONFIDENCE 태그), `tests/unit/plugin-files.test.mjs` | M9-D |
 | OMC | security-reviewer | agent | OWASP·비밀값·위험 패턴 탐지. | ABSORBED | `agents/security-reviewer.md` | — |
 | OMC | test-engineer | agent | 테스트 전략, e2e, flaky 테스트 보강, TDD. | ABSORBED | `agents/test-engineer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | tracer | agent | 경쟁 가설 기반 인과 추적. | ABSORBED | `agents/tracer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
@@ -272,8 +272,8 @@ MIS `hooks/hooks.json`은 PreToolUse(`scripts/guard.mjs`, fail-closed)와 상시
 |---|---|---|---|---|---|---|
 | OMC | HUD 상태줄 (`~/.claude/hud/omc-hud.mjs`, `dist/hud`) | statusline | 요소: agents, autopilot, ralph, prd, todos, skills, background, call-counts, context·context-warning, token-usage, limits, model, git, cwd, session, last-tool, thinking, permission, mission-board 등. 현재 사용자 `statusLine`이 이것이다. | ABSORBED | `scripts/statusline.mjs` (run 진행 + 스타일·loop·freeze·에이전트·todo·브랜치·모델·ctx, 체이닝) | M6+M9-F 흡수: 핵심 요소(모델·git·ctx·에이전트·todo·모드) 표시. 호출 수·토큰·limits 등 나머지 요소는 만들지 않음(`statusLine.chain`으로 OMC HUD를 이어 붙일 수 있음) |
 | OMC | omc launch | bin | tmux 셸 통합으로 Claude Code 실행 | ABSORBED | `mis launch [claude args]` (tmux 세션에서 claude, attach 명령 출력, tmux 없으면 BLOCKED), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
-| OMC | omc interop | bin | Claude(OMC)와 Codex(OMX) 분할 tmux 세션 | PARTIAL | `mis team --worker codex\|gemini` (M8, guard ask) | M8: tmux 혼합 워커. 남음: Claude·Codex 분할 세션 명령 [정책] → M9-D |
-| OMC | omc ask | bin | 다른 모델 자문 실행·결과 파일 저장 | PARTIAL | `mis second-opinion detect` | 남음: 실행기와 결과 파일 [정책] → M9-D |
+| OMC | omc interop | bin | Claude(OMC)와 Codex(OMX) 분할 tmux 세션 | ABSORBED | `mis interop` (tmux 왼쪽 Claude·오른쪽 Codex, tmux 없으면 BLOCKED, guard ask), `tests/integration/mis-models.test.mjs` | M9-D [정책] |
+| OMC | omc ask | bin | 다른 모델 자문 실행·결과 파일 저장 | ABSORBED | `mis ask` (위 ask 행과 같음) | M9-D [정책] |
 | OMC | omc config | bin | 설정 표시 | ABSORBED | `mis config get|set` (`lib/commands-setup.mjs` CONFIG_KEYS 검사), `tests/integration/mis-setup.test.mjs` | M9-A |
 | OMC | omc config-stop-callback | bin | Stop 콜백(file·telegram·discord·slack) 설정 | EXCLUDED-BY-USER | — | 없음 (알림) |
 | OMC | omc config-notify-profile | bin | 알림 프로필 관리 | EXCLUDED-BY-USER | — | 없음 (알림) |
@@ -282,16 +282,16 @@ MIS `hooks/hooks.json`은 PreToolUse(`scripts/guard.mjs`, fail-closed)와 상시
 | OMC | omc update / update-reconcile | bin | 업데이트 확인·설치, 이후 상태 정리 | ABSORBED | `mis update-check [--force]`, `mis upgrade [--yes]` (`lib/update.mjs`), `tests/integration/mis-lifecycle.test.mjs` | M9-A. reconcile 상당: upgrade 후 `mis setup`이 statusLine 경로를 다시 맞춘다 |
 | OMC | omc version | bin | 상세 버전 정보 | ABSORBED | `mis version` (plugin.json 버전·Node·커밋·설치 방식), `tests/integration/mis-setup.test.mjs` | M9-A |
 | OMC | omc install | bin | 에이전트·명령을 `~/.claude`에 설치 | ABSORBED | `mis setup --write` (훅은 플러그인이 등록, 상태줄·지시문은 setup), `tests/integration/mis-setup.test.mjs` | M9-A |
-| OMC | omc wait | bin | 사용량 한도 대기 후 자동 재개 | MISSING | — | 사용량 한도 대기 후 재개 → M9-D |
+| OMC | omc wait | bin | 사용량 한도 대기 후 자동 재개 | PARTIAL | `mis wait --until <시각>\|--seconds N -- <재개 명령>` (`lib/commands-ops.mjs`), `skills/ops/SKILL.md`, `tests/integration/mis-ops.test.mjs` | M9-D: 지정 시각까지 대기 후 재개 명령 실행. 남음: 사용량 한도에 걸린 tmux 창 자동 감지와 자동 재개(시각은 사용자가 지정) → M9-D |
 | OMC | omc teleport | bin | 이슈·PR용 git worktree 생성 | ABSORBED | `mis session create issue\|pr` (M8) | M8 흡수 |
 | OMC | omc session / sessions | bin | 이전 로컬 세션 기록 조회 | ABSORBED | `session_search` (M7) | M7 흡수 |
 | OMC | omc capabilities | bin | 도구·스킬 기능 lockfile 생성·검증 | MISSING | — | 도구·스킬 기능 lockfile 생성·검증 → M9-A |
 | OMC | omc doctor | bin | 설치 진단 | ABSORBED | `mis doctor [--fix]`, `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | OMC | omc setup | bin | 훅·에이전트·스킬 동기화 | ABSORBED | `mis setup [--write]`, `tests/integration/mis-setup.test.mjs` | M9-A |
 | OMC | omc hud | bin | HUD 렌더러 실행 | ABSORBED | `scripts/statusline.mjs` (M6) | M6 흡수 |
-| OMC | omc mission-board | bin | 작업공간 미션 보드 스냅샷 | MISSING | `mis status` (run만) | 작업공간 미션 보드 → M9-D |
+| OMC | omc mission-board | bin | 작업공간 미션 보드 스냅샷 | ABSORBED | `mis mission-board` (run·loop·team·worktree·research·autoresearch 읽기 전용 JSON), `tests/integration/mis-ops.test.mjs` | M9-D |
 | OMC | omc team | bin | 팀 워커 생명주기 (start·status·shutdown) | ABSORBED | `mis team start\|status\|wait\|shutdown` (M8) | M8 흡수 |
-| OMC | omc autoresearch | bin | deprecated shim (deep-interview + autoresearch로 안내) | MISSING | — | autoresearch와 함께 → M9-D |
+| OMC | omc autoresearch | bin | deprecated shim (deep-interview + autoresearch로 안내) | ABSORBED | `mis autoresearch` (deprecated shim 대신 실제 명령) | M9-D |
 | OMC | omc ralphthon | bin | 해커톤 자율 수명주기: interview → execute → harden → done | ABSORBED | `skills/loop` "Ralphthon" (interview→loop→harden), `ralphthon` 키워드 (M9-B) | M9-B 흡수 |
 | OMC | omc ultragoal | bin | 다중 목표 워크플로 CLI | ABSORBED | `mis goal` (`lib/commands-flow.mjs`) (M9-B) | M9-B 흡수 |
 
@@ -367,11 +367,11 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack (루트 `SKILL.md`, `~/.claude/skills/_gstack-command`) | skill | gstack 스킬 라우터, 선제 제안(proactive). | ABSORBED | SessionStart 스킬 목록·호출 규율 (`lib/discipline.mjs`), 키워드 라우터 (M6) | M6 흡수 (선제 제안은 §5.2 proactive 행) |
 | gstack | autoplan | skill | CEO·디자인·엔지니어링·DX 리뷰를 6개 결정 원칙으로 자동 연속 실행. | ABSORBED | `phases/product-review.md` "Autoplan" (6개 결정 원칙, `mis decision add` 기록, 취향 결정은 사용자), `autoplan` 키워드 (M9-B) | M9-B 흡수 |
 | gstack | benchmark | skill | browse 데몬으로 페이지 성능 회귀를 감지한다. | ABSORBED | `mis browse perf` + `phases/qa.md` 9단계, `mis bench` (M8) | M8 흡수 |
-| gstack | benchmark-models | skill | 같은 스킬을 여러 모델(Claude·GPT·Gemini)로 비교. | MISSING | — | 여러 모델 실행 비교, 호출마다 guard ask [정책] → M9-D |
+| gstack | benchmark-models | skill | 같은 스킬을 여러 모델(Claude·GPT·Gemini)로 비교. | PARTIAL | `mis benchmark-models` (모델별 상태·시간·출력 크기 표와 출력 파일, 없는 모델 unavailable), guard ask, `tests/integration/mis-models.test.mjs` | M9-D: 시간·exit 표. 남음: 토큰·비용 집계, 품질 judge 점수 [정책] → M9-D |
 | gstack | browse | skill | 빠른 헤드리스 브라우저로 QA·dogfooding (§5.4 명령). | ABSORBED | `mis browse` (CDP 데몬, `lib/browse/`), `skills/browse/SKILL.md` (M8) | M8 흡수 (빠진 명령은 §5.4 행) |
-| gstack | canary | skill | 배포 후 카나리 모니터링. | MISSING | — | 배포 후 카나리 모니터링 → M9-D |
+| gstack | canary | skill | 배포 후 카나리 모니터링. | PARTIAL | `mis canary <url> [--pages] [--checks N] [--baseline]` (`mis browse`로 상태 코드·콘솔 오류 기록, 기준선 대비 2회 연속 경보), guard ask, `skills/deploy/SKILL.md`, `tests/integration/mis-browse.test.mjs`·`mis-ops.test.mjs` | M9-D: 상태·콘솔 오류 감시. localhost도 guard ask. 남음: 체크마다 스크린샷·로드 시간(2배 회귀) 비교, 페이지 자동 발견 → M9-D |
 | gstack | careful | skill | 파괴적 명령 경고. | ABSORBED | `lib/policy.mjs` `careful` (run 여부와 무관, M6) | M6 흡수 |
-| gstack | codex | skill | Codex CLI 래퍼 (review·challenge·consult 3모드). | PARTIAL | `mis second-opinion detect` | review·challenge·consult 실행기, guard ask [정책] → M9-D |
+| gstack | codex | skill | Codex CLI 래퍼 (review·challenge·consult 3모드). | PARTIAL | `mis ask codex` (review·challenge·consult는 질문 형태로, `skills/ask/SKILL.md`), `mis second-opinion probe` | M9-D: 실행기와 결과 파일. 남음: consult 세션 이어가기, GATE PASS/FAIL 파싱 [정책] → M9-D |
 | gstack | connect-chrome / open-gstack-browser | skill | 사이드바 확장이 들어간 AI 제어 Chromium 실행. | MISSING | — | headed 실제 프로필 Chrome 연결 + 사이드바, guard 항상 ask → M9-E |
 | gstack | context-save | skill | 브랜치·상태·결정·남은 작업을 저장. | ABSORBED | `mis context save <name> --note` (`skills/resume`) (M9-B) | M9-B 흡수 |
 | gstack | context-restore | skill | 저장한 맥락 복원, 브랜치 불일치 경고. | ABSORBED | `mis context restore` (브랜치 불일치·새 커밋 경고) (M9-B) | M9-B 흡수 |
@@ -394,13 +394,13 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | ios-design-review | skill | 실기기에서 iOS 시각 디자인 감사. | PARTIAL | `phases/qa.md` 8단계 (브리지 스크린샷) | 실기기 디자인 감사 절차 → M9-D |
 | gstack | ios-fix | skill | 자율 iOS 버그 수정. | PARTIAL | `phases/debug.md` + iOS QA check | 실기기 수정 루프 → M9-D |
 | gstack | ios-qa | skill | SwiftUI 실기기 라이브 QA (tailnet 데몬 포함). | PARTIAL | `lib/ios.mjs`, `mis ios devices`, 디버그 브리지 템플릿 | 원격 iOS QA 데몬은 아래 `gstack-ios-qa-daemon` 행. 남음: 실기기 QA 루프 → M9-D |
-| gstack | ios-sync | skill | 디버그 브리지를 최신 업스트림 템플릿으로 재생성. | PARTIAL | `templates/ios-debug-bridge/` (고정 템플릿) | 템플릿 갱신 명령 → M9-D |
+| gstack | ios-sync | skill | 디버그 브리지를 최신 업스트림 템플릿으로 재생성. | ABSORBED | `mis ios sync [--dest] [--apply]` (템플릿 diff 표시, `--apply`만 갱신·guard ask), `tests/integration/mis-ios-family.test.mjs` | M9-D |
 | gstack | land-and-deploy | skill | 머지 후 배포까지 진행. | PARTIAL | `phases/ship.md` (준비만, push·PR은 승인 후) | 배포 실행 (guard ask) → M9-D |
-| gstack | landing-report | skill | 작업공간 단위 ship 대기열 대시보드 (읽기 전용). | MISSING | — | 작업공간 ship 대기열 대시보드 → M9-D |
+| gstack | landing-report | skill | 작업공간 단위 ship 대기열 대시보드 (읽기 전용). | ABSORBED | `mis landing-report` (읽기 전용 JSON: 기준 VERSION, PR이 차지한 버전·충돌, 형제 worktree, 다음 빈 버전; `gh` 없으면 OFFLINE), `tests/integration/mis-ops.test.mjs` | M9-D |
 | gstack | learn | skill | 프로젝트 학습 조회·검색·정리·내보내기. | ABSORBED | `mis learn add\|list\|search\|distill` (`learnings.md`가 내보내기) (M9-B) | M9-B 흡수 |
 | gstack | make-pdf | skill | 마크다운을 출판 품질 PDF로 변환. | ABSORBED | `mis pdf` (marked 벤더, M8) | M8 흡수 |
 | gstack | office-hours | skill | YC 오피스아워: 스타트업 모드·빌더 모드. | ABSORBED | `phases/interview.md` office-hours 모드(startup·builder, `specs/<slug>-office-hours.md`), `office-hours` 키워드 (M9-B) | M9-B 흡수 |
-| gstack | pair-agent | skill | 원격 AI 에이전트를 내 브라우저에 연결 (터널). | MISSING | — | 원격 에이전트 브라우저 연결(터널), guard 항상 ask [정책] → M9-D |
+| gstack | pair-agent | skill | 원격 AI 에이전트를 내 브라우저에 연결 (터널). | PARTIAL | `mis pair-agent start [--local]\|status\|stop` (토큰 필수 엔드포인트 → 내장 브라우저, 터널은 ngrok/`MIS_PAIR_TUNNEL_CMD`, stop 시 포트·터널 정리, guard ask), `tests/integration/mis-pair.test.mjs` | M9-D: 토큰·터널·정지. 원격 에이전트는 읽기·이동·조작 명령만(http(s)만, `file:`·JS·storage·업로드·로컬 경로 거부; 루프백 개발 서버는 접근 가능). 남음: 에이전트별 탭 분리·도메인 제한·개별 revoke/rotate [정책] → M9-D |
 | gstack | plan-ceo-review | skill | 창업자 관점 계획 리뷰 (전제 도전, 범위 모드). | ABSORBED | `phases/product-review.md` CEO 렌즈 (계획 문서 `## Review: CEO`), `/make-it-ship:plan-review` (M9-B) | M9-B 흡수 |
 | gstack | plan-design-review | skill | 디자이너 관점 계획 리뷰 (대화형, 계획 수정). | ABSORBED | `phases/product-review.md` Design 렌즈 (`ui: true`) (M9-B) | M9-B 흡수 |
 | gstack | plan-devex-review | skill | DX 관점 계획 리뷰. | ABSORBED | `phases/product-review.md` DX 렌즈 (개발자 대상 표면) (M9-B) | M9-B 흡수 |
@@ -412,9 +412,9 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | review | skill | 머지 전 PR 리뷰. | ABSORBED | `skills/review/SKILL.md` (spec·quality·security) | — |
 | gstack | scrape | skill | 웹 페이지에서 데이터를 가져온다. | ABSORBED | `skills/browse/SKILL.md` "Scrape and browser skills" (`text`·`data`·`media`·`js --remote`, `download`·`scrape`·`archive`), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
 | gstack | setup-browser-cookies | skill | 실제 Chromium 쿠키를 헤드리스 세션으로 가져온다. | ABSORBED | `mis browse cookie-import-browser [browser] [--domain host]` (`lib/browse/cookies.mjs`, guard 항상 ask), `skills/browse/SKILL.md` "Credentials: always ask", `tests/integration/mis-browse-m9e.test.mjs` (합성 쿠키 DB + 가짜 `security`) | M9-E. gstack의 대화형 도메인 선택 UI 대신 `--domain` 없이 실행하면 도메인 목록만 출력 (복호화 없음) |
-| gstack | setup-deploy | skill | land-and-deploy용 배포 설정. | MISSING | — | 배포 설정 → M9-D |
-| gstack | setup-gbrain | skill | gbrain CLI 설치, PGLite·Supabase 브레인 초기화, MCP 등록. | MISSING | — | gbrain 계열, 외부 전송마다 guard ask [정책] → M9-D |
-| gstack | sync-gbrain | skill | gbrain을 저장소 코드와 동기화하고 CLAUDE.md 검색 안내 갱신. | MISSING | — | gbrain 계열 [정책] → M9-D |
+| gstack | setup-deploy | skill | land-and-deploy용 배포 설정. | ABSORBED | `mis deploy setup [...] [--write]` (플랫폼 감지, `--write`만 `.make-it-ship/deploy.json` 저장·guard ask), `tests/integration/mis-ops.test.mjs` | M9-D |
+| gstack | setup-gbrain | skill | gbrain CLI 설치, PGLite·Supabase 브레인 초기화, MCP 등록. | PARTIAL | `mis gbrain detect\|init\|policy\|artifacts-init` (`lib/commands-gbrain.mjs`), `skills/gbrain/SKILL.md`, `tests/integration/mis-gbrain.test.mjs` | M9-D: 감지·로컬 초기화·신뢰 정책. 남음: gbrain 설치 자동화, Supabase 브레인, MCP 등록 [정책] → M9-D |
+| gstack | sync-gbrain | skill | gbrain을 저장소 코드와 동기화하고 CLAUDE.md 검색 안내 갱신. | PARTIAL | `mis gbrain sync\|ingest` (대기열·산출물 → 비공개 git 저장소 → `gbrain import`) | M9-D: 산출물 동기화. 남음: 코드 소스 동기화(`gbrain sources`), CLAUDE.md 검색 안내 갱신 [정책] → M9-D |
 | gstack | ship | skill | base 머지, 테스트, diff 리뷰, VERSION 증가, CHANGELOG, 커밋, push, PR. | ABSORBED | `mis version-bump`, PR 제목 `v<버전>`, `phases/ship.md` base 브랜치 병합·"Release details" (M9-B) | M9-B 흡수 |
 | gstack | skillify | skill | 성공한 `/scrape` 흐름을 영구 browser-skill로 저장. | ABSORBED | `mis browse skillify <name>` (`lib/browse/skills.mjs`: 마지막 `goto` 이후 성공 명령 → C3 형식 SKILL.md(lint 통과) + `steps.json`, 입력값은 `--arg` 매개변수), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. Playwright 스크립트 대신 `mis browse` 단계 재생 (코드 실행 없음) |
 | gstack | spec | skill | 모호한 의도를 5단계로 실행 가능한 spec으로. | ABSORBED | `phases/interview.md` spec 모드(5단계, `docs/make-it-ship/specs/<slug>.md`) (M9-B) | M9-B 흡수 |
@@ -429,7 +429,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | investigate: 디버그 범위 제한 훅 (Edit·Write) | hook | 디버깅 중 편집 범위 제한. | ABSORBED | `mis debug scope <path…>` (`lib/commands-always.mjs`), guard `debugScope` (`lib/policy.mjs`), `phases/debug.md` | M9-F 흡수(F8): 가설 범위 밖 Write/Edit는 guard ask(freeze와 달리 deny 아님), 저장소별, `--clear`로 해제 |
 | gstack | preamble: `gstack-update-check` | hook | 스킬 실행마다 업그레이드 확인. | ABSORBED | SessionStart 업데이트 알림 (캐시, fail-open), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | gstack | preamble: proactive 제안 (`gstack-config get proactive`) | hook | 다음에 쓸 스킬을 선제 제안. | ABSORBED | `lib/discipline.mjs` (SessionStart) | M9-F 흡수(F10): 작업이 끝나면 다음 스킬 한 줄 제안(실행은 안 함). `proactive: false`로 끔 |
-| gstack | preamble: 텔레메트리 (`gstack-telemetry-log`, `-sync`) | hook | 스킬 실행 이벤트 기록·Supabase 동기화. | MISSING | — | 로컬 기록 + 동기화, 기본 꺼짐, 동기화는 guard ask [정책] → M9-D |
+| gstack | preamble: 텔레메트리 (`gstack-telemetry-log`, `-sync`) | hook | 스킬 실행 이벤트 기록·Supabase 동기화. | ABSORBED | PostToolUse `Skill` → `lib/telemetry.mjs` logEvent (기본 꺼짐, 로컬 JSONL만), 동기화는 `mis telemetry sync`(guard ask), `tests/integration/mis-telemetry.test.mjs` | M9-D [정책] |
 | gstack | preamble: CLAUDE.md `## Skill routing` 섹션 작성 | hook | 프로젝트 CLAUDE.md에 스킬 라우팅 규칙을 추가한다. | ABSORBED | `mis setup routing [--write]` (`lib/routing.mjs`) | M9-F 흡수(F10): dry-run diff, 기존 `## Skill routing` 절(gstack 것 포함) 교체·멱등, `--write`는 guard ask |
 | gstack | preamble: 세션 종류·타임라인·질문 로그 (`gstack-session-kind`, `gstack-timeline-log`, `gstack-question-log`) | hook | 세션 분류, 이벤트 타임라인, AskUserQuestion 기록. | ABSORBED | `lib/timeline.mjs`, SessionStart/End·SubagentStart/Stop·Skill 기록, `trace_timeline` | M9-F 흡수(F9): 세션 종류(interactive·headless·team-worker)와 run 밖 이벤트를 프로젝트 타임라인에 기록. 질문 로그는 B3(`mis question log`) 행 |
 | gstack | ETHOS·AskUserQuestion 형식 규율 | hook | 질문 형식·작업 원칙 공통 지시. | ABSORBED | `lib/discipline.mjs` (한 번에 하나씩 질문, 재정리·추천·2-4 선택지), `phases/interview.md` | M6+M9-F 흡수(F10): 질문 형식(재정리·추천·선택지) 규율 추가 |
@@ -441,48 +441,48 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | chrome-cdp | bin | 원격 디버깅(CDP)을 켠 Chrome 실행. | PARTIAL | `lib/browse/chrome.mjs` (pipe 전용 CDP, `--mis-browse-owner` 표지), `mis browse connect` (영속 프로필 headed, guard ask) | M9-E. 남음(의도적 제외): TCP `--remote-debugging-port` 모드와 사용자 기본 프로필 Chrome의 CDP 실행 — 포트는 토큰 없는 로컬 프로세스가 조종할 수 있고(M8 D2), Chrome 136+는 기본 프로필에서 DevTools를 거부 |
 | gstack | dev-setup | bin | gstack 저장소 안에서 스킬 개발용 링크 설정. | N/A | — | gstack 자체 개발용. 사용자 확인 |
 | gstack | dev-teardown | bin | 개발 링크 제거. | N/A | — | gstack 자체 개발용. 사용자 확인 |
-| gstack | gstack-analytics | bin | 로컬 JSONL 기반 개인 사용 대시보드. | MISSING | — | 로컬 JSONL 사용 대시보드 → M9-D |
-| gstack | gstack-artifacts-init | bin | `~/.gstack/`를 비공개 원격과 동기화되는 git 저장소로 설정. | MISSING | — | 산출물 원격 동기화, guard ask [정책] → M9-D |
-| gstack | gstack-artifacts-url | bin | 산출물 저장소 URL 도우미. | MISSING | — | [정책] 위와 함께 → M9-D |
-| gstack | gstack-brain-cache | bin | 브레인 기반 계획 스킬용 3단 캐시. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-consumer | bin | 브레인 소비자 등록 관리. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-context-load.ts | bin | 브레인 검색 표면. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-enqueue | bin | 동기화 대기열에 경로 추가. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-reader | bin | 브레인 소비자 등록 관리 (별칭). | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-restore | bin | 기존 브레인 저장소로 새 머신 부트스트랩. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-sync | bin | 대기열 처리, 허용 경로 커밋, 원격 push. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-brain-uninstall | bin | 브레인 동기화 제거. | MISSING | — | gbrain 계열 [정책] → M9-D |
+| gstack | gstack-analytics | bin | 로컬 JSONL 기반 개인 사용 대시보드. | ABSORBED | `mis analytics [--days N]` (로컬 JSONL), `tests/integration/mis-telemetry.test.mjs` | M9-D |
+| gstack | gstack-artifacts-init | bin | `~/.gstack/`를 비공개 원격과 동기화되는 git 저장소로 설정. | ABSORBED | `mis gbrain artifacts-init <url>` (guard ask) | M9-D [정책] |
+| gstack | gstack-artifacts-url | bin | 산출물 저장소 URL 도우미. | ABSORBED | `mis gbrain artifacts-url` | M9-D |
+| gstack | gstack-brain-cache | bin | 브레인 기반 계획 스킬용 3단 캐시. | MISSING | — | M9-D 핵심 흐름 밖. 남음: 계획 스킬용 3단 캐시 [정책] → M9-D |
+| gstack | gstack-brain-consumer | bin | 브레인 소비자 등록 관리. | MISSING | — | M9-D 핵심 흐름 밖. 남음: 소비자 등록 관리 [정책] → M9-D |
+| gstack | gstack-brain-context-load.ts | bin | 브레인 검색 표면. | PARTIAL | `mis gbrain query` | M9-D: 질의. 남음: 계획 스킬에 자동 맥락 주입 [정책] → M9-D |
+| gstack | gstack-brain-enqueue | bin | 동기화 대기열에 경로 추가. | ABSORBED | `mis gbrain enqueue <file...>`, `tests/integration/mis-gbrain.test.mjs` | M9-D |
+| gstack | gstack-brain-reader | bin | 브레인 소비자 등록 관리 (별칭). | MISSING | — | M9-D 핵심 흐름 밖. 남음: 소비자 등록(별칭) [정책] → M9-D |
+| gstack | gstack-brain-restore | bin | 기존 브레인 저장소로 새 머신 부트스트랩. | ABSORBED | `mis gbrain restore <url>` (guard ask) | M9-D [정책] |
+| gstack | gstack-brain-sync | bin | 대기열 처리, 허용 경로 커밋, 원격 push. | ABSORBED | `mis gbrain sync` (대기열 → 커밋 → push, deny 정책이면 거부, guard ask), `tests/integration/mis-gbrain.test.mjs` | M9-D [정책] |
+| gstack | gstack-brain-uninstall | bin | 브레인 동기화 제거. | ABSORBED | `mis gbrain uninstall [--purge]`, `tests/integration/mis-gbrain.test.mjs` | M9-D |
 | gstack | gstack-builder-profile | bin | 레거시 shim (developer-profile로 이동). | N/A | — | 레거시 별칭 |
-| gstack | gstack-codex-probe | bin | `/codex`·`/autoplan`용 Codex 감지 도우미. | PARTIAL | `mis second-opinion detect` | 버전·인증 상태 확인 [정책] → M9-D |
+| gstack | gstack-codex-probe | bin | `/codex`·`/autoplan`용 Codex 감지 도우미. | ABSORBED | `mis second-opinion probe` (버전·인증 상태, 아무것도 보내지 않음), `tests/integration/mis-models.test.mjs` | M9-D |
 | gstack | gstack-codex-session-import | bin | Codex 세션에서 질문 로그를 채운다. | N/A | — | Codex 호스트 전용 |
-| gstack | gstack-community-dashboard | bin | Supabase 커뮤니티 사용 통계. | MISSING | — | 외부 집계 조회 [정책] → M9-D |
+| gstack | gstack-community-dashboard | bin | Supabase 커뮤니티 사용 통계. | PARTIAL | `mis telemetry dashboard community` (사용자 엔드포인트 조회, guard ask) | M9-D: 조회 명령. 남음: 공용 집계 백엔드 없음(사용자가 엔드포인트 지정) [정책] → M9-D |
 | gstack | gstack-config | bin | `~/.gstack/config.yaml` 읽기·쓰기. | ABSORBED | `mis config get|set`, `tests/integration/mis-setup.test.mjs` | M9-A |
 | gstack | gstack-decision-log | bin | 영구 결정 기록(대체·삭제·압축). | ABSORBED | `mis decision add\|supersede` (`docs/make-it-ship/decisions.jsonl`, 비밀값 거부) (M9-B) | M9-B 흡수 |
 | gstack | gstack-decision-search | bin | 유효한 결정 조회. | ABSORBED | `mis decision search [q] [--all]` (M9-B) | M9-B 흡수 |
-| gstack | gstack-detach | bin | 긴 작업(평가·벤치마크)을 SIGTERM에 강하게 분리 실행. | MISSING | — | 긴 작업 분리 실행 → M9-D |
+| gstack | gstack-detach | bin | 긴 작업(평가·벤치마크)을 SIGTERM에 강하게 분리 실행. | PARTIAL | `mis detach [--timeout] [--label] -- <cmd>` (새 세션으로 분리, EXIT 표식), `tests/integration/mis-ops.test.mjs` | M9-D: SIGTERM에 살아남는 분리 실행. 남음: `--lock` 머신 전역 직렬화, macOS caffeinate → M9-D |
 | gstack | gstack-developer-profile | bin | 개발자 프로필 조회·도출. | ABSORBED | `mis profile` (M9-B) | M9-B 흡수 |
 | gstack | gstack-diff-scope | bin | base 대비 diff 범주 분류. | ABSORBED | `mis diff-scope` (code/test/docs/config) (M9-B) | M9-B 흡수 |
 | gstack | gstack-distill-apply | bin | 증류 제안 하나를 사용자 승인 후 적용. | ABSORBED | `mis learn distill --yes` (사용자 승인 후 적용) (M9-B) | M9-B 흡수 |
 | gstack | gstack-distill-free-text | bin | 자유 텍스트 일괄 증류("dream cycle"). | ABSORBED | `mis learn distill <file\|->` (제안만) (M9-B) | M9-B 흡수 |
 | gstack | gstack-extension | bin | Chrome 확장 설치 도우미. | ABSORBED | `mis browse extension` (수동 설치 안내), `mis browse connect` (CDP `Extensions.loadUnpacked`로 자동 로드), `extension/`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
 | gstack | gstack-first-task-detect | bin | 프로젝트를 첫 작업 유형으로 분류. | ABSORBED | `mis init`의 `projectType`(web/cli/library/unknown)·`firstTask` (`lib/setup.mjs`), `tests/integration/mis-setup.test.mjs` | M9-A |
-| gstack | gstack-gbrain-detect | bin | gbrain 상태 JSON. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-gbrain-install | bin | gbrain CLI 설치. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-gbrain-lib.sh | bin | setup-gbrain 공용 함수. | MISSING | — | gbrain 계열 [정책] → M9-D |
+| gstack | gstack-gbrain-detect | bin | gbrain 상태 JSON. | ABSORBED | `mis gbrain detect`, `tests/integration/mis-gbrain.test.mjs` | M9-D |
+| gstack | gstack-gbrain-install | bin | gbrain CLI 설치. | PARTIAL | `mis gbrain detect`·BLOCKED 메시지의 설치 안내 | M9-D: 안내만. 남음: 설치 실행(guard ask 대상) [정책] → M9-D |
+| gstack | gstack-gbrain-lib.sh | bin | setup-gbrain 공용 함수. | ABSORBED | `lib/commands-gbrain.mjs` 공용 함수 | M9-D |
 | gstack | gstack-gbrain-mcp-verify | bin | 원격 gbrain MCP 확인. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-gbrain-repo-policy | bin | 원격별 gbrain 수집 신뢰 등급. | MISSING | — | gbrain 계열 [정책] → M9-D |
+| gstack | gstack-gbrain-repo-policy | bin | 원격별 gbrain 수집 신뢰 등급. | ABSORBED | `mis gbrain policy [set <remote> full\|artifacts-only\|deny]`, `tests/integration/mis-gbrain.test.mjs` | M9-D |
 | gstack | gstack-gbrain-source-wireup | bin | 브레인 저장소를 gbrain 소스로 등록. | MISSING | — | gbrain 계열 [정책] → M9-D |
 | gstack | gstack-gbrain-supabase-provision | bin | Supabase Management API 래퍼. | MISSING | — | gbrain 계열 [정책] → M9-D |
 | gstack | gstack-gbrain-supabase-verify | bin | Supabase 세션 구조 확인. | MISSING | — | gbrain 계열 [정책] → M9-D |
-| gstack | gstack-gbrain-sync.ts | bin | gbrain 통합 동기화. | MISSING | — | gbrain 계열 [정책] → M9-D |
+| gstack | gstack-gbrain-sync.ts | bin | gbrain 통합 동기화. | PARTIAL | `mis gbrain sync` | M9-D: 산출물 동기화. 남음: 코드 소스 전략 동기화 [정책] → M9-D |
 | gstack | gstack-global-discover / gstack-global-discover.ts | bin | Claude Code·Codex·Gemini 세션을 전역에서 찾는다. | ABSORBED | `mis context sessions` (`CLAUDE_CONFIG_DIR`/projects 전 프로젝트) (M9-B) | M9-B 흡수 |
-| gstack | gstack-ios-qa-daemon | bin | tailnet·루프백 트래픽을 중계하는 Mac 데몬 (원격 iOS QA). | MISSING | — | tailnet 중계 데몬, guard ask [정책] → M9-D |
-| gstack | gstack-ios-qa-mint | bin | 원격 iOS QA 에이전트 tailnet 허용 목록. | MISSING | — | [정책] 위와 함께 → M9-D |
+| gstack | gstack-ios-qa-daemon | bin | tailnet·루프백 트래픽을 중계하는 Mac 데몬 (원격 iOS QA). | PARTIAL | `mis ios daemon start --target <url> [--tailnet]\|status\|stop` (`lib/ios-relay.mjs`: 루프백 기본, tailnet은 토큰 필수·guard ask), `tests/integration/mis-ios-family.test.mjs` | M9-D: 중계·토큰. 남음: CoreDevice USB 터널로 기기 브리지 자동 발견(지금은 `--target` 직접 지정) [정책] → M9-D |
+| gstack | gstack-ios-qa-mint | bin | 원격 iOS QA 에이전트 tailnet 허용 목록. | ABSORBED | `mis ios mint <agent> [--ttl]`, `mis ios tokens [revoke]` (해시만 저장, 0600, guard ask), `tests/integration/mis-ios-family.test.mjs` | M9-D [정책] |
 | gstack | gstack-jsonl-merge | bin | 추가 전용 JSONL용 git merge 드라이버. | ABSORBED | `mis jsonl-merge install` + git merge 드라이버 (합집합) (M9-B) | M9-B 흡수 |
 | gstack | gstack-learnings-log | bin | 학습 추가. | ABSORBED | `mis learn add` | — |
 | gstack | gstack-learnings-search | bin | 학습 검색·필터. | ABSORBED | `mis learn search <q> [--type]` (M9-B) | M9-B 흡수 |
-| gstack | gstack-memory-ingest.ts | bin | 메모리 수집 도우미. | MISSING | — | 세션·산출물을 gbrain에 수집하는 도구 (gbrain 계열) [정책] → M9-D |
-| gstack | gstack-model-benchmark | bin | 같은 프롬프트를 여러 제공자로 실행. | MISSING | — | [정책] benchmark-models와 함께 → M9-D |
+| gstack | gstack-memory-ingest.ts | bin | 메모리 수집 도우미. | PARTIAL | `mis gbrain ingest [--probe]` (`--probe`는 쓰기 없음), `tests/integration/mis-gbrain.test.mjs` | M9-D: wiki·보고서·연구 보고서 수집. 남음: Claude Code 세션 기록 수집 [정책] → M9-D |
+| gstack | gstack-model-benchmark | bin | 같은 프롬프트를 여러 제공자로 실행. | PARTIAL | `mis benchmark-models` | M9-D: benchmark-models 행과 같음. 남음: 토큰·비용·judge [정책] → M9-D |
 | gstack | gstack-next-version | bin | ship용 VERSION 할당. | ABSORBED | `mis next-version <level>` (M9-B) | M9-B 흡수 |
 | gstack | gstack-open-url | bin | 플랫폼별 URL 열기. | ABSORBED | `mis open-url <url\|file.html>` (`open`/`xdg-open`, argv만, http(s)·로컬 .html만), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
 | gstack | gstack-patch-names | bin | 접두사 모드용 SKILL.md `name` 수정. | N/A | — | gstack 설치 구조 전용. 사용자 확인 |
@@ -497,7 +497,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-repo-mode | bin | 1인·협업 저장소 판정. | ABSORBED | `mis repo-mode` (상위 작성자 80% 기준) (M9-B) | M9-B 흡수 |
 | gstack | gstack-review-log | bin | 리뷰 결과 기록. | ABSORBED | `mis review add` | — |
 | gstack | gstack-review-read | bin | 리뷰 기록·설정 조회. | ABSORBED | `mis status` | — |
-| gstack | gstack-security-dashboard | bin | 커뮤니티 프롬프트 인젝션 공격 통계. | MISSING | — | 외부 집계 조회 [정책] → M9-D |
+| gstack | gstack-security-dashboard | bin | 커뮤니티 프롬프트 인젝션 공격 통계. | PARTIAL | `mis telemetry dashboard security` (사용자 엔드포인트, guard ask) | M9-D: 조회 명령. 남음: 공용 집계 백엔드 없음 [정책] → M9-D |
 | gstack | gstack-session-kind | bin | 세션 종류 분류. | ABSORBED | `lib/timeline.mjs` `sessionKind` | M9-F 흡수(F9): `MIS_TEAM_ID`→team-worker, `MIS_HEADLESS`·CI(대화형 CLI 표시 없을 때)→headless, 그 외 interactive |
 | gstack | gstack-session-update | bin | 세션 시작 시 자동 업데이트 (팀 모드). | ABSORBED | SessionStart 업데이트 알림 + `mis upgrade --yes`(승인 후), `tests/integration/mis-lifecycle.test.mjs` | M9-A. 차이: 자동 설치는 하지 않는다(사용자 규칙: 승인 없이 적용 금지) |
 | gstack | gstack-settings-hook | bin | `~/.claude/settings.json` 훅 관리. | ABSORBED | `mis setup [--write]` (settings.json statusLine, 기존 상태줄은 `statusLine.chain`으로 보존; 훅은 플러그인 hooks.json), `tests/integration/mis-setup.test.mjs` | M9-A |
@@ -505,8 +505,8 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-specialist-stats | bin | 리뷰어별 적중률. | ABSORBED | `mis retro` 리뷰어별 적중률 (`reviewers`) (M9-B) | M9-B 흡수 |
 | gstack | gstack-taste-update | bin | 디자인 취향 프로필 갱신. | ABSORBED | `mis taste approve\|reject\|show` (M9-B) | M9-B 흡수 |
 | gstack | gstack-team-init | bin | 팀 모드 저장소 부트스트랩 파일 생성. | ABSORBED | `mis setup team [--write]` (`.make-it-ship.json`·`.gitignore` 초안), `tests/integration/mis-setup.test.mjs` | M9-A |
-| gstack | gstack-telemetry-log | bin | 텔레메트리 이벤트를 로컬 JSONL에 기록. | MISSING | — | 로컬 텔레메트리, 기본 꺼짐 → M9-D |
-| gstack | gstack-telemetry-sync | bin | 로컬 이벤트를 Supabase로 동기화. | MISSING | — | 동기화, 기본 꺼짐 + guard ask [정책] → M9-D |
+| gstack | gstack-telemetry-log | bin | 텔레메트리 이벤트를 로컬 JSONL에 기록. | ABSORBED | `mis telemetry log`, `lib/telemetry.mjs` (기본 꺼짐), `tests/integration/mis-telemetry.test.mjs` | M9-D |
+| gstack | gstack-telemetry-sync | bin | 로컬 이벤트를 Supabase로 동기화. | ABSORBED | `mis telemetry sync` (사용자 엔드포인트만, 커서, guard ask), `tests/integration/mis-telemetry.test.mjs` | M9-D [정책] |
 | gstack | gstack-timeline-log | bin | 프로젝트 타임라인 이벤트 기록. | ABSORBED | `lib/timeline.mjs`, `mis timeline log <event> [k=v…]`, 훅 자동 기록 | M7+M9-F 흡수(F9): run 밖 이벤트를 `.git/make-it-ship/timeline.jsonl`(저장소 밖이면 홈)에 기록 |
 | gstack | gstack-timeline-read | bin | 타임라인 조회. | ABSORBED | `mis timeline [--last N]`, `trace_timeline` (filter `timeline`) | M7+M9-F 흡수(F9): 프로젝트 타임라인 조회, run 이벤트·훅 trace와 병합 |
 | gstack | gstack-uninstall | bin | 스킬·상태·browse 데몬 제거. | ABSORBED | `mis uninstall [--yes] [--purge-runs]` (목록 먼저, `~/.make-it-ship`·statusLine·MIS 블록·browse/team 프로세스; run 기록은 `--purge-runs`만), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
@@ -536,8 +536,8 @@ browse는 작업공간별 포트를 쓰는 Bun 기반 Chromium 데몬(`browse/di
 | gstack | browser-skills 런타임 (`skill list\|show\|run\|test\|rm`, `browser-skills/`) | bin | 사이트별 스크립트 스킬 3단 저장소·실행. | PARTIAL | `mis browse skill list\|show\|run\|test\|rm` (`lib/browse/skills.mjs`; project `.make-it-ship/browser-skills/` > global `~/.make-it-ship/browser-skills/`), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 번들(플러그인 동봉) tier와 코드를 실행하는 스크립트 스킬 — 의도적으로 `mis browse` 단계 재생만 지원 (guard·원격 게이트가 그대로 적용) |
 | gstack | domain-skills (`domain-skill save\|list\|show\|edit\|promote-to-global\|rollback\|rm`) | bin | 사이트별 에이전트 메모, 격리 → 활성 → 전역 승격. | PARTIAL | `mis browse domain-skill save\|list\|show\|edit\|promote-to-global\|rollback\|rm` (격리 → 3회 읽기 후 활성 → 전역), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 프롬프트 주입 분류기 (대신 격리 상태 메모는 "데이터로만 취급" 경고와 함께 출력) |
 | gstack | `extension/` (사이드패널·인스펙터·터미널) | bin | headed Chrome 사이드바 확장. | PARTIAL | `extension/` (MV3 사이드패널: 에이전트에게 메모, element picker → `chrome.storage` inbox; 외부 통신 없음), `mis browse inbox`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 사이드패널 터미널(확장 안의 셸은 guard 밖에서 명령을 실행하므로 넣지 않음; Claude Code 터미널 사용), 인스펙터의 CSS 캐스케이드 패널(`mis browse inspect`로 대체), 활동 피드 |
-| gstack | `design/` 바이너리 (generate·variants·compare·iterate·evolve·serve·gallery) | bin | OpenAI API로 디자인 시안 이미지 생성·비교 보드. | MISSING | — | OpenAI 이미지 시안 생성, 호출마다 guard ask [정책] → M9-D |
-| gstack | `supabase/` (edge functions, config) | bin | 텔레메트리·커뮤니티 집계 백엔드. | MISSING | — | 텔레메트리 집계 백엔드 연동, 기본 꺼짐 [정책] → M9-D |
+| gstack | `design/` 바이너리 (generate·variants·compare·iterate·evolve·serve·gallery) | bin | OpenAI API로 디자인 시안 이미지 생성·비교 보드. | PARTIAL | `mis design generate\|variants\|iterate\|evolve\|compare\|gallery` (`lib/commands-design.mjs`, 키 없으면 BLOCKED, 결과 `design/variants/`, 생성마다 guard ask), `skills/design-images/SKILL.md`, `tests/integration/mis-design.test.mjs` | M9-D: 생성·변형·반복·진화·비교 보드. 남음: serve(피드백을 받는 HTTP 보드), design-to-code·check·diff·memory [정책] → M9-D |
+| gstack | `supabase/` (edge functions, config) | bin | 텔레메트리·커뮤니티 집계 백엔드. | PARTIAL | `mis telemetry sync\|dashboard` (사용자 엔드포인트) | M9-D: 클라이언트. 남음: 집계 백엔드(edge functions) 자체는 없음 [정책] → M9-D |
 | gstack | `hosts/` (codex·cursor·factory·kiro·opencode·openclaw·hermes·gbrain), `openclaw/`, `agents/openai.yaml`, `model-overlays/`, `conductor.json` | bin | 다른 호스트·모델용 변환·설정. | N/A | — | 다른 호스트 전용 |
 
 ### 5.5 `~/.claude/skills/`의 gstack 외 디렉터리 (참고)
@@ -582,6 +582,7 @@ browse는 작업공간별 포트를 쓰는 Bun 기반 Chromium 데몬(`browse/di
 - `design/` 바이너리(OpenAI API로 이미지 생성), design-shotgun의 AI 시안.
 - pair-agent(원격 터널), `gstack-ios-qa-daemon`·`-mint`(tailnet).
 - 다른 모델 호출: OMC ask·ccg·`omc interop`, gstack codex·benchmark-models·`gstack-model-benchmark`. MIS는 이미 guard가 ask한다(`isOtherModel`).
+- (M9-D 구현) 위 항목의 `mis` 명령(`ask`, `ccg`, `benchmark-models`, `interop`, `telemetry sync|dashboard`, `gbrain init|import|sync|query|restore|artifacts-init|ingest`, `design generate|variants|iterate|evolve`, `pair-agent start`, `ios daemon start --tailnet`, `ios mint`)은 `lib/policy.mjs` `EXTERNAL_MIS`에 등록되어 run 여부와 관계없이 ask한다(`tests/unit/policy.test.mjs`). 해당 스킬 문서는 회사 정책이 금지할 수 있다고 적는다. 텔레메트리는 기본 꺼짐이고 켜도 로컬 JSONL만 쓴다.
 
 ### 6.5 플러그인 MCP 서버 로딩 (실측 완료)
 

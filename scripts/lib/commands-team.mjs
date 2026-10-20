@@ -203,12 +203,9 @@ async function runWorker([id, name], cwd) {
 
 function status(dir) {
   const team = readJson(join(dir, 'team.json'));
-  const tasks = listTasks(dir);
-  const counts = { pending: 0, in_progress: 0, done: 0, failed: 0, stopped: 0 };
-  // after shutdown nothing runs any more: a task that was in progress was interrupted
-  for (const t of tasks) if (team.endedAt && t.status === 'in_progress') t.status = 'stopped';
-  for (const t of tasks) counts[t.status]++;
   const alive = tmux('has-session', '-t', team.session).status === 0;
+  // Workers before tasks: a worker writes exit.json after its last task result, so tasks read later are never older
+  // than the exit state (else a task finishing in between shows in_progress on a "complete" team).
   const workers = team.workers.map((w) => {
     const hb = readJson(join(dir, 'workers', w.name, 'heartbeat.json'));
     const age = hb ? Date.now() - Date.parse(hb.at) : null;
@@ -216,6 +213,11 @@ function status(dir) {
     const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : !hb ? 'starting' : age > STALE_MS ? 'stale' : 'running';
     return { ...w, state, task: hb?.task ?? null, heartbeatAgeSec: age === null ? null : Math.round(age / 1000), log: join(dir, 'workers', w.name, 'log') };
   });
+  const tasks = listTasks(dir);
+  const counts = { pending: 0, in_progress: 0, done: 0, failed: 0, stopped: 0 };
+  // after shutdown nothing runs any more: a task that was in progress was interrupted
+  for (const t of tasks) if (team.endedAt && t.status === 'in_progress') t.status = 'stopped';
+  for (const t of tasks) counts[t.status]++;
   // Complete = every worker process is gone (drivers exit as soon as no task is left), so merging can start.
   // shortcut: a stale worker's in_progress task is reported, not re-queued; re-run it in a new team if needed.
   const complete = Boolean(team.endedAt) || workers.every((w) => w.state === 'exited' || w.state === 'stale');
