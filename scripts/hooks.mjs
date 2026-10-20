@@ -64,7 +64,7 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
-    try { (await import('./lib/memory.mjs')).extractRemember(lastAssistantText(input.transcript_path), cwd); } catch { /* best effort */ }
+    try { (await import('./lib/memory.mjs')).extractRemember(typeof input.last_assistant_message === 'string' ? input.last_assistant_message : lastAssistantText(input.transcript_path), cwd); } catch { /* best effort */ }
     const { loopForSession, writeLoop, endLoop, loopDecision, lastReportAt } = await import('./lib/loop.mjs');
     const loop = loopForSession(cwd, input.session_id);
     if (loop.active) {

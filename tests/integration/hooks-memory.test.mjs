@@ -39,9 +39,11 @@ test('<remember> tags: saved from subagent results and from the last assistant m
   const t = join(mkdtempSync(join(tmpdir(), 'mis-t-')), 't.jsonl');
   writeFileSync(t, [JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'ok <remember priority>Release freeze until Friday</remember>' }] } })].join('\n'));
   hook('Stop', { cwd: dir, session_id: 'A', transcript_path: t }, { MIS_STATE_HOME: h });
+  hook('Stop', { cwd: dir, session_id: 'A', last_assistant_message: 'fine <remember>Host field wins</remember>', transcript_path: '/nonexistent' }, { MIS_STATE_HOME: h });
   const n = notepadRead(dir);
   assert.match(JSON.stringify(n), /rate limit is 50\/s/);
   assert.match(JSON.stringify(n), /Release freeze until Friday/);
+  assert.match(JSON.stringify(n), /Host field wins/);
   assert.doesNotMatch(JSON.stringify(n), /"info"/);
 });
 
