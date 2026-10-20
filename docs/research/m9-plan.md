@@ -81,7 +81,7 @@
 
 ### B0 결정: 단독 명령 vs `run --phase` — S
 수용 기준:
-- B1~B9 착수 전에 사용자 결정을 PROGRESS SPEC_CHANGES에 기록한다 (아래 기준은 단독 스킬 기준으로 썼다)
+- 결정됨(2026-10-20): 단독 명령이 아니라 개발 흐름에 녹인다. B1~B9의 각 기능은 run 단계(phases/*.md)에서 상황에 따라 자동으로 쓰이고, run 밖에서는 자연어로 기존 스킬·키워드 라우터를 통해 호출된다. 아래 "단독 스킬" 수용 기준은 "해당 단계에서 자동 사용 + 자연어 진입점"으로 읽는다.
 
 ### B1 계획·spec 단독 스킬 — M, 8행
 행: `OMC deep-dive` · `OMC plan` · `OMC ralplan` · `Superpowers brainstorming` · `Superpowers executing-plans` · `Superpowers writing-plans` · `gstack office-hours` · `gstack spec`
