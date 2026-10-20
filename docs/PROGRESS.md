@@ -116,7 +116,17 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아래 표에 추가한다.
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
-| M6-00 | 갭 매트릭스 + ADR-0003 + plugin MCP strict 실측 | DONE | — | ADR-0003 | (이 커밋) | probe 실측 |
+| M6-00 | 갭 매트릭스 + ADR-0003 + plugin MCP strict 실측 | DONE | — | ADR-0003 | 3db8b0c | probe 실측 |
+| M6-01 | 전역 상태·설정(`~/.make-it-ship`, `MIS_STATE_HOME`) + 스타일 레벨 off/lite/full/ultra 규칙 빌더 + `mis style [lvl]`, `mis style default <lvl>` | DONE | `tests/unit/style.test.mjs` | gap §4 Ponytail 레벨·config | (이 커밋) | npm test |
+| M6-02 | 상시 훅 디스패처 `scripts/hooks.mjs`(fail-open) + SessionStart: 스킬 사용 규율·상시 TDD/검증/디버그 규율, 스타일 규칙, 활성 run·모드 안내, 코드베이스 지도 | TODO | `tests/integration/hooks-session.test.mjs` | gap §3 using-superpowers, §4 activate·map, §2.3 session-start | | |
+| M6-03 | SubagentStart: 스타일 규칙 주입(`subagentMatcher`) | TODO | 같은 파일 | gap §4 subagent | | |
+| M6-04 | UserPromptSubmit 키워드 라우터(§2.5 전 키워드, 한국어 변형, 비활성 목록) + 스타일 전환 문구 + 학습 스킬 주입 + `mis test-prompt` | TODO | `tests/unit/keywords.test.mjs` | gap §2.5, §2.3 skill-injector, §4 mode-tracker | | |
+| M6-05 | 지속 모드(loop: ralph/autopilot/ultrawork) `mis loop start/status/cancel` + Stop 훅(증거 기반 종료, 반복 상한) + 컨텍스트 경고 | TODO | `tests/integration/loop.test.mjs` | gap §2.3 persistent-mode·context-guard | | |
+| M6-06 | statusLine 통합: run 없이도 스타일·모드·브랜치·모델·컨텍스트 표시 + run 정보 | TODO | `tests/unit/statusline.test.mjs` 확장 | gap §6.2 | | |
+| M6-07 | run 밖 guard 정책(careful 상시: main force push 거부, 파괴 명령 ask) + freeze/unfreeze 경계 + README 정정 | TODO | `tests/integration/guard.test.mjs` 확장 | gap §5.2, §6.3 | | |
+| M6-08 | PostToolUse: 규칙 파일 주입(세션당 1회), 편집 후 검증 알림, 반복 도구 실패 시 근본 원인 안내 | TODO | `tests/integration/hooks-posttool.test.mjs` | gap §2.3 rules-injector·verifier·failure | | |
+| M6-09 | 새 스킬(loop, cancel, style) + hooks.json 연결 + THIRD_PARTY_NOTICES + README 상시 계층 절 | TODO | `tests/unit/plugin-files.test.mjs` | ADR-0003 | | |
+| M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | TODO | — | VERIFIER_PROMPT | | |
 
 ## M7 — MCP 도구 서버
 VERIFY: PENDING — 범위: gap-matrix §7 M7 행.
@@ -125,7 +135,7 @@ VERIFY: PENDING — 범위: gap-matrix §7 M7 행.
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
 
 ## M9 — 나머지 이전 제외 기능
-VERIFY: PENDING — 범위: gap-matrix §7 M9 행. [정책] 항목(§6.4)은 사용자 결정 후에만.
+VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
 
 ## M10 — 원본 대비 비교 + HTML 보고서
 VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
