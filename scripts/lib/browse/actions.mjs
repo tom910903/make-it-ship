@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, mkdirSync } from 'node:fs';
 import { resolve, dirname, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { toUrl, lineDiff, toInches } from './util.mjs';
 
 const INTERACTIVE = new Set(['button', 'link', 'textbox', 'checkbox', 'radio', 'combobox', 'listbox', 'menuitem', 'menuitemcheckbox',
@@ -196,16 +197,14 @@ const HANDLERS = {
     if (!['.html', '.htm', '.xhtml', '.svg'].includes(extname(p).toLowerCase())) throw new Error('load-html takes .html, .htm, .xhtml or .svg files');
     if (statSync(p).size > 50 * 1024 * 1024) throw new Error('file is larger than 50MB');
     const html = readFileSync(p, 'utf8');
-    await b.navigate(tab, 'about:blank');
-    await b.send(tab, 'Page.setDocumentContent', { frameId: tab.mainFrameId, html });
+    // as a file: URL, not about:blank + setDocumentContent: the page keeps a local (file) origin and its relative links work
+    await b.navigate(tab, pathToFileURL(p).href);
     return `Loaded ${p} (${html.length} chars)`;
   },
   async back(b, tab) { return history(b, tab, -1); },
   async forward(b, tab) { return history(b, tab, 1); },
   async reload(b, tab) {
-    const w = b.waitLoad(tab); w.promise.catch(() => {});
-    await b.send(tab, 'Page.reload', {});
-    await w.promise;
+    await b.waitNav(tab, () => b.send(tab, 'Page.reload', {}), 30000);
     return `Reloaded ${tab.url}`;
   },
   async url(b, tab) { return tab.frameId ? tab.frameUrl : tab.url; },
@@ -536,16 +535,14 @@ async function history(b, tab, delta) {
   const { currentIndex, entries } = await b.send(tab, 'Page.getNavigationHistory');
   const e = entries[currentIndex + delta];
   if (!e) throw new Error(`no ${delta < 0 ? 'previous' : 'next'} page in history`);
-  const w = b.waitLoad(tab, 15000); w.promise.catch(() => {});
-  await b.send(tab, 'Page.navigateToHistoryEntry', { entryId: e.id });
-  await Promise.race([w.promise, sleep(3000)]); // same-document entries fire no load event
-  w.cancel();
+  await b.waitNav(tab, () => b.send(tab, 'Page.navigateToHistoryEntry', { entryId: e.id }));
   return `${delta < 0 ? 'Back' : 'Forward'} to ${tab.url}`;
 }
 
-// Page JavaScript and storage can read a logged-in site's cookies/tokens: on non-local pages they need --remote, which
-// the guard (policy.mjs) asks the user about. Raw CDP is asked every time, so it may not hide inside a chain.
-const GATED = new Set(['storage', 'js', 'eval']);
+// Page JavaScript and storage can read a logged-in site's cookies/tokens, and upload sends a local file to the site:
+// on non-local pages they need --remote, which the guard (policy.mjs) asks the user about. Raw CDP is asked every
+// time, so it may not hide inside a chain.
+const GATED = new Set(['storage', 'js', 'eval', 'upload']);
 
 export async function runCommand(b, cmd, args, ctx) {
   if (cmd === 'chain') return chain(b, args[0], ctx);
@@ -553,10 +550,16 @@ export async function runCommand(b, cmd, args, ctx) {
   if (!h) throw new Error(`unknown browse command "${cmd}". Commands: ${Object.keys(HANDLERS).join(', ')}, chain, status, stop, restart`);
   if (cmd === 'cdp' && ctx.inChain) throw new Error('cdp is not allowed inside chain; run `mis browse cdp ...` on its own so the guard can ask');
   const tab = b.current();
-  if (GATED.has(cmd) && !ctx.remote && !b.isLocal(tab)) {
-    throw new Error(`${cmd} on a non-local page (${new URL(tab.url).origin}) can read or change its cookies and storage; rerun with --remote (the guard asks the user first)`);
+  if (!GATED.has(cmd) || ctx.remote) return h(b, tab, args.map(String), ctx);
+  // Judge the document the command will actually run in, by the origin the browser reports for it, and run the
+  // command pinned to that same document: if it navigates in between, the command fails instead of running elsewhere.
+  const c = await b.pageContext(tab);
+  if (!c.local) {
+    const what = cmd === 'upload' ? 'sends a local file to it' : 'can read or change its cookies and storage';
+    throw new Error(`${cmd} on a non-local page (${/^[a-z][\w+.-]*:\/\/[^/]/i.test(c.origin) ? c.origin : 'opaque origin'}) ${what}; rerun with --remote (the guard asks the user first)`);
   }
-  return h(b, tab, args.map(String), ctx);
+  tab.pinned = c.uniqueId;
+  try { return await h(b, tab, args.map(String), ctx); } finally { tab.pinned = null; }
 }
 
 async function chain(b, steps, ctx) {

@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { rmSync, existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { rmSync, existsSync, mkdtempSync, realpathSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeRepo, mis, git } from '../helpers.mjs';
@@ -76,4 +76,15 @@ test('--tmux opens a tmux session in the worktree (real tmux) or reports BLOCKED
   assert.equal(tmux('display-message', '-p', '-t', s.tmux, '#{pane_current_path}').stdout.trim(), s.path);
   ok(mis(dir, ['session', 'remove', 'feat-ui'], { env }));
   assert.notEqual(tmux('has-session', '-t', s.tmux).status, 0, 'tmux session closed on remove');
+});
+
+test('M8 D9: session --tmux without tmux says BLOCKED for the session, not for a team', () => {
+  const dir = makeRepo();
+  const bin = mkdtempSync(join(tmpdir(), 'mis-notmux-'));
+  symlinkSync(spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim(), join(bin, 'git'));
+  const r = mis(dir, ['session', 'create', 'feature', 'nt', '--tmux'], { env: { ...env, PATH: bin } });
+  rmSync(bin, { recursive: true, force: true });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /BLOCKED: tmux is not installed/);
+  assert.doesNotMatch(r.err, /team/);
 });

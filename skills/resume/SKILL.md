@@ -5,7 +5,7 @@ description: Resume an interrupted Make It Ship run after a crash, closed sessio
 
 Absorbs: gstack context-restore/context-save · OMC cancel, notepad, state.
 
-`mis` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"`.
+`mis` = the shell function `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` (define it in the same Bash call, or type the full `node` command; not a variable: `M="node …"; $M` fails in zsh).
 
 1. Run `mis resume` (or `mis resume <run-id>` if the user named one). It reclaims a lock left by a dead process, switches to that run, and prints: state, files changed since the last recorded step, evidence that is now stale, tasks that were in progress, open questions, and suggested next steps.
 2. Show the user a short summary: where the run stopped (last completed step), what changed since, what is stale, and what needs their decision. Do not ask them to re-explain the task; the plan and history are in `mis status`.

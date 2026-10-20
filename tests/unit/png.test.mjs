@@ -72,7 +72,7 @@ test('compare: identical → 100 pass; a changed block lowers the score and is l
   for (let y = 0; y < 20; y++) for (let x = 0; x < 50; x++) b.data.set([0, 0, 0, 255], (y * 100 + x) * 4);
   const r = compareImages(b, a);
   assert.equal(r.diffPixels, 1000);
-  assert.equal(r.score, 90);
+  assert.equal(r.score, 0, 'the block is all the content there is, and all of it changed');
   assert.ok(r.hotspots.length > 0 && r.hotspots[0].y === 0, JSON.stringify(r.hotspots[0]));
   assert.equal(r.diff.width, 100);
 });
@@ -82,11 +82,26 @@ test('compare: small differences within tolerance are ignored; size mismatch cou
   assert.equal(r.score, 100);
   const s = compareImages(solid(10, 10, [0, 0, 0, 255]), solid(10, 20, [0, 0, 0, 255]));
   assert.equal(s.diffPixels, 100);
-  assert.equal(s.score, 50);
+  assert.ok(s.score < 50, `score ${s.score}`);
   assert.equal(s.sizeMatch, false);
 });
 
 test('compare: one differing pixel never rounds up to a perfect score', () => {
   const b = solid(100, 100, [0, 0, 0, 255]); b.data.set([255, 255, 255, 255], 0);
-  assert.equal(compareImages(b, solid(100, 100, [0, 0, 0, 255])).score, 99);
+  assert.ok(compareImages(b, solid(100, 100, [0, 0, 0, 255])).score < 100);
+});
+
+// "Text lines": dark bars on a white page at the given rows.
+const page = (rows, w = 400, h = 300) => {
+  const img = solid(w, h, [255, 255, 255, 255]);
+  for (const y0 of rows) for (let y = y0; y < y0 + 8; y++) for (let x = 20; x < 300; x++) img.data.set([20, 20, 20, 255], (y * w + x) * 4);
+  return img;
+};
+
+test('M8 D3: clearly different pages on a shared white background fail; the background does not count as matching content', () => {
+  const r = compareImages(page([10, 30, 50]), page([150, 170, 190, 210]));
+  assert.ok(r.score < 50, `score ${r.score}`);
+  assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).score, 100);
+  const small = compareImages(page([10, 30, 50, 70, 90, 110, 130, 150, 170, 190]), page([10, 30, 50, 70, 90, 110, 130, 150, 170, 190, 210]));
+  assert.ok(small.score >= 50 && small.score < 100, `one added line of ten: ${small.score}`);
 });

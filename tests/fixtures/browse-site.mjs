@@ -23,10 +23,23 @@ export const PAGES = {
   '/style.css': ['text/css', '#hover:hover { color: red }'],
   '/next': ['text/html', '<title>Next</title><h1>Next page</h1><a href="/">Home</a>'],
   '/frame': ['text/html', '<p id="inner">Inside frame</p><button>Frame button</button>'],
+  // a site that turns itself into a blob: document / opens an about:blank popup; both keep the site's origin
+  '/blob.html': ['text/html', `<title>Blob maker</title><script>localStorage.secret = 'S3CR3T';
+location = URL.createObjectURL(new Blob(['<p id="b">blob page</p>'], { type: 'text/html' }));</script>`],
+  '/pop.html': ['text/html', `<title>Popup maker</title><script>localStorage.secret = 'S3CR3T';</script>
+<button id="open" onclick="window.open('about:blank')">Open</button>`],
+  '/upload.html': ['text/html', '<title>Upload</title><input type="file" id="f">'],
 };
+const SLOW_MS = 800; // /slow answers late, so a previous page's late load events race with the new navigation
 
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
+  if (u.pathname === '/xframe') { // a local page embedding a real site
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<title>X</title><iframe id="x" src="http://shop.test:${server.address().port}/next"></iframe>`); return;
+  }
+  if (u.pathname === '/nocontent') { res.writeHead(204); res.end(); return; }
+  if (u.pathname === '/slow') { setTimeout(() => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<title>Slow</title><p>slow page</p>'); }, SLOW_MS); return; }
   const page = PAGES[u.pathname] ?? (u.pathname === '/submitted' ? ['text/html', `<h1>Submitted</h1><p id="q">${u.search}</p>`] : null);
   if (!page) { res.writeHead(404); res.end('nope'); return; }
   res.writeHead(200, { 'content-type': page[0] }); res.end(page[1]);

@@ -2,7 +2,7 @@
 // 127.0.0.1 with a page index, live reload (SSE) and click-to-choose. Access needs the per-start key (query or cookie).
 // argv: <dir> <port> <key> <infoFile> <choicesFile>
 import { createServer } from 'node:http';
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync } from 'node:fs';
 import { extname, join, relative, resolve, sep } from 'node:path';
 
 const [dir, port, key, infoFile, choicesFile] = process.argv.slice(2);
@@ -16,6 +16,9 @@ fetch('/__choice',{method:'POST',body:JSON.stringify({page:location.pathname.sli
 const FRAME = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
 <style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui,sans-serif;max-width:1100px;margin:0 auto;padding:24px 16px}a{color:#2563eb}</style></head><body>${body}</body></html>`;
 
+// Symlinks are followed only when their target stays inside the served directory (both sides resolved: /var → /private/var).
+const REAL_DIR = realpathSync(dir);
+const inside = (p) => { try { return realpathSync(p).startsWith(REAL_DIR + sep); } catch { return false; } };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const inject = (html) => (/<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${CLIENT}</body>`) : html + CLIENT);
 
@@ -24,7 +27,7 @@ function pages(d = dir) {
     if (e.name.startsWith('.')) return [];
     const p = join(d, e.name);
     if (e.isDirectory()) return pages(p);
-    return e.name.endsWith('.html') ? [{ rel: relative(dir, p), mtime: statSync(p).mtimeMs }] : [];
+    return e.name.endsWith('.html') && inside(p) ? [{ rel: relative(dir, p), mtime: statSync(p).mtimeMs }] : [];
   });
 }
 
@@ -72,7 +75,7 @@ const server = createServer((req, res) => {
   }
   let abs;
   try { abs = resolve(dir, decodeURIComponent(u.pathname).slice(1)); } catch { abs = null; }
-  if (!abs || !abs.startsWith(dir + sep) || !existsSync(abs) || !statSync(abs).isFile()) { res.writeHead(404).end('not found'); return; }
+  if (!abs || !abs.startsWith(dir + sep) || !inside(abs) || !statSync(abs).isFile()) { res.writeHead(404).end('not found'); return; }
   const type = TYPES[extname(abs).toLowerCase()] ?? 'application/octet-stream';
   if (extname(abs).toLowerCase() !== '.html') { res.writeHead(200, { 'content-type': type }).end(readFileSync(abs)); return; }
   const html = readFileSync(abs, 'utf8');

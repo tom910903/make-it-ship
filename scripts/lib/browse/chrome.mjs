@@ -1,5 +1,5 @@
 // Chrome discovery, launch and a Chrome DevTools Protocol client over Node's built-in WebSocket (no Playwright).
-import { existsSync, readFileSync, statSync, rmSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join, delimiter } from 'node:path';
 import { homedir } from 'node:os';
@@ -22,9 +22,12 @@ export function findChrome(env = process.env) {
   return candidates.find(isFile) ?? null;
 }
 
-/** Launch the browser on a throwaway profile; resolves with the browser WebSocket URL from DevToolsActivePort. */
+/**
+ * Launch the browser on a throwaway profile with CDP over a pipe (fds 3/4): no DevTools TCP port that other local
+ * processes could reach without the daemon's token. Resolves once the browser answers.
+ */
 export async function launchChrome({ exe, userDataDir, headless, extraArgs = [] }) {
-  const args = [`--user-data-dir=${userDataDir}`, '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check',
+  const args = [`--user-data-dir=${userDataDir}`, '--remote-debugging-pipe', '--no-first-run', '--no-default-browser-check',
     // no phoning home: the org forbids sending data out, and background traffic would pollute `network`/`perf`
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
     '--disable-domain-reliability', '--disable-client-side-phishing-detection', '--metrics-recording-only',
@@ -32,49 +35,48 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [] 
     // cross-origin iframes stay in-process so `frame` can reach them through one session
     '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process',
     ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...extraArgs, 'about:blank'];
-  const portFile = join(userDataDir, 'DevToolsActivePort');
-  rmSync(portFile, { force: true }); // a relaunch on the same profile must not read the previous port
-  const proc = spawn(exe, args, { stdio: 'ignore', detached: false });
-  const deadline = Date.now() + 20000;
-  while (Date.now() < deadline) {
-    if (proc.exitCode !== null) throw new Error(`browser exited during start (code ${proc.exitCode})`);
-    if (existsSync(portFile)) {
-      const [port, path] = readFileSync(portFile, 'utf8').split('\n');
-      if (port && path) return { proc, wsUrl: `ws://127.0.0.1:${port.trim()}${path.trim()}` };
-    }
-    await new Promise((r) => setTimeout(r, 50));
+  const proc = spawn(exe, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], detached: false });
+  const cdp = new CDP(proc.stdio[3], proc.stdio[4]);
+  const died = new Promise((_, reject) => {
+    proc.once('error', (e) => reject(new Error(`cannot start the browser: ${e.message}`)));
+    proc.once('exit', (code) => reject(new Error(`browser exited during start (code ${code})`)));
+  });
+  try {
+    await Promise.race([cdp.send('Browser.getVersion', {}, undefined, 20000), died]);
+  } catch (e) {
+    proc.kill('SIGKILL'); cdp.close();
+    throw new Error(/timed out/.test(e.message) ? 'browser did not answer on its DevTools pipe within 20s' : e.message);
   }
-  proc.kill('SIGKILL');
-  throw new Error('browser did not open its DevTools port within 20s');
+  died.catch(() => {});
+  return { proc, cdp };
 }
 
-/** One browser-level connection; page sessions are multiplexed with Target.attachToTarget({flatten:true}). */
+/** One browser-level connection over the DevTools pipe (NUL-terminated JSON); page sessions are multiplexed with Target.attachToTarget({flatten:true}). */
 export class CDP {
-  static connect(url) {
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(url);
-      ws.onopen = () => resolve(new CDP(ws));
-      ws.onerror = () => reject(new Error(`cannot connect to the browser at ${url}`));
+  constructor(out, input) {
+    this.out = out; this.input = input; this.seq = 0; this.pending = new Map(); this.listeners = new Set(); this.closed = false;
+    let buf = Buffer.alloc(0);
+    input.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]); // split on NUL bytes before decoding: a UTF-8 character may span chunks
+      for (let i; (i = buf.indexOf(0)) >= 0; buf = buf.subarray(i + 1)) this.dispatch(JSON.parse(buf.subarray(0, i).toString('utf8')));
     });
-  }
-
-  constructor(ws) {
-    this.ws = ws; this.seq = 0; this.pending = new Map(); this.listeners = new Set(); this.closed = false;
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.id !== undefined) {
-        const p = this.pending.get(msg.id);
-        if (!p) return;
-        this.pending.delete(msg.id); clearTimeout(p.timer);
-        if (msg.error) p.reject(new Error(`${p.method}: ${msg.error.message}`)); else p.resolve(msg.result);
-      } else for (const l of this.listeners) l(msg.method, msg.params, msg.sessionId);
-    };
-    ws.onclose = () => {
+    const closed = () => {
+      if (this.closed) return;
       this.closed = true;
       for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('browser connection closed')); }
       this.pending.clear();
       this.onclose?.();
     };
+    input.on('close', closed); input.on('error', closed); out.on('error', closed);
+  }
+
+  dispatch(msg) {
+    if (msg.id !== undefined) {
+      const p = this.pending.get(msg.id);
+      if (!p) return;
+      this.pending.delete(msg.id); clearTimeout(p.timer);
+      if (msg.error) p.reject(new Error(`${p.method}: ${msg.error.message}`)); else p.resolve(msg.result);
+    } else for (const l of this.listeners) l(msg.method, msg.params, msg.sessionId);
   }
 
   send(method, params = {}, sessionId, timeoutMs = 30000) {
@@ -83,10 +85,10 @@ export class CDP {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} timed out after ${timeoutMs / 1000}s`)); }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer, method });
-      this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      this.out.write(`${JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })}\0`);
     });
   }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-  close() { try { this.ws.close(); } catch { /* already closed */ } }
+  close() { this.out.destroy(); this.input.destroy(); }
 }
