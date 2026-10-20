@@ -19,4 +19,6 @@ Goal: remove the ambiguity that would make the plan wrong, asking the user as li
 7. If the user says "just do it", stop asking: resolve open items with stated defaults; unresolved HIGH items stay open and `mis` will refuse approval until they are answered.
 8. Non-interactive session: you cannot ask. Leave HIGH items open (never invent answers) and continue to planning; the approval gate will stop the run and the report will list the questions.
 
+Visual questions: when a question is about how something looks or is laid out (not merely about a UI topic), offer the visual companion then, not upfront: write 2-4 small HTML mockups or diagrams into `design/`, `mis companion start design`, give the user the full URL, and ask in the terminal (clicked `data-choice` elements show up in `mis companion status`). Conceptual, scope and tradeoff questions stay in the terminal.
+
 Push for measurable definitions ("fast" → a number). Do not ask more than needed; no questions for their own sake.

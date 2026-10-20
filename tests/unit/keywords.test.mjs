@@ -96,3 +96,8 @@ test('M6 D4: style phrases only when the prompt is just the phrase', () => {
   assert.equal(styleSwitch('please stop ponytail'), 'off');
   assert.equal(styleSwitch('use ponytail ultra for the parser rewrite'), null);
 });
+
+test('M8: team and session skills are explicit-only (no always-on keyword for "team")', () => {
+  for (const p of ['our team wants csv export', 'ask the team to review this', 'omc-teams', 'team 3 fix the build', 'psm review pr 12'])
+    assert.deepEqual(names(p), [], p);
+});

@@ -201,3 +201,17 @@ test('M6 D8: unstaging is not a discard', () => {
   assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
   assert.equal(d(bash('git restore -S .')), 'allow');
 });
+
+test('M8: team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
+  const idle = { ...ctx, activeRun: false };
+  for (const c of [ctx, idle]) {
+    assert.equal(d(bash('node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" team start 2 "x" --worker codex'), c), 'ask');
+    assert.equal(d(bash('node /p/scripts/mis.mjs team start 3 "x" --worker=gemini'), c), 'ask');
+    assert.equal(d(bash('MIS_TEAM_WORKER_CMD="codex exec x" node /p/scripts/mis.mjs team start 1 "x"'), c), 'ask', 'worker command override');
+    assert.equal(d(bash('export MIS_TEAM_WORKER_CMD=gemini; node /p/scripts/mis.mjs team start 1 "x"'), c), 'ask');
+    assert.equal(d(bash('node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" team start 2 "x"'), c), 'allow');
+    assert.equal(d(bash('node /p/scripts/mis.mjs team start 2 "x" --worker claude'), c), 'allow');
+    assert.equal(d(bash('node /p/scripts/mis.mjs team status'), c), 'allow');
+  }
+  assert.match(classify(bash('node /p/scripts/mis.mjs team start 2 "x" --worker codex'), ctx).reason, /external model/);
+});

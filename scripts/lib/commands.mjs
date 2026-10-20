@@ -26,6 +26,7 @@ import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
+import { teamCommands, excludeWorktrees } from './commands-team.mjs';
 import { readLoop, endLoop } from './loop.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
@@ -551,9 +552,7 @@ function worktree([sub, id], cwd) {
       if (s.worktrees[id]) fail(`task ${id} already has a worktree: ${s.worktrees[id].path}`);
       if (t.status !== 'TODO') fail(`task ${id} is ${t.status}`);
       beginExecution(s, cwd);
-      const exclude = join(gitOut(root, 'rev-parse', '--git-common-dir').replace(/^(?!\/)/, `${root}/`), 'info', 'exclude');
-      mkdirSync(join(exclude, '..'), { recursive: true });
-      if (!(existsSync(exclude) && readFileSync(exclude, 'utf8').split('\n').includes('.worktrees/'))) writeFileSync(exclude, `${existsSync(exclude) ? readFileSync(exclude, 'utf8').replace(/\n?$/, '\n') : ''}.worktrees/\n`);
+      excludeWorktrees(root);
       const path = join(root, '.worktrees', `${s.runId}-${id}`);
       const branch = `mis/${s.runId}/${id}`;
       const base = gitOut(root, 'rev-parse', 'HEAD');
@@ -700,5 +699,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...teamCommands };
 export { requiredChecks };

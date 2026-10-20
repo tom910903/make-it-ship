@@ -97,6 +97,7 @@ function classifyBash(cmd, ctx, cwd) {
   for (const { argv: ws } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     let r = careful(ws, ctx, dir);
+    if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -144,6 +145,16 @@ function runOnly(ws, ctx, functions) {
   if (g?.sub === 'push') return classifyPush(g.rest, ctx);
   if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) return ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
   if (isInstall(ws)) return ask('package install needs your approval (supply chain)');
+  return allow;
+}
+
+/** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
+function otherModelTeam(mis, text) {
+  if (mis?.[0] !== 'team' || mis[1] !== 'start') return allow;
+  const w = mis.find((a, i) => a.startsWith('--worker=') || mis[i - 1] === '--worker');
+  if ((w && !/^(--worker=)?claude$/.test(w)) || /\bMIS_TEAM_WORKER_CMD=/.test(text)) {
+    return ask('team workers on another model (codex/gemini or a custom worker command) send repository content to an external model service — needs your approval');
+  }
   return allow;
 }
 

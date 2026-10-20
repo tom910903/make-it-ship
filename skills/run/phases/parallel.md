@@ -1,6 +1,6 @@
 # Phase: parallel (optional)
 
-Absorbs: OMC team, ultrawork, omc-teams, project-session-manager · Superpowers dispatching-parallel-agents, using-git-worktrees.
+Absorbs: OMC ultrawork · Superpowers dispatching-parallel-agents, using-git-worktrees. OMC team / omc-teams (staged pipeline, tmux workers) live in `/make-it-ship:team` (`skills/team/SKILL.md`), project-session-manager in `/make-it-ship:session`.
 
 Use only when the plan has 2+ tasks that are truly independent (different files, no shared state) and the user agreed to parallel work. Otherwise implement sequentially.
 

@@ -1,11 +1,11 @@
 # Phase: design-explore
 
-Absorbs: gstack design-consultation, design-shotgun, design-html, design-review · OMC designer.
+Absorbs: gstack design-consultation, design-shotgun, design-html, design-review · OMC designer · Superpowers brainstorming visual companion.
 
 Full mode with a UI (plan `"ui": true`, Web or iOS); in Standard only when the user asks. `mis approve plan` refuses a Full UI plan until a design choice is recorded with `mis note design`.
 
 1. **Design system proposal** (`DESIGN.md`): product context, aesthetic, typography (up to 3 fonts with roles), color tokens (hex), spacing scale, layout, motion — with a one-line reason each, which choices are SAFE (category baseline) and at least two deliberate RISKS. Reuse an existing design system if the project has one. Avoid default-looking output (Inter/Roboto/Arial as the only type, purple gradients, uniform card grids).
 2. **Variants**: 2-3 static mockups of the key screen that differ in typography, palette, and layout (if you can swap headlines between two and not notice, they are too similar). Web: self-contained HTML files with real content (no lorem ipsum), checked at 375 / 768 / 1440 px widths. iOS: SwiftUI views with `#Preview`. Put them under `design/` (they are deliverables the user reviews).
-3. Show them and ask the user to choose (or combine). Non-interactive: do not choose for the user; stop at the approval gate with the variants listed.
+3. Show them with the visual companion: `mis companion start design` serves `design/` on localhost (page index, live reload when you edit a file; elements with `data-choice="<id>"` are clickable). Give the user the **full** URL it prints (it carries the access key), say in one line what each variant is, and ask them to choose (or combine) in the terminal. Write each revision as a new file (`layout-v2.html`), never overwrite the one being judged. `mis companion status` lists the user's clicks — the terminal answer wins if they differ. `mis companion stop` when the choice is recorded. No browser available (remote/headless): list the file paths instead. Non-interactive: do not choose for the user; stop at the approval gate with the variants listed.
 4. Record the choice **after the final `mis plan set`**: `mis note design - <<'MIS'` with the chosen variant, the reasons, and the final tokens. The note is bound to the current plan; any later plan change needs the note recorded again. Update `DESIGN.md` accordingly.
 5. After implementation, the qa phase checks the built UI against `DESIGN.md` (hierarchy, spacing, color, states, responsiveness).
