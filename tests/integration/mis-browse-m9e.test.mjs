@@ -155,9 +155,16 @@ test('cookie-import loads a JSON cookie file; the next goto sends them', () => {
   const r = ok(b('cookie-import', f));
   assert.equal(r.imported, 2);
   assert.doesNotMatch(JSON.stringify(r), /j1/, 'values are not printed');
-  ok(b('goto', `${site}/echo`));
+  // M9 fix1: browsing a non-local site that the imported cookies log into needs --remote (the guard asks every time)
+  failed(b('goto', `${site}/echo`), /imported credentials[\s\S]*--remote/);
+  failed(b('chain', JSON.stringify([['goto', `${site}/echo`]])), /imported credentials/);
+  ok(b('goto', `${base}/next`)); // local pages need no --remote
+  ok(b('goto', `${site}/echo`, '--remote'));
   assert.match(echo().cookie, /jar=j1/);
+  ok(b('goto', `${base}/next`));
+  failed(b('back'), /imported credentials/);
   failed(b('cookie-import', join(out, 'missing.json')), /ENOENT|no such/);
+  ok(b('restart')); // later tests start without the imported sessions
 });
 
 /** A Chromium cookie DB (schema version 24) with values encrypted the way Chrome does on this platform. */
@@ -200,13 +207,15 @@ test('cookie-import-browser: lists domains without decrypting, imports only the 
   assert.deepEqual(res.domains, ['shop.test']);
   assert.doesNotMatch(r.out + r.err, /fromchrome|dark|secret-other/, 'cookie values are never printed');
   if (process.platform === 'darwin') assert.match(readFileSync(log, 'utf8'), /find-generic-password -w -s Chrome Safe Storage/);
-  ok(b('goto', `${site}/echo`));
+  failed(b('goto', `${site}/echo`), /imported credentials[\s\S]*--remote/);
+  ok(b('goto', `${site}/echo`, '--remote'));
   const c = echo().cookie;
   assert.match(c, /bsid=fromchrome/); assert.match(c, /pref=dark/); assert.doesNotMatch(c, /old=/);
   assert.ok(!ok(b('cookies')).some((x) => x.domain === 'other.example'), 'other sites were not imported');
   assert.deepEqual(readdirSync(privTmp), [], 'the copy of the cookie store is deleted');
   failed(b('cookie-import-browser', 'chrome', '--profile', 'Profile 9', '--domain', 'shop.test'), /no cookie store/);
   failed(b('cookie-import-browser', 'netscape', '--domain', 'x'), /unknown browser/);
+  ok(b('restart')); // later tests start without the imported sessions
 });
 
 test('download (with the page cookies, across origins), scrape with a manifest, archive as MHTML', () => {
@@ -243,7 +252,28 @@ test('state save|load keeps cookies and pages across a browser restart; the file
   assert.match(ok(b('state', 'load', 's1')), /Loaded/);
   assert.equal(ok(b('url')).trim(), `${site}/echo`);
   assert.match(echo().cookie, /keep=me/);
+  failed(b('goto', `${site}/next`), /imported credentials/, 'restored sessions count as imported credentials');
   failed(b('state', 'load', 'nope'), /no saved state/);
+  ok(b('restart')); // later tests start without the restored sessions
+});
+
+test('M9 fix1 D4: connect refuses the real data of every Chromium browser, through letter-case variants, symlinks and copies (a dir with a Local State that is not its own profile)', () => {
+  if (!chrome) return blocked(b('connect'));
+  const mac = process.platform === 'darwin';
+  const appSupport = (...p) => join(H.home, 'Library', 'Application Support', ...p);
+  const roots = mac ? ['Google/Chrome Canary', 'Google/Chrome Beta', 'Google/Chrome Dev', 'Microsoft Edge Beta', 'Vivaldi', 'com.operasoftware.Opera', 'BraveSoftware/Brave-Browser-Nightly', 'Arc/User Data'].map((d) => appSupport(d))
+    : ['google-chrome-beta', 'google-chrome-unstable', 'chromium', 'vivaldi', 'opera', 'microsoft-edge-dev'].map((d) => join(H.home, '.config', d));
+  for (const d of roots) { mkdirSync(join(d, 'Default'), { recursive: true }); failed(b('connect', '--profile-dir', join(d, 'Default')), /inside your browser's own data/); }
+  const real = mac ? appSupport('Google', 'Chrome') : join(H.home, '.config', 'google-chrome');
+  mkdirSync(join(real, 'Default'), { recursive: true });
+  const alias = join(out, 'chrome-alias'); symlinkSync(real, alias);
+  failed(b('connect', '--profile-dir', join(alias, 'Default')), /inside your browser's own data/);
+  const lower = join(H.home, mac ? 'library/application support/google/chrome/Default' : '.config/Google-Chrome/Default');
+  if (existsSync(lower)) failed(b('connect', '--profile-dir', lower), /inside your browser's own data/); // case-insensitive file system: the same dir
+  const copy = join(out, 'copied-chrome-data');
+  mkdirSync(join(copy, 'Default'), { recursive: true }); writeFileSync(join(copy, 'Local State'), JSON.stringify({ profile: { info_cache: { Default: { name: 'Person 1' } } } }));
+  for (const d of [copy, join(copy, 'Default')]) failed(b('connect', '--profile-dir', d), /Local State/);
+  assert.equal(ok(b('status')).mode, 'headless', 'nothing was launched');
 });
 
 test('watch takes snapshots while the user browses and returns what changed', () => {

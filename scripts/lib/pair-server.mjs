@@ -18,6 +18,38 @@ function refusal(cmd, args) {
   if (cmd === 'snapshot' && args.some((a) => ['-o', '--output'].includes(String(a)))) return 'snapshot -o writes a local file; not available to a paired agent';
   return null;
 }
+// M9 fix1 D3: the agent sees only pages it opened itself: http(s) origins it went to with goto/newtab, in tabs it opened or
+// navigated. Every command is checked against the active page before it runs and where it landed after; a page outside
+// that set (the user's local file: pages, pages from before pairing reached with back/forward) is blanked, never read.
+const run = (cmd, args = []) => send(cfg.browseDir, { cmd, args: args.map(String), cwd: cfg.cwd, remote: false });
+const origins = new Set(), openedTabs = new Set();
+const originOf = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.origin : null; } catch { return null; } };
+const shared = (t) => !!t && openedTabs.has(t.id) && origins.has(originOf(t.url));
+const tabList = async () => { const r = await run('tabs'); return Array.isArray(r) ? r : JSON.parse(r); };
+const activeTab = async () => (await tabList()).find((t) => t.active);
+const refused = (msg) => Object.assign(new Error(msg), { status: 400 });
+const clearLogs = async () => { for (const c of ['console', 'network', 'dialog']) await run(c, ['--clear']).catch(() => {}); };
+
+async function handle(cmd, args) {
+  if (cmd === 'status') return status(cfg.browseDir);
+  if (cmd === 'tabs') return (await tabList()).map((t) => (shared(t) ? t : { id: t.id, active: t.active, title: '(not shared with the paired agent)', url: '(not shared)' }));
+  const opens = cmd === 'goto' || cmd === 'newtab';
+  if (cmd === 'tab' || (cmd === 'closetab' && args[0] !== undefined)) {
+    if (!shared((await tabList()).find((t) => String(t.id) === String(args[0])))) throw refused(`tab ${args[0]} was not opened by the paired agent`);
+  } else if (!opens && !shared(await activeTab())) throw refused('the current page was not opened by the paired agent; goto an http(s) URL first');
+  if (opens) origins.add(originOf(args[0]));
+  if (cmd === 'goto') await clearLogs(); // the tab's earlier console/network entries belong to pages the agent did not open
+  const result = await run(cmd, args);
+  if (cmd === 'closetab') return result;
+  const now = await activeTab();
+  if (opens && now) { openedTabs.add(now.id); if (originOf(now.url)) origins.add(originOf(now.url)); } // a redirect it followed
+  if (!shared(now)) {
+    await run('goto', ['about:blank']).catch(() => {}); await clearLogs();
+    throw refused(`${cmd} left the pages the paired agent opened (back/forward into earlier or local pages, or a link to an origin it did not open with goto); the page was blanked. Use goto <http(s) URL>`);
+  }
+  return result;
+}
+
 const want = Buffer.from(cfg.tokenHash, 'hex');
 function authorized(h) {
   const t = /^Bearer (.+)$/.exec(h ?? '')?.[1];
@@ -36,9 +68,8 @@ const server = createServer((req, res) => {
       const { cmd, args = [] } = JSON.parse(body);
       const no = refusal(cmd, args);
       if (no) return json(400, { error: no });
-      const result = cmd === 'status' ? await status(cfg.browseDir) : await send(cfg.browseDir, { cmd, args: args.map(String), cwd: cfg.cwd, remote: false });
-      json(200, { ok: true, result });
-    } catch (e) { json(500, { ok: false, error: e.message }); }
+      json(200, { ok: true, result: await handle(cmd, args.map(String)) });
+    } catch (e) { json(e.status ?? 500, { ok: false, error: e.message }); }
   });
 });
 server.listen(cfg.port, '127.0.0.1', () => {

@@ -49,3 +49,39 @@ test('ingest --probe writes nothing; enqueue + sync commit to the brain repo, pu
   ok(mis(dir, ['gbrain', 'uninstall', '--purge'], { env: h.env }));
   assert.equal(existsSync(join(h.state, 'gbrain.json')), false); assert.equal(existsSync(join(h.state, 'brain')), false);
 });
+
+test('M9 fix1 D5: trust tiers hold at enqueue, sync and import (artifacts-only pushes docs and artifacts only, full pushes source, deny nothing); D8: detect runs no gbrain doctor', () => {
+  const h = env(), dir = makeRepo({ 'src/core.c': 'int secret_source;\n', 'docs/a.md': '# a\n', '.make-it-ship/wiki/w.md': '# w\n' });
+  const remote = mkdtempSync(join(tmpdir(), 'mis-brain-remote-'));
+  execFileSync('git', ['init', '-q', '--bare', remote]);
+  const pushed = () => execFileSync('git', ['--git-dir', remote, 'ls-tree', '-r', '--name-only', 'main'], { encoding: 'utf8' });
+  ok(mis(dir, ['gbrain', 'artifacts-init', remote], { env: h.env }));
+  // default tier: artifacts-only
+  assert.equal(ok(mis(dir, ['gbrain', 'policy'], { env: h.env })).thisRepo.trust, 'artifacts-only');
+  const refused = mis(dir, ['gbrain', 'enqueue', 'src/core.c'], { env: h.env });
+  assert.equal(refused.code, 1); assert.match(refused.err, /src\/core\.c[\s\S]*artifacts-only/);
+  ok(mis(dir, ['gbrain', 'enqueue', 'docs/a.md'], { env: h.env }));
+  // a queue written before the fix (plain paths) still cannot push source: sync checks every file again
+  const cfgFile = join(h.state, 'gbrain.json'), c = JSON.parse(readFileSync(cfgFile, 'utf8'));
+  c.queue.push(join(dir, 'src', 'core.c')); writeFileSync(cfgFile, JSON.stringify(c));
+  const s = ok(mis(dir, ['gbrain', 'sync'], { env: h.env }));
+  assert.equal(s.copied, 1); assert.equal(s.pushed, true);
+  assert.deepEqual(s.refused.map((x) => x.file), [join(dir, 'src', 'core.c')]);
+  assert.match(pushed(), /a\.md/); assert.doesNotMatch(pushed(), /core\.c/);
+  assert.match(mis(dir, ['gbrain', 'import', 'src'], { env: h.env }).err, /artifacts-only/);
+  assert.match(mis(dir, ['gbrain', 'import', '.'], { env: h.env }).err, /artifacts-only/);
+  ok(mis(dir, ['gbrain', 'import', 'docs'], { env: h.env }));
+  // full: source may go
+  ok(mis(dir, ['gbrain', 'policy', 'set', 'local', 'full'], { env: h.env }));
+  ok(mis(dir, ['gbrain', 'enqueue', 'src/core.c'], { env: h.env }));
+  assert.equal(ok(mis(dir, ['gbrain', 'sync'], { env: h.env })).copied, 1);
+  assert.match(pushed(), /core\.c/);
+  // deny: nothing is queued or imported
+  ok(mis(dir, ['gbrain', 'policy', 'set', 'local', 'deny'], { env: h.env }));
+  assert.match(mis(dir, ['gbrain', 'enqueue', 'docs/a.md'], { env: h.env }).err, /deny/);
+  assert.match(mis(dir, ['gbrain', 'import', 'docs'], { env: h.env }).err, /deny/);
+  // detect is read-only: no gbrain doctor (it may connect to a remote engine)
+  const d = ok(mis(dir, ['gbrain', 'detect'], { env: h.env }));
+  assert.equal(d.doctorOk, null); assert.match(d.doctor, /gbrain doctor/);
+  assert.doesNotMatch(readFileSync(join(h.home, 'gbrain.log'), 'utf8'), /doctor/);
+});

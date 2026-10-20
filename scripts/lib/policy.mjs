@@ -1,7 +1,7 @@
 // Guard policy (Spec §7): pure classification of a PreToolUse call.
 // Threat model: careless/habitual mistakes, not an adversarial model (obfuscation is out of scope).
 import { resolve, sep, dirname, basename, join } from 'node:path';
-import { existsSync, lstatSync, readlinkSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync, realpathSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 const R = 'make-it-ship';
@@ -35,6 +35,24 @@ const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.som
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
 import { BROWSE_ALWAYS_ASK, alwaysAskIn } from './browse/util.mjs';
+import { maskSecrets } from './mask.mjs';
+import { homeDir } from './home.mjs';
+import { ingestCandidates } from './commands-gbrain.mjs';
+
+// M9 fix1 D1/D6: files holding commands or changes that mis runs or applies later. Writing one is asked like running it
+// (a stored command is a Bash command run later), with or without a run, through any tool.
+const STORED_FILE = /(?:^|\/)\.make-it-ship\/(?:autoresearch\/[^/]+\/evaluator\.json|deploy\.json|self-improve\/proposals\/[^/]+\/(?:change\.patch|proposal\.json))$/;
+const FILE_WRITER = /^(sed|perl|tee|mv|cp|ln|rsync|dd|install|truncate|patch)$/;
+const READ_MCP = /(^|_)(read|get|list|search|query|find|view|stat|info|tree)(_|$)/i;
+/** Masked, one-line, truncated: stored commands and endpoints shown in an ask (and kept in the trace log). */
+const show = (s, n = 300) => { const t = maskSecrets(String(s)).replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n)}…` : t; };
+const list = (xs, n = 10) => `${xs.slice(0, n).map((x) => show(x, 160)).join(', ')}${xs.length > n ? `, … (${xs.length} in all)` : ''}`;
+const storedWrite = (p, content) => ask(`${p} holds commands or changes that mis runs later (autoresearch evaluator, deploy steps, self-improve proposal); writing it is checked like running them${content ? ` — new content: ${show(content)}` : ''} — needs your approval`);
+/** Repository of a directory: the nearest ancestor with .git (a dir, or a file in a linked worktree). */
+function repoOf(dir) { for (let d = resolve(dir); ; d = dirname(d)) { if (existsSync(join(d, '.git'))) return d; if (dirname(d) === d) return null; } }
+const readJsonAt = (f) => { try { return f ? JSON.parse(readFileSync(f, 'utf8')) : null; } catch { return null; } };
+const inRepo = (dir, ...p) => { const r = repoOf(dir); return r ? join(r, ...p) : null; };
+const mcpPaths = (ti) => Object.entries(ti).filter(([k]) => /path|destination|file|target/i.test(k)).flatMap(([, v]) => [].concat(v)).filter((v) => typeof v === 'string');
 
 const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
@@ -93,6 +111,8 @@ function misSub(ws, functions) {
 }
 
 function classifyBash(cmd, ctx, cwd) {
+  // stored commands can name each other (an evaluator that runs mis autoresearch eval): fail closed past a few levels
+  if ((ctx.depth ?? 0) > 3) return ask(`stored commands nest too deeply to check (${show(cmd, 120)}) — needs your approval`);
   const { commands, text, functions } = commandsOf(cmd);
   // Heredoc bodies are data (plans, reviews) and are excluded from `text`.
   if (BASH_STATE.test(text)) return deny('run state is written only by mis.mjs; use `mis status` to read it');
@@ -112,12 +132,15 @@ function classifyBash(cmd, ctx, cwd) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
   }
   let verdict = allow;
-  for (const { argv: ws } of commands) {
+  for (const { argv: ws, redirects } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
-    let r = careful(ws, ctx, dir, functions);
+    const written = [...(redirects ?? []), ...(FILE_WRITER.test(ws[0] ?? '') ? ws.slice(1).filter((w) => !w.startsWith('-')) : [])];
+    const stored = written.map((t) => resolve(dir, t.replace(/^~/, homedir()))).find((t) => STORED_FILE.test(t));
+    let r = stored ? storedWrite(stored) : careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
     if (r.decision === 'allow') r = misInner(misSub(ws, functions), text, ctx, dir);
-    if (r.decision === 'allow') r = externalMis(misSub(ws, functions));
+    if (r.decision === 'allow') r = storedMis(misSub(ws, functions), ctx, dir, text);
+    if (r.decision === 'allow') r = externalMis(misSub(ws, functions), dir, text);
     if (r.decision === 'allow') r = outsideRepoMis(misSub(ws, functions));
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
@@ -145,7 +168,7 @@ function careful(ws, ctx, dir, functions) {
       if (sub === 'upload' || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
         return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services)`);
       }
-      return ask(`mis browse ${sub} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
+      return ask(`mis browse ${sub} --remote reads or changes cookies/storage, runs JavaScript, or browses with imported credentials (logged-in cookies) on a non-local site`);
     }
   }
   if (browse?.[0] === 'setup' && browse[1] === 'routing' && browse.includes('--write')) return ask('mis setup routing --write changes the project CLAUDE.md; check the dry-run diff first — needs your approval');
@@ -221,12 +244,85 @@ export const APPROVAL_MIS = [
   [['ios', 'sync'], 'mis ios sync --apply overwrites the debug bridge files in this project', { when: '--apply' }],
 ];
 const hit = (mis) => ([prefix, , o = {}]) => prefix.every((w, i) => mis[i] === w) && (!o.when || mis.includes(o.when)) && (!o.unless || !mis.includes(o.unless));
-function externalMis(mis) {
+function externalMis(mis, dir = '.', text = '') {
   if (!mis) return allow;
   const e = EXTERNAL_MIS.find(hit(mis));
-  if (e) return ask(`${e[1]} — data leaves this machine; needs your approval`);
+  if (e) return ask(`${e[1]}${detail(mis, dir, text)} — data leaves this machine; needs your approval`);
   const l = APPROVAL_MIS.find(hit(mis));
-  return l ? ask(`${l[1]} — needs your approval`) : allow;
+  return l ? ask(`${l[1]}${detail(mis, dir, text)} — needs your approval`) : allow;
+}
+
+const DEPLOY_STEPS = [['mergeCmd', 'merge'], ['deployCmd', 'deploy'], ['statusCmd', 'status'], ['ciCmd', 'CI'], ['rollbackCmd', 'rollback']];
+const DEPLOY_FLAGS = { '--merge-cmd': 'mergeCmd', '--deploy-cmd': 'deployCmd', '--status-cmd': 'statusCmd', '--ci-cmd': 'ciCmd', '--rollback-cmd': 'rollbackCmd', '--health': 'healthUrl' };
+const flagOf = (mis, f) => { const i = mis.findIndex((w) => w === f || w.startsWith(`${f}=`)); return i < 0 ? undefined : mis[i].startsWith(`${f}=`) ? mis[i].slice(f.length + 1) : mis[i + 1]; };
+const deploySteps = (c) => DEPLOY_STEPS.filter(([k]) => c[k]).map(([k, n]) => `${n}: \`${show(c[k], 160)}\``).concat(c.healthUrl ? [`health check: ${show(c.healthUrl, 160)}`] : []).join('; ');
+
+/** M9 fix1 D6: where the data goes and exactly what is sent or run, read from the same files mis will read. */
+function detail(mis, dir, text) {
+  try {
+    const [a, b] = mis;
+    if (a === 'telemetry') {
+      const ep = readJsonAt(join(homeDir(), 'config.json'))?.telemetry?.endpoint;
+      return ep ? ` [destination: ${show(ep)}]` : ' [no endpoint configured: nothing would be sent]';
+    }
+    if (a === 'gbrain') {
+      const g = readJsonAt(join(homeDir(), 'gbrain.json')) ?? {}, root = repoOf(dir);
+      const files = b === 'sync' ? (g.queue ?? []).map((x) => (typeof x === 'string' ? x : x.path))
+        : b === 'ingest' && root ? ingestCandidates(root) : b === 'import' ? [resolve(dir, mis[2] ?? '.')] : [];
+      const remote = ['restore', 'artifacts-init'].includes(b) ? mis[2] : g.artifactsRemote;
+      return ` [git remote: ${remote ? show(remote) : 'none'}; gbrain engine: as configured in ~/.gbrain/config.json${['sync', 'ingest', 'import'].includes(b) ? `; files (${files.length}): ${files.length ? list(files) : 'none'}` : ''}]`;
+    }
+    if (a === 'design') return ` [destination: ${show(/\bMIS_OPENAI_BASE_URL=(\S+)/.exec(text)?.[1] ?? process.env.MIS_OPENAI_BASE_URL ?? 'https://api.openai.com')}]`;
+    if (a === 'ask' && b) return ` [to: the ${show(b, 40)} CLI]`;
+    if (a === 'pair-agent') return mis.includes('--local') ? ' [no tunnel: 127.0.0.1 only]' : ` [tunnel command: ${show(process.env.MIS_PAIR_TUNNEL_CMD ?? 'ngrok http <port>')}]`;
+    if (a === 'canary') {
+      const url = mis.slice(1).find((w, i, xs) => /^https?:\/\//.test(w) && !['--pages', '--interval', '--checks', '--max-pages'].includes(xs[i - 1]));
+      const pages = String(flagOf(mis, '--pages') ?? (mis.includes('--discover') ? '' : '/')).split(',').filter(Boolean);
+      return url ? ` [targets: ${list(pages.map((p) => { try { return new URL(p, url).href; } catch { return p; } }))}${mis.includes('--discover') ? `, plus same-origin pages of ${show(url)} found in its sitemap and links` : ''}]` : '';
+    }
+    if (a === 'deploy') {
+      const c = readJsonAt(inRepo(dir, '.make-it-ship', 'deploy.json')) ?? {};
+      if (b === 'setup') for (const [f, k] of Object.entries(DEPLOY_FLAGS)) { const v = flagOf(mis, f); if (v !== undefined) c[k] = v; }
+      return ` [${b === 'setup' ? 'saves' : 'runs'}: ${deploySteps(c) || 'no commands configured'}]`;
+    }
+    if (a === 'approve' && b === 'proposal' && /^[\w.-]+$/.test(mis[2] ?? '')) {
+      const p = readJsonAt(inRepo(dir, '.make-it-ship', 'self-improve', 'proposals', mis[2], 'proposal.json'));
+      return p?.paths ? ` [changes: ${list(p.paths)}]` : '';
+    }
+  } catch { /* no detail: the registry reason still asks */ }
+  return '';
+}
+
+/** M9 fix1 D1: mis subcommands that run a command stored in a file (evaluator, checks, deploy steps): classified like that Bash command. */
+function storedCommands(mis, dir) {
+  const [a, b] = mis;
+  if (a === 'autoresearch' && b === 'eval' && /^[a-z0-9][a-z0-9-]*$/.test(mis[2] ?? '')) {
+    const e = readJsonAt(inRepo(dir, '.make-it-ship', 'autoresearch', mis[2], 'evaluator.json'));
+    return typeof e?.command === 'string' ? [['autoresearch evaluator', e.command]] : [];
+  }
+  if (['check', 'bench', 'health'].includes(a)) {
+    const checks = readJsonAt(inRepo(dir, '.make-it-ship.json'))?.checks ?? {};
+    const names = a === 'health' ? Object.keys(checks).filter((n) => !n.startsWith('qa-')) : [b];
+    const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
+    return names.filter((n) => Array.isArray(checks[n]?.argv)).map((n) => [`check "${n}"`, checks[n].argv.map(q).join(' ')]);
+  }
+  if (a === 'deploy' && b === 'run' && !mis.includes('--dry-run')) {
+    const c = readJsonAt(inRepo(dir, '.make-it-ship', 'deploy.json')) ?? {};
+    return DEPLOY_STEPS.filter(([k]) => typeof c[k] === 'string').map(([k, n]) => [`deploy ${n}`, c[k]]);
+  }
+  return [];
+}
+function storedMis(mis, ctx, dir, text) {
+  if (!mis) return allow;
+  for (const [what, cmd] of storedCommands(mis, dir)) {
+    const r = classifyBash(cmd, { ...ctx, depth: (ctx.depth ?? 0) + 1 }, dir);
+    if (r.decision === 'allow') continue;
+    const why = `mis ${mis[0]} runs the stored ${what} command \`${show(cmd)}\` — ${r.reason.replace(`${R}: `, '')}`;
+    // a command that asks anyway (deploy run) keeps its own question, which lists every stored command
+    const own = r.decision === 'ask' ? externalMis(mis, dir, text) : allow;
+    return own.decision === 'ask' ? ask(`${own.reason.replace(`${R}: `, '')} [${why}]`) : { decision: r.decision, reason: `${R}: ${why}` };
+  }
+  return allow;
 }
 
 /** M9-C: `mis tty start -- <cmd>` runs and `mis tty send <text>` types a command line: classify it as that Bash command. */
@@ -320,6 +416,7 @@ export function classify(input, ctx) {
     const abs = resolve(cwd, p);
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
     if (ctx.freezeDir && outsideFreeze(abs, ctx.freezeDir)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
+    if (STORED_FILE.test(abs) || STORED_FILE.test(realish(abs))) return storedWrite(abs, ti.content ?? ti.new_string ?? ti.edits?.map((e) => e.new_string).join(' | ') ?? ti.new_source);
     if (ctx.debugScope?.length && outsideScope(abs, ctx.debugScope)) return ask(`${abs} is outside the debug scope (${ctx.debugScope.join(', ')}); a fix outside the hypothesis widens the change (mis debug scope --clear to lift)`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
@@ -334,6 +431,8 @@ export function classify(input, ctx) {
     const name = tool.slice(OWN_MCP.length);
     const writes = name === 'lsp_code_action_resolve' || (FILE_WRITERS.includes(name) && ti.apply === true);
     if (!writes) return allow;
+    const stored = mcpPaths(ti).map((p) => resolve(cwd, p)).find((p) => STORED_FILE.test(p));
+    if (stored) return storedWrite(stored);
     if (ctx.freezeDir) {
       const paths = name === 'ast_grep_replace' ? [].concat(ti.paths ?? []) : [];
       if (!paths.length || paths.some((p) => outsideFreeze(resolve(cwd, p), ctx.freezeDir))) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
@@ -342,6 +441,8 @@ export function classify(input, ctx) {
   }
   if (tool.startsWith('mcp__')) {
     const name = tool.split('__').slice(2).join('__');
+    const stored = !READ_MCP.test(name) || MCP_WRITE.test(name) ? mcpPaths(ti).map((p) => resolve(cwd, p)).find((p) => STORED_FILE.test(p)) : null;
+    if (stored) return storedWrite(stored, ti.content ?? ti.edits?.map((e) => e.newText ?? e.new_string).join(' | '));
     if (ctx.activeRun && MCP_WRITE.test(name)) return ask(`external write via MCP (${tool}) needs your approval`);
   }
   return allow;

@@ -5,12 +5,32 @@ import { tmpdir, hostname } from 'node:os';
 import { browserDataDirs } from './cookies.mjs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { toUrl, lineDiff, toInches, BROWSE_ALWAYS_ASK } from './util.mjs';
+import { toUrl, lineDiff, toInches, BROWSE_ALWAYS_ASK, isLocalOrigin } from './util.mjs';
 
 export const EXTENSION_DIR = fileURLToPath(new URL('../../../extension', import.meta.url));
 const mb = (n) => Math.round(n / 1048576 * 10) / 10;
 
 const realish = (p) => { let base = p, rest = ''; while (!existsSync(base) && dirname(base) !== base) { rest = join(basename(base), rest); base = dirname(base); } try { return join(realpathSync(base), rest).replace(/\/$/, ''); } catch { return p; } };
+
+/** The existing ancestors of a path, nearest first (a profile dir may not exist yet). */
+const ancestors = (p) => { const out = []; for (let d = resolve(p); ; d = dirname(d)) { if (existsSync(d)) out.push(d); if (dirname(d) === d) return out; } };
+const sameDir = (a, b) => a.dev === b.dev && a.ino === b.ino;
+/** M9 fix1 D4: the user's real browser data dir that holds this path, compared by device and inode (letter case,
+ *  symlinks and .. cannot hide it), and by case-insensitive path on macOS for roots that do not exist yet. */
+function ownBrowserData(profile) {
+  const roots = browserDataDirs(), up = ancestors(profile).map((d) => statSync(d));
+  for (const r of roots) if (existsSync(r) && up.some((s) => sameDir(s, statSync(r)))) return r;
+  const real = realish(profile), fold = (x) => (process.platform === 'darwin' ? x.toLowerCase() : x);
+  return roots.find((d) => fold(real) === fold(realish(d)) || fold(real).startsWith(fold(realish(d)) + sep)) ?? null;
+}
+const PROFILE_MARK = '.make-it-ship-profile';
+/** Fail closed: a dir (or ancestor) with a Chrome "Local State" is some browser's user data, unless connect made it or
+ *  it lies in Make It Ship's own state dir. */
+function foreignUserData(profile, home) {
+  const mine = home && ancestors(profile).some((d) => existsSync(home) && sameDir(statSync(d), statSync(home)));
+  if (mine) return null;
+  return ancestors(profile).find((d) => existsSync(join(d, 'Local State')) && !existsSync(join(d, PROFILE_MARK))) ?? null;
+}
 
 /** A profile a running browser holds: SingletonLock is a symlink to "<host>-<pid>" (a dead pid on this host is a stale lock). */
 function profileInUse(dir) {
@@ -266,6 +286,9 @@ async function setCookies(b, cookies) {
   return { set, rejected: cookies.length - set };
 }
 
+/** M9 fix1: sites the browser holds imported (or restored) logged-in cookies for; browsing them off-machine needs --remote. */
+function remember(b, domains) { b.credentialDomains = new Set([...(b.credentialDomains ?? []), ...domains.map((d) => String(d ?? '').replace(/^\./, '').toLowerCase()).filter(Boolean)]); }
+
 /** cookie-import / cookie-import-browser: the CLI reads (and decrypts) the cookies and sends them as data; values are never echoed. */
 async function importCookies(b, ctx) {
   const list = ctx.data?.cookies;
@@ -273,6 +296,7 @@ async function importCookies(b, ctx) {
   const r = await setCookies(b, list.map((c) => ({ name: String(c.name), value: String(c.value), domain: c.domain, path: c.path ?? '/', secure: !!c.secure,
     httpOnly: !!c.httpOnly, ...(c.sameSite ? { sameSite: c.sameSite } : {}), ...(c.expires > 0 ? { expires: c.expires } : {}) })));
   const domains = [...new Set(list.map((c) => String(c.domain ?? '').replace(/^\./, '')))];
+  remember(b, domains);
   return { imported: r.set, rejected: r.rejected, domains, ...(ctx.data.source ? { source: ctx.data.source } : {}) };
 }
 
@@ -790,6 +814,7 @@ const HANDLERS = {
     if (!existsSync(file)) throw new Error(`no saved state "${name}"`);
     const s = JSON.parse(readFileSync(file, 'utf8'));
     await b.cdp.send('Storage.setCookies', { cookies: s.cookies });
+    remember(b, s.cookies.map((c) => c.domain));
     const [first, ...rest] = s.urls;
     if (first) await b.navigate(b.current(), first);
     for (const u of rest) await b.newTab(u);
@@ -850,12 +875,14 @@ const HANDLERS = {
     const profile = resolve(ctx.cwd, o['--profile-dir'] ?? join(ctx.home, 'chrome-profile'));
     // never the user's own browser data (Chrome 136+ refuses DevTools there, and its logins must not be driven from here);
     // to use those sessions, import one site's cookies with cookie-import-browser
-    const real = realish(profile);
-    const own = browserDataDirs().map(realish).find((d) => real === d || real.startsWith(d + sep));
+    const own = ownBrowserData(profile);
     if (own) throw new Error(`${profile} is inside your browser's own data (${own}); connect uses its own profile. Pick another --profile-dir, or import a site's cookies with cookie-import-browser`);
+    const data = foreignUserData(profile, ctx.home);
+    if (data) throw new Error(`${profile} looks like a browser's user data (${data} has a Chrome "Local State" file) that connect did not create; connect only uses its own profiles. Pick an empty --profile-dir`);
     // a running browser owns its profile (a second instance just hands the URL to it)
     if (profileInUse(profile)) throw new Error(`${profile} is in use by a running browser; quit it or pick another --profile-dir`);
     mkdirSync(profile, { recursive: true, mode: 0o700 });
+    if (!existsSync(join(profile, PROFILE_MARK))) writeFileSync(join(profile, PROFILE_MARK), 'A profile made by mis browse connect.\n');
     const urls = await b.tabUrls();
     b.connected = { profile, extension: o['--no-extension'] ? null : EXTENSION_DIR };
     try { await b.relaunch(false, urls); } catch (e) { b.connected = null; await b.relaunch(true, urls).catch(() => {}); throw e; }
@@ -987,8 +1014,29 @@ export async function runCommand(b, cmd, args, ctx) {
   return result;
 }
 
+/** Where a navigation command is about to go (M9 fix1: checked against imported credentials before it runs). */
+async function navTargets(b, tab, cmd, args, ctx) {
+  if (cmd === 'goto' || cmd === 'newtab') return args[0] ? [toUrl(String(args[0]), ctx.cwd)] : [];
+  if (cmd === 'diff') return args.slice(0, 2).map((u) => toUrl(String(u), ctx.cwd));
+  if (cmd === 'reload') return [tab.url];
+  if (cmd === 'back' || cmd === 'forward') {
+    const { currentIndex, entries } = await b.send(tab, 'Page.getNavigationHistory');
+    return [entries[currentIndex + (cmd === 'back' ? -1 : 1)]?.url].filter(Boolean);
+  }
+  return [];
+}
+
 async function gated(b, h, cmd, args, ctx) {
   const tab = b.current();
+  // ADR-0003 (credentials always ask): with imported sessions, browsing a non-local site they log into needs --remote,
+  // which the guard asks about. shortcut: a click that follows a link there is not checked beforehand (RISKS).
+  if (b.credentialDomains?.size && !ctx.remote) {
+    for (const u of await navTargets(b, tab, cmd, args, ctx)) {
+      let host; try { host = new URL(u).hostname.toLowerCase(); } catch { continue; }
+      if (isLocalOrigin(u) || ![...b.credentialDomains].some((d) => host === d || host.endsWith(`.${d}`))) continue;
+      throw new Error(`${cmd} to ${new URL(u).origin} would browse a non-local site with imported credentials (logged-in cookies from cookie-import or state load); rerun with --remote (the guard asks the user first)`);
+    }
+  }
   if (!GATED.has(cmd) || ctx.remote) return h(b, tab, args.map(String), ctx);
   // Judge the document the command will actually run in, by the origin the browser reports for it, and run the
   // command pinned to that same document: if it navigates in between, the command fails instead of running elsewhere.
