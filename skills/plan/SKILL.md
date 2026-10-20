@@ -7,7 +7,7 @@ description: Make It Ship planning without building - turns a request, idea or s
 
 Absorbs: OMC plan, planner, ultragoal · Superpowers writing-plans, executing-plans · gstack spec (via the interview).
 
-`mis` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"`. No run is started; nothing outside `docs/make-it-ship/` changes.
+`mis` means the shell function `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` (define it in the same Bash call). No run is started; nothing outside `docs/make-it-ship/` changes.
 
 1. Discover read-only: `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/discover.md` (dispatch `make-it-ship:explorer` for anything larger than a few files).
 2. Clarify: if goal, constraints or success criteria are unclear, follow `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/interview.md` (spec or brainstorming mode when the intent is vague or the design is open). `make-it-ship:analyst` can draft the acceptance criteria and gaps.
