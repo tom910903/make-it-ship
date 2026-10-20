@@ -2,27 +2,14 @@
 // Always-on hooks (M6): SessionStart, SubagentStart, ... One entry, event name in argv[2].
 // Fail-open by design: any error or bad input prints nothing and exits 0 so a session is never blocked.
 // (guard.mjs is the separate fail-closed PreToolUse hook.)
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleRules, currentStyle } from './lib/style.mjs';
 import { globalConfig } from './lib/home.mjs';
+import { contextPercent } from './lib/context.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = (event, text) => text ? { hookSpecificOutput: { hookEventName: event, additionalContext: text } } : null;
-
-/** Context use from the last assistant usage in the transcript (shortcut: assumes a 200k window). */
-function contextPercent(path) {
-  if (!path) return 0;
-  try {
-    const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
-    for (let i = lines.length - 1; i >= 0 && i >= lines.length - 200; i--) {
-      const u = JSON.parse(lines[i])?.message?.usage;
-      if (u) return Math.round(((u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) / 2000);
-    }
-  } catch { /* unreadable transcript */ }
-  return 0;
-}
 
 const handlers = {
   async SessionStart(input) {

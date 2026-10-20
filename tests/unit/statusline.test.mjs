@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { renderHud } from '../../scripts/statusline.mjs';
 import { makeRepo, mis, ROOT } from '../helpers.mjs';
 
@@ -18,13 +20,20 @@ test('HUD one-liner format', () => {
   assert.equal(line, 'MIS ▸ EXECUTING · T1/3 · unit✓ lint✗ e2e~ build· · FAILED');
 });
 
-test('statusline script: prints the run line for the session cwd, nothing without a run', () => {
+test('statusline script: idle line without a run, run line plus extras with one', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
-  const sl = (cwd) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd }), encoding: 'utf8' });
-  assert.equal(sl(dir).stdout, '');
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) };
+  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, ...extra }), encoding: 'utf8', env });
+  assert.equal(sl(dir).stdout, 'MIS ▸ idle · style full · main\n');
   mis(dir, ['start', '--input', 'x']);
-  assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL\n?$/);
+  assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL · style full · main\n?$/);
+  mis(dir, ['loop', 'start', '--max', '7', 'x'], { env });
+  mis(dir, ['style', 'ultra'], { env });
+  assert.match(sl(dir, { model: { display_name: 'Opus 5.5' } }).stdout, / · style ULTRA · loop 0\/7 · main · Opus 5\.5\n$/);
+  mis(dir, ['style', 'off'], { env });
+  assert.doesNotMatch(sl(dir).stdout, /style/);
   assert.equal(sl('/').status, 0, 'non-repo cwd does not crash');
+  assert.match(sl('/').stdout, /^MIS ▸ idle/);
 });
 
 test('mis init proposes the HUD statusLine (user applies it)', () => {
