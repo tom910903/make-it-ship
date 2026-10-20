@@ -32,3 +32,10 @@ export function setGlobalConfig(patch) {
 }
 
 export const homeExists = () => existsSync(homeDir());
+
+// Per-session memory (style level, hint counters); keyed by the host session id.
+const sid = (id) => `sessions/${String(id || 'default').replace(/[^\w.-]/g, '_')}.json`;
+export const readSession = (id) => readHome(sid(id), {}) ?? {};
+export const writeSession = (id, s) => writeHome(sid(id), s);
+/** The session a CLI call runs in (Claude Code sets it for Bash tool commands). */
+export const envSession = () => process.env.CLAUDE_CODE_SESSION_ID || null;

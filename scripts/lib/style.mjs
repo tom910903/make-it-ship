@@ -1,6 +1,6 @@
 // Always-on coding style (absorbs Ponytail levels; see THIRD_PARTY_NOTICES.md). Injected by hooks.mjs at
 // SessionStart and SubagentStart; the level lives in the per-user home (home.mjs), not in the repo.
-import { globalConfig, readHome, writeHome } from './home.mjs';
+import { globalConfig, readSession, writeSession } from './home.mjs';
 
 export const STYLE_LEVELS = ['off', 'lite', 'full', 'ultra'];
 const ALIASES = { normal: 'off', stop: 'off', none: 'off', default: 'full', on: 'full' };
@@ -47,14 +47,15 @@ Level:
 ${LEVEL_LINE[lvl]}`;
 }
 
-/** Session level: explicit `mis style <lvl>` choice, else the configured default. */
-export function currentStyle() {
-  return normalizeStyle(readHome('style.json')?.level) ?? normalizeStyle(globalConfig().style.default) ?? 'full';
+/** A session's level: set in that session (`mis style <lvl>` or a style phrase), else the configured default. */
+export function currentStyle(sessionId) {
+  return normalizeStyle(sessionId ? readSession(sessionId).style : null) ?? normalizeStyle(globalConfig().style.default) ?? 'full';
 }
 
-export function setStyle(level) {
+export function setStyle(level, sessionId) {
   const lvl = normalizeStyle(level);
   if (!lvl) throw new Error(`unknown style level "${level}" (use ${STYLE_LEVELS.join('|')})`);
-  writeHome('style.json', { level: lvl, at: new Date().toISOString() });
+  if (!sessionId) throw new Error('a style level belongs to a Claude Code session; outside one, use mis style default <level>');
+  writeSession(sessionId, { ...readSession(sessionId), style: lvl });
   return lvl;
 }

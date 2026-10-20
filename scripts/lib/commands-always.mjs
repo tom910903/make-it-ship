@@ -1,6 +1,6 @@
 // mis commands of the always-on layer (M6): style level. Run-independent; state lives in home.mjs.
 import { currentStyle, setStyle, normalizeStyle } from './style.mjs';
-import { globalConfig, setGlobalConfig, homeDir } from './home.mjs';
+import { globalConfig, setGlobalConfig, homeDir, envSession } from './home.mjs';
 import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './keywords.mjs';
 import { repoRoot } from './tree-hash.mjs';
 import { readLoop, startLoop, endLoop } from './loop.mjs';
@@ -15,8 +15,8 @@ function style([a, b]) {
     setGlobalConfig({ style: { ...globalConfig().style, default: lvl } });
     return { default: lvl };
   }
-  if (a !== undefined) return { level: setStyle(a) };
-  return { level: currentStyle(), default: globalConfig().style.default };
+  if (a !== undefined) return { level: setStyle(a, envSession()) };
+  return { level: currentStyle(envSession()), default: globalConfig().style.default };
 }
 
 /** Dry run of the UserPromptSubmit router: what a prompt would trigger. Changes nothing. */
@@ -32,7 +32,7 @@ function loop([sub, ...rest], cwd) {
   if (sub === 'start') {
     let max = 20;
     if (rest[0] === '--max') { max = Number(rest[1]); rest = rest.slice(2); }
-    return startLoop(cwd, rest.join(' ').trim(), max);
+    return startLoop(cwd, rest.join(' ').trim(), max, envSession());
   }
   if (sub === 'cancel') return endLoop(cwd, 'cancelled');
   if (sub === 'status' || sub === undefined) return readLoop(cwd);

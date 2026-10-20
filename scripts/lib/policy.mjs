@@ -1,6 +1,7 @@
 // Guard policy (Spec §7): pure classification of a PreToolUse call.
 // Threat model: careless/habitual mistakes, not an adversarial model (obfuscation is out of scope).
-import { resolve, sep } from 'node:path';
+import { resolve, sep, dirname, basename, join } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 const R = 'make-it-ship';
@@ -13,6 +14,14 @@ const STATE_PATH = /\.git\/(?:.*\/)?make-it-ship\/(?:runs\/|current$)/;
 const BASH_STATE = /make-it-ship\/(?:runs|current)\b/; // §7: state paths; `cd` into the state dir is checked separately
 const MCP_WRITE = /create|update|delete|send|push|merge|upload|transition|edit|write/i;
 const CONFIG = '.make-it-ship.json';
+
+/** Real path of a possibly not-yet-existing file: resolve symlinks of the nearest existing ancestor. */
+function realish(abs) {
+  let base = abs, rest = '';
+  while (!existsSync(base) && dirname(base) !== base) { rest = rest ? join(basename(base), rest) : basename(base); base = dirname(base); }
+  try { return rest ? join(realpathSync(base), rest) : realpathSync(base); } catch { return abs; }
+}
+const outsideFreeze = (abs, dir) => !(realish(abs) + sep).startsWith(dir + sep);
 
 import { commandsOf } from './shell.mjs';
 
@@ -106,7 +115,8 @@ function careful(ws, ctx, dir) {
   }
   if (g?.sub === 'reset' && g.rest.includes('--hard')) return ask('git reset --hard discards local changes');
   if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) return ask('git clean -f deletes untracked files');
-  if ((g?.sub === 'checkout' || g?.sub === 'restore') && g.rest.filter((w) => w !== '--').some((w) => w === '.' || w === ':/')) return ask(`git ${g.sub} . discards all uncommitted changes`);
+  const unstageOnly = g?.sub === 'restore' && g.rest.some((w) => w === '--staged' || w === '-S') && !g.rest.some((w) => w === '--worktree' || w === '-W');
+  if ((g?.sub === 'checkout' || g?.sub === 'restore') && !unstageOnly && g.rest.filter((w) => w !== '--').some((w) => w === '.' || w === ':/')) return ask(`git ${g.sub} . discards all uncommitted changes`);
   if (isOtherModel(ws)) return ask('sends repository content to an external model service (second opinion) — needs your approval');
   if (ws[0] === 'kubectl' && ws[1] === 'delete') return ask('kubectl delete removes cluster resources');
   if (ws[0] === 'docker' && ((ws[1] === 'rm' && ws.includes('-f')) || (ws[1] === 'system' && ws[2] === 'prune'))) return ask(`docker ${ws[1]} ${ws[2] ?? ''} removes containers or images`);
@@ -184,7 +194,7 @@ export function classify(input, ctx) {
     if (!p) return allow;
     const abs = resolve(cwd, p);
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
-    if (ctx.freezeDir && !(abs + sep).startsWith(ctx.freezeDir + sep)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
+    if (ctx.freezeDir && outsideFreeze(abs, ctx.freezeDir)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
     const inRepo = (abs + sep).startsWith(ctx.repoRoot + sep);

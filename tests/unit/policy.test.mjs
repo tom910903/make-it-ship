@@ -179,3 +179,9 @@ test('freeze boundary (M6-07): edits outside the frozen directory are denied, wi
   assert.equal(w(`${REPO}/README.md`, { ...frozen, activeRun: true }), 'deny');
   assert.match(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/x.js` }, cwd: REPO }, frozen).reason, /mis unfreeze/);
 });
+
+test('M6 D8: unstaging is not a discard', () => {
+  assert.equal(d(bash('git restore --staged .')), 'allow');
+  assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
+  assert.equal(d(bash('git restore -S .')), 'allow');
+});

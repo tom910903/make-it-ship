@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeRepo, GUARD, ROOT } from '../helpers.mjs';
@@ -127,4 +127,20 @@ test('guard: mis freeze limits edits to one directory without a run; mis unfreez
   assert.equal(w(`${dir}/README.md`), 'deny');
   assert.equal(JSON.parse(m('unfreeze').stdout).freezeDir, null);
   assert.equal(w(`${dir}/README.md`), 'allow');
+});
+
+test('M6 D10: freeze follows symlinks (no escape through a link inside the frozen dir; links to inside are fine)', () => {
+  const dir = makeRepo({ 'src/a.js': '', 'outside/b.js': '' });
+  symlinkSync(join(dir, 'outside'), join(dir, 'src', 'escape'));
+  const alias = join(mkdtempSync(join(tmpdir(), 'mis-alias-')), 'repo');
+  symlinkSync(dir, alias);
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'freeze', 'src'], { cwd: dir, encoding: 'utf8', env });
+  const w = (p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p }, cwd: dir }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(w(join(dir, 'src', 'escape', 'pwn.js')), 'deny', 'link inside src pointing outside');
+  assert.equal(w(join(alias, 'src', 'new.js')), 'allow', 'symlinked path to a frozen file is inside');
 });
