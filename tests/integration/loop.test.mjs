@@ -77,3 +77,16 @@ test('Stop without a loop: silent, except a context warning from transcript usag
   assert.match(w.systemMessage, /context .*8\d%/i);
   assert.equal(w.decision, undefined);
 });
+
+test('Stop lets the session stop while the run waits for the user (AWAITING_APPROVAL), keeping the loop', () => {
+  const dir = makeRepo();
+  ok(mis(dir, ['loop', 'start', 'x']));
+  ok(mis(dir, ['start', '--input', 'x']));
+  ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
+  ok(mis(dir, ['mode', 'set', 'standard', '--reason', 'r']));
+  assert.equal(ok(mis(dir, ['status', '--json'])).state.state, 'AWAITING_APPROVAL');
+  const r = stop(dir);
+  assert.equal(r?.decision, undefined);
+  assert.match(r.systemMessage, /waiting for the user/i);
+  assert.equal(ok(mis(dir, ['loop', 'status'])).iteration, 0);
+});

@@ -41,6 +41,7 @@ export function loopDecision(loop, run, v) {
   const state = run?.state.state;
   if (state === 'REPORTED' && v?.verdict === 'VERIFIED') return { end: 'verified', message: `Make It Ship loop finished: run ${run.state.runId} is REPORTED with verdict VERIFIED.` };
   if (state === 'BLOCKED') return { message: `Make It Ship loop paused: run ${run.state.runId} is BLOCKED (${run.state.blockedReason ?? 'needs the user'}). The user must resolve it; the loop resumes on the next stop after that.` };
+  if (state === 'AWAITING_APPROVAL') return { message: `Make It Ship loop paused: run ${run.state.runId} is waiting for the user to approve the plan (mis approve plan). The loop resumes after that.` };
   if (loop.iteration >= loop.max) return { end: 'limit', message: `Make It Ship loop stopped at its iteration limit (${loop.max}) without a VERIFIED report. Tell the user what is left.` };
   const n = loop.iteration + 1;
   const status = !run || run.state.state === 'CANCELLED'
