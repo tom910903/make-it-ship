@@ -11,7 +11,7 @@ const names = (p, opts) => detectKeywords(p, opts).map((m) => m.name);
 test('every keyword triggers in English and Korean', () => {
   const cases = {
     cancel: ['cancelomc please', 'stopomc'],
-    loop: ['ralph: fix the login bug', '랄프로 끝까지 해줘'],
+    loop: ['ralph: fix the login bug', '랄프: 끝까지 해줘'],
     run: ['autopilot: add csv export', 'build me an app for notes', 'I want a cli that counts words', 'handle it all', '오토파일럿으로 해줘'],
     ultragoal: ['ultragoal ship these three things'],
     parallel: ['ulw refactor the parsers', 'ultrawork this', '울트라워크로 해줘'],
@@ -80,12 +80,12 @@ test('M6 D2/D7: names, quotes, complaints and casual words do not start modes', 
     'the UW campus map is broken',
   ]) assert.ok(!names(p).includes('loop') && !names(p).includes('parallel'), `${p}: ${names(p)}`);
   assert.deepEqual(names('stop the ralph loop'), ['cancel']);
-  for (const p of ['ralph: fix the importer', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode: port the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘'])
+  for (const p of ['ralph: fix the importer', '/ralph finish it', 'ralph mode: port the parser', '랄프: 끝까지 해줘', '랄프 모드로 진행: 해줘'])
     assert.deepEqual(names(p), ['loop'], p);
 });
 
 test('M6 D9: Japanese variants', () => {
-  const cases = { loop: 'ラルフで直して', run: 'オートパイロットで作って', parallel: 'ウルトラワークで', 'second-opinion': 'シーシージー', 'plan-consensus': 'ラルプランして', interview: 'ディープインタビューしよう', tdd: 'テストファーストで', review: 'コードレビューして', 'security-review': 'セキュリティレビューして', think: 'ウルトラシンク', search: 'ディープサーチして', analyze: 'ディープアナライズして' };
+  const cases = { loop: 'ラルフ: 直して', run: 'オートパイロットで作って', parallel: 'ウルトラワークで', 'second-opinion': 'シーシージー', 'plan-consensus': 'ラルプランして', interview: 'ディープインタビューしよう', tdd: 'テストファーストで', review: 'コードレビューして', 'security-review': 'セキュリティレビューして', think: 'ウルトラシンク', search: 'ディープサーチして', analyze: 'ディープアナライズして' };
   for (const [n, p] of Object.entries(cases)) assert.ok(names(p).includes(n), `${n} ← ${p}: ${names(p)}`);
 });
 
@@ -96,29 +96,22 @@ test('M6 D4: style phrases only when the prompt is just the phrase', () => {
   assert.equal(styleSwitch('use ponytail ultra for the parser rewrite'), null);
 });
 
-test('M6 R3 (user decision): explicit forms start the loop, off-requests cancel, every other mention is only a hint for the model', () => {
-  for (const p of ['ralph: fix the importer', 'ralph: fix the end-to-end tests', 'ralph: add a front end for the cli', '/ralph finish it', 'use ralph to fix the stop button',
-    'use ralph to finish the migration', 'start ralph on the parser', 'ralph mode: port the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘', '랄프 켜줘',
-    '랄프로 데이터 꺼내는 함수 고쳐줘', 'ラルフで直して', 'ラルフ 起動して直して'])
+test('M6 R5 (user decision): only prefix forms start the loop; every other mention is a model-judged hint; off-requests cancel', () => {
+  for (const p of ['ralph: fix the importer', 'ralph: fix the end-to-end tests', 'ralph: why does login fail on Safari? make the e2e suite pass',
+    "ralph: don't break the public API while fixing the parser", '/ralph finish it', 'ralph mode: port the parser', '랄프: 끝까지 해줘',
+    '랄프 모드로 진행: 로그인이 왜 깨져? 테스트 통과할 때까지', 'ラルフ: 直して'])
     assert.deepEqual(names(p), ['loop'], p);
   for (const p of ['turn off ralph', 'disable ralph', 'ralph stop', 'ralph off', 'ralph cancel', 'end ralph', 'no more ralph', 'stop the ralph loop',
-    'ralph 그만', 'ralph 멈춰', '랄프 꺼줘', '랄프 꺼', 'ラルフ止めて', 'ラルフを止めて', 'cancelomc'])
+    'ralph: stop', 'ralph: off', 'ralph mode: off', '/ralph off', '/ralph cancel', '랄프 모드로 진행: 그만', 'ralph 그만', '랄프 꺼줘', 'ラルフを止めて', 'cancelomc'])
     assert.deepEqual(names(p), ['cancel'], p);
-  for (const p of ['ralph fix the login bug', 'Ralph fixed the bug already', 'ralph broke my repo', 'Ralph reviewed the PR yesterday', 'Ralph Smith reported a bug, fix it',
-    'Thanks Ralph', 'I talked with Ralph', 'the ralph loop is stuck again', "don't use ralph anymore", 'please don\'t start ralph', '랄프로 하지 말고 그냥 고쳐줘',
-    'ラルフで直さないで', '랄프 씨가 만든 모듈 고쳐줘', 'ralph stop the server before deploy'])
-    assert.deepEqual(names(p), ['loop-hint'], p);
+  for (const p of ['use ralph to finish the migration', 'start ralph on the parser', '랄프로 끝까지 해줘', 'ラルフで直して', 'how do I use ralph?', 'why did you start ralph?',
+    'we stopped using ralph last week, just fix it normally', 'Use ralph? No thanks.', '랄프로는 안 될 것 같아', '랄프로선 무리야', 'ラルフでさえ無理', 'Use Ralph’s patch',
+    'Ralph Lauren page is broken, fix it', 'Ralph fixed the bug already', 'Thanks Ralph', 'the ralph loop is stuck again', "don't use ralph anymore", 'ralph.config.js is wrong, fix it'])
+    assert.ok(!names(p).includes('loop') && !names(p).includes('cancel'), `${p}: ${names(p)}`);
+  assert.deepEqual(names('use ralph to finish the migration'), ['loop-hint']);
   assert.match(detectKeywords('Ralph fixed it')[0].context, /only if the user is asking/i);
-  assert.ok(names('stop the loop in parser.js and add a test first').includes('tdd'), 'a coding sentence about a loop is not a cancel');
-  assert.ok(!names('stop the loop in parser.js and add a test first').includes('cancel'));
-});
-
-test('M6 R4: refusals in the same clause demote a verb form to a hint; questions inside an explicit form keep the loop; particles/brands/possessives are not invocations', () => {
-  for (const p of ['stop using ralph', "don't ever use ralph again", "I don't want to use ralph", 'fix it without using ralph', 'no need to use ralph here', "I didn't ask you to use ralph",
-    '랄프로 하지마', '랄프 켜지 마', '랄프 시작하지 말고 그냥 고쳐', 'ラルフではなく手で直して', 'ラルフで直すのはやめて', 'ラルフ起動しないで',
-    '랄프로렌 셔츠 상품 페이지 고쳐줘', '랄프로부터 받은 패치 적용해줘', '랄프로 인해 빌드가 깨졌어', 'ラルフでしたっけ', "Use Ralph's patch", "Run Ralph's migration script"])
-    assert.ok(!names(p).includes('loop'), `${p}: ${names(p)}`);
-  for (const p of ['ralph: why does login fail on Safari? make the e2e suite pass', 'use ralph — why do the uploads time out? keep going until green',
-    '랄프 모드로 진행: 로그인이 왜 깨져? 테스트 통과할 때까지', "ralph: don't break the public API while fixing the parser"])
-    assert.ok(names(p).includes('loop'), `${p}: ${names(p)}`);
+  for (const p of ["ralph: don't stop ralph until tests pass", 'do not cancel ralph', 'never disable ralph'])
+    assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
+  for (const p of ['stop mis-labelling the axes', 'stop the loop in parser.js and add a test first'])
+    assert.ok(!names(p).includes('cancel'), p);
 });

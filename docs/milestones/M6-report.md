@@ -661,3 +661,140 @@ ROUND3: DEFECTS FOUND
 - 미검증: 대화형 세션, Linux, R4-1 문장으로 실제 모델이 loop를 시작하는지 (훅 주입까지만 확인).
 
 ROUND4: DEFECTS FOUND
+
+## 5차 검증 (round 5)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD b48d6a6)
+- 검증자: 독립 verifier (구현에 참여하지 않음). 기준은 PROGRESS.md SPEC_CHANGES의 사용자 결정이다. 명시형은 loop, 그 밖의 언급은 `loop-hint`, 명확한 끄기 요청은 cancel이다.
+- 실험은 모두 저장소 밖 scratchpad에서 했고, `MIS_STATE_HOME`은 임시 디렉터리로 지정했다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 키워드 판정은 `detectKeywords`로 했다. 대표 6문장은 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했고, 모두 같은 결과였다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` ×3 | 3회 모두 tests 370 · pass 370 · fail 0 · skipped 0 · todo 0 (안정) |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 4차 문장 73개 + 새 문장 125개 + 추가 탐색 45개 |
+
+### 4차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R4-1 부정형 → loop | **PARTIAL** | 4차 재현 15문장 중 14문장은 `loop-hint`다.<br>4차 재현 문장 `we stopped using ralph last week, just fix it normally`는 **여전히 `loop`**다. `REFUSAL`에는 `stop\s+using`만 있고 `stopped using`은 없다. 단위 테스트에도 이 문장이 없다.<br>새 변형에서도 loop가 나온다. 아래 R5-2. |
+| R4-2 KO/JA 조사·브랜드 | PARTIAL | 4차 4문장은 모두 고쳐졌다 (`랄프로렌`은 `[]`, 나머지 3문장은 hint).<br>같은 종류의 새 변형은 loop다: `랄프로선 할 만큼 했어`, `랄프로는 안 될 것 같아`(불만), `ラルフでさえ解けなかったバグ`. 아래 R5-5. |
+| R4-3 소유격 | PARTIAL | `Use Ralph's patch …`와 `Run Ralph's …`(곧은 따옴표)는 hint다.<br>둥근 따옴표 `Ralph’s`는 여전히 loop다. 영어 브랜드·이름도 loop다. 아래 R5-5. |
+| R4-4 명시형 안의 질문 | FIXED (회귀 있음) | 4차 5문장과 새 접두형 질문 15문장 모두 `loop`다.<br>그러나 이 수정 때문에 도움말 질문이 loop가 된다. 아래 R5-1. |
+
+### 새 문장 대조 (계약 기준)
+
+| 분류 | 문장 수 | 결함 | 내용 |
+|---|---|---|---|
+| 4차 부정 요청 (재실행) | 20 | 1 | `we stopped using ralph last week …` → loop |
+| 4차 이름·불만 (재실행) | 13 | 0 | |
+| 4차 명시형 (재실행) | 24 | 0 | |
+| 4차 끄기 (재실행) | 10 | 0 | 모두 cancel |
+| 4차 코딩 산문 (재실행) | 6 | 0 | |
+| 새 부정형, 같은 절 (EN/KO/JA) | 30 | 3 | `we won't use ralph for hotfixes`, `you shouldn't run ralph on this repo`, `랄프 시작 안 해도 돼` → loop |
+| 새 부정형, 다른 문장 | 10 | 8 | `Use ralph? No thanks.`, `Use ralph? No. Just fix it.`, `Run ralph. Actually no, don't.`, `Start ralph. Wait, never mind, do not do that.`, `Enable ralph? Nope, not today.`, `use ralph. just kidding, don't.`, `Should I run ralph? Please do not, just fix it.`, `랄프로 할까? 아니, 하지 마.` → loop. (`랄프 켤까? 아니 켜지 마.`와 `ラルフで？いや、やめて。`는 hint. 문장부호 `。`가 절 경계가 아니라서 같은 절로 읽혔다.) |
+| 접두형 안의 질문 | 15 | 0 | 모두 loop |
+| 접두형 + 과제 속 부정어 | 19 | 3 | `ralph: don't break …`, `ralph: never log secrets …`, `/ralph don't use any new deps`, `랄프 모드로 진행: … 바꾸지 말고 …` 등 16문장은 loop다.<br>`ralph: don't stop ralph until tests pass`, `ralph: do not cancel ralph if a test flakes`, `ralph: never disable ralph mid-run` → **cancel**. 아래 R5-4. |
+| 조사·브랜드·소유격 | 30 | 13 | 아래 R5-5 |
+| 코딩 산문 (stop/cancel/kill/end/disable/멈춰/취소/キャンセル) | 13 | 1 | `stop mis-labelling the axes` → cancel. 아래 R5-6 |
+
+추가 탐색에서 나온 문장:
+- 질문 속 동사형 → **loop**: `how do I use ralph?`, `why use ralph?`, `what happens if I run ralph?`, `explain how to use ralph?`, `what does enable ralph do?`, `should I use ralph?`, `can I run ralph on this branch?`, `does it make sense to use ralph here?`, `who told you to run ralph?`, `why did you start ralph?`, `랄프로 해도 될까?`, `랄프로 하면 뭐가 달라?`, `랄프 켜면 뭐가 좋아?`, `ラルフで大丈夫かな？`, `ラルフで何ができる？`
+- 접두형으로 쓴 끄기 요청 → **loop**: `/ralph off`, `/ralph stop`, `/ralph cancel`, `ralph: off`, `ralph: stop`, `ralph mode: off`, `랄프 모드로 진행: 그만`. 같은 뜻의 `ralph off`와 `ralph stop`은 cancel이다.
+- 부정형 → **loop**: `we can't use ralph here`, `I wouldn't run ralph on this`, `they won't let us use ralph`, `랄프로 못 해`, `랄프 시작 못 하게 해줘`, `랄프로 안 돌려도 돼`, `ラルフ起動禁止`
+
+훅 경로로 확인한 문장: `how do I use ralph?`, `we stopped using ralph last week, just fix it normally`, `/ralph off`, `Use ralph? No thanks.`, `Use the Ralph Lauren logo on the banner`
+- 이 5문장 모두 `[MAKE IT SHIP: loop] … do not stop early.`가 주입됐다.
+- `ralph: don't stop ralph until tests pass`에는 `[MAKE IT SHIP: cancel]`이 주입됐다.
+
+### 새 결함
+
+**R5-1 · MEDIUM · 도움말 질문이 loop를 시작한다 (R4-4 수정이 만든 회귀)**
+- 위치: `scripts/lib/keywords.mjs` `detectKeywords` 첫 줄의 `!explicitLoop(text)`. `explicitLoop`는 접두형뿐 아니라 동사형도 참으로 돌려준다. 그래서 `how do I use ralph?`처럼 동사형이 들어간 질문은 도움말 조기 반환을 건너뛰고 loop가 된다.
+- 회귀 증거: daa7794의 `keywords.mjs`로 같은 문장을 돌렸다. `how do I use ralph?`, `why use ralph?`, `why did you start ralph?`, `why does ralph stop early when I run ralph?`는 그때 `[]`였다. 지금은 loop다. 4차 보고서 표의 "질문 `how do I use ralph?` → none, 정상"이 깨졌다. 단위 테스트에는 `what is ralph?`만 있고 이 문장은 없다.
+- 다음 질문들은 이전부터 loop였다. 이것도 비명시 언급이 loop가 된 경우다: `should I use ralph?`, `can I run ralph on this branch?`, `랄프로 해도 될까?`, `ラルフで大丈夫かな？`. 동사형이 의문문 안에 있어도 명시형으로 친다.
+- 영향: 기능 사용법을 물은 사용자에게 loop 스킬과 "do not stop early"가 주입된다. `why did you start ralph?`(불만)도 loop를 다시 시작한다.
+- 고칠 방향: 도움말 예외 조건을 접두형(`LOOP_PREFIX`)으로만 좁힌다. 동사형이 있는 절이 `?`로 끝나면 hint로 내린다.
+
+**R5-2 · MEDIUM · 부정 요청이 여전히 loop를 시작한다 (R4-1 잔여)**
+- 위치: `REFUSAL`과 `clauseOf`.
+  - `REFUSAL`에 빠진 형태:
+    - 영어: `stopped using`, `won't`, `shouldn't`, `can't`, `wouldn't`
+    - 한국어: `안`, `못`
+    - 일본어: `禁止`
+  - `clauseOf`는 동사형이 들어 있는 절만 본다. 그래서 바로 다음 문장의 거부는 보지 않는다.
+- 재현 → loop:
+  - 4차 재현 문장 그대로: `we stopped using ralph last week, just fix it normally`
+  - 같은 절의 부정형: `we won't use ralph for hotfixes`, `you shouldn't run ralph on this repo`, `we can't use ralph here`, `랄프 시작 안 해도 돼`, `랄프로 안 돌려도 돼`, `랄프로 못 해`, `ラルフ起動禁止`
+  - 다음 문장의 거부: `Use ralph? No thanks.`, `Run ralph. Actually no, don't.`, `use ralph. just kidding, don't.`, `랄프로 할까? 아니, 하지 마.`
+- 영향: 과제의 결함 정의 "거부·끄기 요청이 loop를 만든다"에 해당한다.
+  - 다음 문장의 거부는 "같은 절" 규칙대로 동작한 결과다. 그래도 사람이 읽으면 거부가 분명하므로 결함으로 센다.
+  - 판정은 4차 재현 문장과 같은 절의 부정형만으로도 성립한다.
+
+**R5-3 · MEDIUM · 접두형으로 쓴 끄기 요청이 loop를 시작한다**
+- 재현 → loop: `ralph: stop`, `ralph: off`, `ralph mode: off`, `/ralph off`, `/ralph stop`, `/ralph cancel`, `랄프 모드로 진행: 그만`.
+- 대조: `ralph off`와 `ralph stop`은 cancel이다.
+- 원인: cancel 정규식의 `^\s*ralph\s+(stop|off|cancel)…$`는 콜론과 슬래시를 받지 않는다. 그 뒤 접두형 규칙이 무조건 loop로 판정한다.
+- 영향: 사용자는 끄려고 했는데 loop와 "do not stop early"가 주입된다.
+- 미검증: 대화형 세션에서 `/ralph …`가 알 수 없는 슬래시 명령으로 처리되어 훅까지 오지 않을 수도 있다. `ralph: stop`은 훅까지 온다.
+
+**R5-4 · LOW · 접두형 과제에 "don't stop/cancel/disable ralph"가 있으면 cancel이 된다**
+- 재현 → cancel: `ralph: don't stop ralph until tests pass`, `ralph: do not cancel ralph if a test flakes`, `ralph: never disable ralph mid-run`.
+- 원인: cancel 정규식 `\b(stop|cancel|…|disable)\s+(the\s+)?ralph\b`가 앞의 부정어를 보지 않는다. cancel은 다른 모든 키워드를 지운다.
+- 영향: 명시형이 loop를 만들지 않는다. 오히려 실행 중인 loop를 끄라는 지시가 주입된다. 4차 참고(`ralph: make stop ralph also clear the statusline`)는 애매한 문장이었지만, 이 세 문장은 뜻이 분명하다. 빈도가 낮아 LOW.
+
+**R5-5 · LOW · 이름·브랜드·조사·소유격이 아직 loop를 시작한다 (R4-2·R4-3 잔여)**
+- 영어 → loop:
+  - 둥근 따옴표 소유격: `Use Ralph’s patch for the parser`, `Run Ralph’s script`, `start Ralph’s review`, `use Ralph’s fixture`
+  - 브랜드·이름: `Use the Ralph Lauren logo on the banner`, `start Ralph Lauren campaign page`, `run Ralph Wiggum quotes generator`, `enable Ralph, our bot user, in the ACL`
+  - 파일명: `use ralph-lauren.png as hero image`, `use ralph.config.js values`
+  - 원인: `(?!'s)`가 곧은 따옴표만 거른다. `Lauren` 예외가 없다.
+- 한국어·일본어 → loop: `랄프로선 할 만큼 했어`, `랄프로는 안 될 것 같아`(불만), `ラルフでさえ解けなかったバグ`.
+  - 원인: `로(?!…서)`가 `선`·`는`을 거르지 않는다. `で(?!し|す|は)`가 `さえ`·`も`를 거르지 않는다 (`ラルフでも`는 우연히 hint다).
+- 빈도가 낮아 LOW. 다만 macOS 입력기는 따옴표를 자동으로 둥글게 바꿀 수 있다.
+
+**R5-6 · LOW · 코딩 문장 `stop mis-…`가 cancel이 된다 (이전부터 있던 문제)**
+- 재현: `stop mis-labelling the axes` → cancel. `stop-mis`도 cancel이다.
+- 원인: `\bstop[\s-]?mis\b`에서 `mis` 뒤 하이픈 앞에 단어 경계가 생긴다.
+- 영향: 과제의 결함 정의 "코딩 문장이 cancel이 된다"에 해당한다. 아주 드물다.
+
+**참고 (결함으로 세지 않음)**
+- 동사형 과제 안의 부정어는 hint가 된다. 계약대로다. 다만 결과가 고르지 않다:
+  - `랄프로 로그인이 안 되는 버그 고쳐줘` → loop
+  - `랄프로 저장이 되지 않는 버그 고쳐줘` → hint
+  - `use ralph to fix the button that does not work` → hint
+  - `ラルフで動かない画面を直して` → hint
+- 일본어 `。`·`！`·`？`는 절 경계가 아니다. 그래서 `ラルフで直して。テストは触らないで。`는 hint다. 안전한 쪽으로 틀린다.
+- `explicitLoop`는 정규식마다 첫 번째 일치만 본다. 그래서 `I said don't use ralph earlier. Now use ralph to fix it.`는 hint다. 두 번째 절에는 거부가 없는데도 그렇다. 안전한 쪽으로 틀린다.
+- 저장소 밖 cwd에서 `mis freeze`나 SessionStart를 실행하면 stderr에 `fatal: not a git repository`가 찍힌다. exit 0이고 판정에는 영향이 없다. 표시 문제다.
+
+### 이전 결함 수동 확인 (자동 테스트와 별도로 7건)
+
+| ID | 결과 |
+|---|---|
+| D1 loop 세션 묶기 | 저장소 F에서 세션 A로 `loop start`했다.<br>Stop A → block. Stop B(같은 저장소) → 출력 없음. 다른 저장소 R7의 세션 C → 출력 없음. 유지 |
+| R3-4 freeze 범위 | F에서 `freeze src`, cwd F:<br>- `F/src/a.js` allow<br>- `F/other.js`·`R7/a.js`·`NR1/a.js` deny<br>cwd R7의 `R7/a.js` → allow. 유지 |
+| R3-6 저장소 밖 freeze 안내 | NR3에서 `freeze keep`.<br>SessionStart cwd NR3 → `Edits are frozen to …/NR3/keep` 안내 있음. cwd R7 → 안내 없음. 유지 |
+| R2-4 statusline 체인 재귀 | `statusLine.chain`이 MIS statusline 자신을 가리킨 상태로 1회 실행했다.<br>1초 안에 `MIS ▸ idle … \| MIS ▸ idle …`을 한 번 출력하고 끝났다. 2초, 4초, 6초 뒤 `pgrep` 0개. 유지 |
+| D4 산문 속 "normal mode" | `the router falls back to normal mode when wifi drops; fix it` → 주입 없음. 유지 |
+| D7·D9 | `the UW campus map is broken` → `[]`. `ラルフ 起動して直して` → loop. `コードレビューして` → review. 유지 |
+
+### 판정
+
+**DEFECTS FOUND**
+- 4차 결함 4건 중 FIXED 1건(R4-4, 회귀 있음), PARTIAL 3건(R4-1, R4-2, R4-3)이다.
+- 새 결함은 MEDIUM 3건(R5-1, R5-2, R5-3)과 LOW 3건(R5-4, R5-5, R5-6)이다.
+- 판정을 정하는 근거:
+  - R5-1 회귀: `how do I use ralph?`가 loop가 된다.
+  - R5-2: 4차 재현 문장 `we stopped using ralph …`가 여전히 loop다.
+- 테스트 3회 안정, validate 통과, 이전 결함 수동 확인 7건 모두 유지.
+- 미검증:
+  - 대화형 세션과 Linux
+  - 실제 모델이 위 loop 주입을 받고 loop를 시작하는지 (훅 주입까지만 확인)
+  - 슬래시로 시작하는 `/ralph …`가 훅까지 오는지
+
+ROUND5: DEFECTS FOUND

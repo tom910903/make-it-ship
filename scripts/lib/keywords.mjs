@@ -6,7 +6,7 @@ import { join } from 'node:path';
 const K = (name, re, context) => ({ name, re, context });
 // Priority order: earlier wins in conflict resolution.
 const KEYWORDS = [
-  K('cancel', /\b(cancelomc|stopomc|cancel[\s-]?mis|stop[\s-]?mis)\b|\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b|^\s*ralph\s+(stop|off|cancel)\s*[.!]?\s*$|(ralph|랄프)\s?(멈춰|그만|취소|꺼줘|꺼(?:\s|$)|끄(?:기|자|고)|중지)|ラルフを?(止め|やめ)/i,
+  K('cancel', /\b(cancelomc|stopomc)\b|\b(?:cancel|stop)[\s-]?mis\b(?![\w-])|(?<!\b(?:don'?t|do\s+not|never|not)\s+)\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b|^\s*\/?ralph(?:\s+mode)?\s*[:：]?\s*(stop|off|cancel)\s*[.!]?\s*$|^\s*랄프[^:：\n]*[:：]\s*(그만|멈춰|취소|꺼)\s*$|(ralph|랄프)\s?(멈춰|그만|취소|꺼줘|꺼(?:\s|$)|끄(?:기|자|고)|중지)|ラルフを?(止め|やめ)/i,
     'Cancel active Make It Ship modes: run `mis loop cancel`. If the user also wants to drop the current run, run `mis cancel`.'),
   K('loop', /\bralph\b|랄프|ラルフ/i,
     "Invoke /make-it-ship:loop with the user's task. It keeps working (plan → implement → verify) until `mis verdict` is VERIFIED or the iteration limit is reached; do not stop early."),
@@ -45,26 +45,10 @@ const SLOP_ACTION = /\b(clean(?:\s*up)?|cleanup|refactor|simplify|dedupe|prune)\
 const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abstract\w*|wrapper\s+layers?|needless\s+abstractions?|tech\s+debt)\b/i;
 // "ralph" starts a loop only in an unambiguous form (user decision after three rounds of heuristics); any other
 // mention becomes a hint the model judges, since names, complaints and "don't use ralph" read the same to a regex.
-// Prefix forms are unambiguous; verb forms are dropped to a hint when a refusal sits in the same clause.
-const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?모드로\s*(?:진행|해)?\s*[:：]/];
-const LOOP_VERB = [
-  /\b(?:use|using|run|start|enable|activate)\s+(?:the\s+)?ralph\b(?!'s)/i,
-  /랄프\s?(?:로(?!\s?(?:렌|부터|인해|인한|서))|모드로)/, /랄프\s?(?:켜|시작)/, /ラルフ\s?(?:で(?!し|す|は)|モードで)/, /ラルフ\s?(?:起動|開始)/,
-];
-const REFUSAL = /\b(?:don'?t|do\s+not|didn'?t|never|not|no\s+need|without|stop\s+using|instead\s+of|rather\s+than|avoid)\b|말고|하지\s?마|지\s?마|말아|않|없이|대신|ない|ずに|やめ|なく/i;
-const clauseOf = (text, idx) => {
-  const start = Math.max(text.lastIndexOf('.', idx), text.lastIndexOf('!', idx), text.lastIndexOf('?', idx), text.lastIndexOf('\n', idx)) + 1;
-  const rest = text.slice(idx).search(/[.!?\n]/);
-  return text.slice(start, rest < 0 ? text.length : idx + rest);
-};
-function explicitLoop(text) {
-  if (LOOP_PREFIX.some((r) => r.test(text))) return true;
-  for (const r of LOOP_VERB) {
-    const m = r.exec(text);
-    if (m && !REFUSAL.test(clauseOf(text, m.index))) return true;
-  }
-  return false;
-}
+// Only prefix forms start the loop (user decision after five rounds of regex heuristics); every other mention of
+// ralph — "use ralph", "랄프로", names, questions, refusals — is a hint the model judges in context.
+const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
+const explicitLoop = (text) => LOOP_PREFIX.some((r) => r.test(text));
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 
 const HELP_QUERY = /\b(what\s+is|what's|how\s+(do\s+i|to)\s+use|explain|describe|tell\s+me\s+about|why)\b|사용법|뭐야|뭐지|무엇|설명|왜/i;
