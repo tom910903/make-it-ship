@@ -125,8 +125,9 @@ test('M6 R6 (same principle as the loop): cancel only when the whole prompt is a
     'add a button to stop ralph', '랄프 취소 버튼 만들어줘', 'ラルフを止めるボタンを追加して', 'disable Ralph’s account', 'In the end Ralph fixed it himself', 'cancel mis.json load when offline',
     'https://ci.example.com/job/42 ralph: why is this red?', '`npm test` ralph: flaky', '/ralph-lauren.png is broken, replace it'])
     assert.ok(!names(p).includes('cancel') && !names(p).includes('loop'), `${p}: ${names(p)}`);
+  // prefix + an off stem is handed to the model (R9 design): never cancel, never auto-loop
   for (const p of ["ralph: don’t stop ralph until tests pass", "ralph: please don't ever stop ralph", '랄프: 끝날 때까지 랄프 그만두지 마', 'ラルフ: ラルフを止めないで、テストが通るまで'])
-    assert.deepEqual(names(p), ['loop'], p);
+    assert.deepEqual(names(p), ['loop-hint'], p);
   assert.match(detectKeywords('add a button to stop ralph')[0].context, /mis loop cancel/);
 });
 
@@ -135,8 +136,9 @@ test('M6 R7: a prompt made only of ralph words, off words and filler cancels (an
     '랄프: 중지해', '랄프: 종료', '랄프 모드: 꺼', 'ラルフ: 止めてください', 'ラルフ: キャンセル', 'ラルフモード: 停止', 'Please, stop ralph', 'turn ralph off', 'stop ralph now', 'exit ralph',
     '랄프를 꺼줘', '랄프 모드 꺼줘', '랄프 종료', 'ラルフを止めてください', 'ralph：stop'])
     assert.deepEqual(names(p), ['cancel'], p);
-  for (const p of ["ralph: don't stop", 'ralph: stop the server from crashing on boot', 'ralph: end-to-end tests are red, fix them', 'ralph: 서버 종료 버그 고쳐줘'])
-    assert.deepEqual(names(p), ['loop'], p);
+  assert.deepEqual(names('ralph: end-to-end tests are red, fix them'), ['loop']);
+  for (const p of ["ralph: don't stop", 'ralph: stop the server from crashing on boot', 'ralph: 서버 종료 버그 고쳐줘'])
+    assert.deepEqual(names(p), ['loop-hint'], `${p}: prefix with an off stem goes to the model`);
   for (const p of ['add a button to stop ralph', '랄프 취소 버튼 만들어줘', 'ラルフを止めるボタンを追加して', 'In the end Ralph fixed it himself', "don't stop ralph", 'stop ralph from deleting files'])
     assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
   assert.deepEqual(names('ralph：fix it'), ['loop'], 'full-width colon prefix');
@@ -150,4 +152,14 @@ test('M6 R8: token rule — any polite ending, punctuation, mixed languages, inn
   for (const p of ['랄프: 데이터 꺼내는 함수 고쳐줘', '랄프 그만두지 마', '랄프: 멈추지 말고 계속해', 'ralph ralph ralph ralph ralph ralph 꺼줘'])
     assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
   assert.deepEqual(names('랄프 모드로 해: 로그인 고쳐줘'), ['loop']);
+});
+
+test('M6 R9 (harmless by construction): negated or noun uses of off stems never cancel; a prefix with any off stem is a hint, never a loop', () => {
+  for (const p of ['랄프 끄지말아줘', '랄프: 종료안해', 'ラルフを止めるな', 'ラルフ: 停止しない', 'ラルフは止めなくていい', '랄프: 정지화면 꺼줘', '랄프: 취소선 꺼줘',
+    '랄프: 끄집어내줘', '랄프: 종료일 취소해', '랄프 그만큼 해줘'])
+    assert.ok(!names(p).includes('cancel'), `${p}: ${names(p)}`);
+  for (const p of ['ralph: 모드를 꺼', 'ラルフ: モードを止めて', '랄프: 루프를 꺼줘', '랄프 모드를 꺼줘', 'ラルフモードを止めて'])
+    assert.deepEqual(names(p), ['cancel'], p);
+  for (const p of ['랄프: 정지화면 꺼줘', 'ralph: 서버 종료 버그 고쳐줘', 'ralph: stop the server from crashing on boot', '랄프: 종료안해'])
+    assert.ok(!names(p).includes('loop'), `${p}: ${names(p)}`);
 });

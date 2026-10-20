@@ -1191,3 +1191,125 @@ ROUND7: DEFECTS FOUND
   - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
 
 ROUND8: DEFECTS FOUND
+
+## 9차 검증 (round 9)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD a55c640)
+- 검증자: 독립 verifier (구현에 참여하지 않음).
+- 기준: 과제에 적힌 8차 계약 (토큰 규칙).
+  - PREFIX: loop와 cancel이 같은 접두형을 쓴다.
+  - CANCEL: 프롬프트를 공백과 `, 、 — ; : ~ … ! ? .`로 나눈 토큰이 7개 이하다. 모든 토큰이 ralph 단어(2개 이하), 끄기 단어, 채움말 중 하나다. 끄기 단어가 하나 이상 있고, 부정이 없다. 또는 `cancelomc`/`stopomc`가 있다.
+  - LOOP: 원문이 접두형으로 시작하고 cancel이 아니다.
+  - 그 밖의 ralph 언급은 hint다. hint는 결함이 아니다.
+- 실험은 모두 저장소 밖 scratchpad에서 했다. `MIS_STATE_HOME`과 `HOME`은 임시 디렉터리로 지정했다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 키워드 판정은 `detectKeywords`로 했다. 대표 6문장은 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했다.
+- 회귀 여부는 8차 코드(`git show 383aacb:scripts/lib/keywords.mjs`)를 같은 문장에 돌려 비교했다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | 1회차: tests 372 · pass 372 · fail 0 (32초)<br>2회차: tests 372 · pass 372 · fail 0 (54초)<br>3회차: 출력이 중간(`ok 104`)에서 끊겼다. 요약 줄이 없어 결과로 세지 않는다. 검증 셸 문제로 보인다.<br>4회차 (3회차 대신): tests 372 · pass 372 · fail 0 · `not ok` 없음 (115초) |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 8차 결함 문장 28개 재실행 + 새 문장 95개. 합계 123개. 계약 위반 29개 (R9-1~R9-3). 참고로 옮길 수 있는 2개를 빼면 27개 |
+
+### 8차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R8-1 공손 어미 | FIXED | 14문장 모두 cancel이다 (`랄프: 중지하세요`, `ラルフ: 停止してください`, `ラルフをやめて下さい` 등).<br>훅 경로: `ラルフ: 停止してください` → cancel |
+| R8-2 끝 문장부호 | FIXED | `ralph: stop…`, `ralph: stop;`, `랄프: 꺼줘~`, `stop ralph…` → 모두 cancel |
+| R8-3 가운데 문장부호·언어 혼합 | FIXED | 7문장 모두 cancel이다 (`랄프, 꺼줘`, `ralph — stop`, `stop 랄프`, `랄프 그만 꺼` 등) |
+| R8-4 접두형 불일치 | FIXED | `랄프 모드로 해: 꺼줘` → cancel.<br>`랄프 모드로 해: 로그인 고쳐줘` → loop.<br>`ralph mode： fix x` → loop |
+| R8-5 resume 테스트 시간 | FIXED (완화) | 대기 시간이 `1200 × 50ms` = 60초로 늘었다.<br>`assert.ok(existsSync(marker), 'running check leaves a marker')`와 `assert.ok(!existsSync(marker), 'marker cleaned up')`는 그대로 있다.<br>시간 의존성을 없앤 것이 아니라 여유를 늘린 것이다. 이번 3회(1·2·4회차)는 모두 통과했다. |
+
+### 새 문장 대조 (토큰 규칙의 경계)
+
+| 분류 | 문장 수 | 위반 | 내용 |
+|---|---|---|---|
+| 토큰 수 7 / ralph 단어 2개 상한 | 11 | 0 | 7토큰은 cancel이다 (`please stop the ralph loop right now`). 8토큰은 아니다.<br>ralph 단어 3개(`ralph loop mode stop`)는 cancel이 아니다. |
+| 조사가 붙은 ralph 단어 (`모드를`, `루프를`, `モードを`) | 4 + 접두형 4 | 4 + 4 | R9-3 |
+| 끄기 토큰에 붙은 부정 (비접두형) | 16 | 16 | R9-1 |
+| 끄기 토큰에 붙은 부정 (접두형) | 4 | 4 | R9-1. **loop가 아니라 cancel이 된다** |
+| 이미 잡히던 부정 (`끄지마`, `止めないで`, `やめません`, `don't`, `do not`, `never`) | 6 | 0 | 모두 cancel이 아니다 |
+| 끄기 어간으로 시작하는 과제 명사 | 9 | 5 | R9-2.<br>`ラルフ: 停止ボタンを止めて`, `ralph: stop the server`, `랄프: 데이터 꺼내줘`, `ralph: turn on dark mode` → loop (정상) |
+| 문장부호 (`!!!` `...` `;` `~` `，` `–` 전각 공백 등) | 11 | 0 | `ralph - stop`, `(stop ralph)`는 hint다. 하이픈과 괄호는 계약 목록 밖이다 |
+| 접두형 모양 | 15 | 0 | `/ralph stop`, `ralph mode： stop`, `ラルフモード：停止`, `랄프 모드로 진행: 그만`, `RALPH: STOP`, `ralph:stop` → cancel.<br>`/ralph fix login`, `RALPH: Fix the bug`, `  ralph:fix it` → loop.<br>`/ralphstop`, `please ralph: fix it`, URL 뒤·코드 안의 `ralph:` → hint |
+| 영어 끄기·채움말 | 9 | 0 | `ok ralph, turn it off`, `no more ralph`, `kill ralph` → cancel.<br>`turn ralph on`, `stop ralph from deleting files`, `cancel ralph order` → hint |
+| 언어 혼합 | 4 | 0 | 모두 cancel |
+| `cancelomc`/`stopomc` | 2 | 0 | cancel |
+| 여러 줄 | 2 | 0 | `ralph: stop\nthen fix the build` → loop. 둘째 줄의 `ralph: go` → hint |
+
+- 비접두형이 loop가 된 경우: 0건.
+- 부정이나 과제어가 있는데 cancel이 된 경우: 25건 (R9-1 20건 + R9-2 5건). 그중 8건은 접두형이어서 loop여야 했다.
+- 규칙을 만족하는 끄기 요청이 cancel이 아닌 경우: 8건 (R9-3). 그중 접두형 4건은 loop가 된다.
+
+### 새 결함
+
+**R9-1 · MEDIUM · 끄기 토큰 안에 붙은 부정이 걸러지지 않는다. 그래서 "끄지 마라"가 cancel이 된다** (8차 수정에서 생긴 회귀)
+- 재현 (비접두형) → **cancel** (16건):
+  - 한국어: `랄프 끄지말아줘`, `랄프 끄지말자`, `랄프 꺼지면안돼`, `랄프 종료안해`, `랄프 중지안함`, `랄프 끄기싫어`, `랄프 멈출수없어`, `랄프 중지못해`
+  - 일본어: `ラルフを止めない`, `ラルフを止めるな`, `ラルフは止めなくていい`, `ラルフを停止しない`, `ラルフをやめたくない`, `ラルフをキャンセルしなくていい`, `ラルフ止めちゃだめ`, `ラルフを止めてはいけない`
+- 재현 (접두형) → **cancel** (4건, 원래 loop여야 한다): `랄프: 끄지말아줘`, `ラルフ: 止めるな`, `ラルフ: 停止しない`, `랄프: 종료안해`
+- 훅 경로: `랄프: 종료안해`, `ラルフを止めるな`, `랄프 끄지말아줘` → `[MAKE IT SHIP: cancel]`
+- 8차 코드에서는 같은 문장이 모두 hint 또는 loop였다. 어미 목록을 닫힌 목록에서 "아무 한글·가나 어미"로 바꾸면서 생겼다.
+- 원인:
+  - `CJK_OFF`는 끄기 어간 뒤의 한글·히라가나를 모두 받는다.
+  - `NEGATION`은 `지\s?마`, `말고`, `않`, `ないで`, `ずに`, `ません`, `ないと`만 본다. 그래서 `지말아`, `지말자`, `안돼`, `안해`, `안함`, `싫어`, `ない`, `るな`, `なくて`, `だめ`, `いけない`는 지나간다.
+- 영향: 계속하라는 사용자의 활성 loop를 끈다. 접두형이면 시작해야 할 loop 대신 cancel이 주입된다.
+- 계약의 "부정이 없을 때"를 정면으로 어긴다. 그래서 판정을 정하는 결함이다.
+- 참고: `멈출수없어`, `중지못해`("못 멈추겠어")는 멈춰 달라는 불평일 수도 있다. 이 2건을 빼도 18건이 남는다.
+- 고칠 방향: 끄기 어간 뒤 어미를 "아무 글자"가 아니라 동사·공손 어미 조합으로 좁힌다. 또는 어미 안의 부정 형태소(말·안·않·못·싫·없 / な[いく]·るな·だめ·いけ)를 거부한다.
+
+**R9-2 · LOW-MEDIUM · 끄기 어간으로 시작하는 과제 명사가 끄기 단어로 읽힌다** (8차 수정에서 생긴 회귀)
+- 재현 → **cancel** (5건): `랄프: 정지화면 꺼줘`, `랄프: 취소선 꺼줘`, `랄프: 끄집어내줘`, `랄프: 종료일 취소해`, `랄프 그만큼 해줘`
+  - 앞의 네 문장은 접두형 과제다. loop여야 하는데 cancel이 된다. 훅 경로: `랄프: 정지화면 꺼줘` → cancel
+  - 8차 코드에서는 4건이 loop, `랄프 그만큼 해줘`는 hint였다.
+- 원인: `CJK_OFF`가 `정지`·`취소`·`종료`·`끄`·`그만`으로 시작하는 한글 토큰을 모두 받는다. 정지화면(멈춤 화면), 취소선, 종료일, 끄집어내다, 그만큼은 끄기 요청이 아니다.
+- 계약과 부딪히는 점: 계약의 끄기 단어 정의("어간 + 아무 가나/한글 어미")를 글자 그대로 읽으면 이 단어들도 들어간다. 하지만 결함 정의("과제어가 있는데 cancel")가 판정 기준이다. 그래서 결함으로 센다.
+- 고칠 때는 계약 문구도 같이 고쳐야 한다. "아무 어미"를 "동사·공손 어미"로 좁혀야 한다. 그러지 않으면 다음 차수에서 같은 논쟁이 반복된다. R9-1과 고칠 곳이 같다.
+
+**R9-3 · MEDIUM · 조사가 붙은 ralph 단어(`모드를`, `루프를`, `モードを`)가 토큰 하나가 된다. 접두형이면 loop를 켠다** (8차 수정에서 생긴 회귀)
+- 재현 (비접두형) → hint (4건): `랄프 모드를 꺼줘`, `랄프 루프를 꺼줘`, `ラルフモードを止めて`, `ラルフのモードを止めて`
+  - 훅 경로: `랄프 모드를 꺼줘` → `[MAKE IT SHIP: loop-hint]`
+- 재현 (접두형) → **loop** (4건): `ラルフ: モードを止めて`, `랄프: 루프를 꺼줘`, `ralph: 모드를 꺼`, `랄프 모드: 루프를 꺼줘`
+- 8차 코드에서는 8문장 모두 cancel이었다. 8차 보고서의 "조사 7문장 모두 cancel"도 이번에는 유지되지 않는다.
+- 원인:
+  - `PARTICLE`은 토큰 **앞**의 조사만 뗀다. `랄프를`은 `ralph` 분리 덕분에 `를`이 따로 떨어져서 통과한다.
+  - 한국어·일본어 조사는 앞 단어 **뒤**에 붙는다. 그래서 `모드를`, `루프를`, `モードを止めて`(공백 없음)는 ralph 단어로도 끄기 단어로도 읽히지 않는다.
+- 영향: R8-1과 같은 종류다. 끄려는 사용자에게 loop와 "do not stop early"가 주입된다.
+
+**참고 (결함으로 세지 않음)**
+- `RALPH_TOKEN`에 `ralph's`가 있지만 실제로는 닿지 않는다. 앞의 `replace`가 `ralph`를 먼저 떼어 내서 `'s` 토큰이 남기 때문이다. 그래서 `stop ralph's loop`는 hint다. 계약 밖의 동의어이므로 결함은 아니다.
+- 코드 주석은 "at most 6 tokens"인데 코드는 `<= 7`이다. 계약은 7이므로 주석만 틀렸다.
+- `ralph - stop`(하이픈), `(stop ralph)`(괄호)는 hint다. 계약의 구분자 목록 밖이다.
+
+### 이전 결함 수동 확인 (3건)
+
+| ID | 결과 |
+|---|---|
+| D1 loop 세션 묶기 | 임시 저장소 F에서 `CLAUDE_CODE_SESSION_ID=A`로 `loop start`했다.<br>- Stop A → `{"decision":"block", … LOOP 1/20 …}`<br>- Stop B(같은 저장소) → 출력 없음<br>- 다른 저장소 G의 세션 C → 출력 없음<br>- 세션 B의 cancel → "the active loop belongs to another session (A)" 오류<br>- 세션 A의 cancel → `active: false`<br>유지 |
+| R3-4 freeze 범위 | F에서 `freeze src`. `guard.mjs`에 PreToolUse Edit 입력을 넣었다.<br>- cwd F, `F/src/a.js` → 결정 없음 (allow)<br>- cwd F, `F/other.js` → deny<br>- cwd F, `G/a.js` → deny<br>- cwd G, `G/a.js` → 결정 없음 (allow)<br>유지 |
+| R6-4 `/ralph-…` 파일명 / R6-3 URL 뒤 접두형 | `/ralph-lauren.png is broken, replace it`, `/ralph.png fix`, `see https://x.io/a ralph: fix`, `add a button to stop ralph` → 모두 hint.<br>유지 |
+
+### 판정
+
+**DEFECTS FOUND**
+- 8차 결함 5건: 모두 FIXED (R8-5는 시간 여유를 늘린 완화).
+- 새 결함 3건. 모두 8차의 토큰 규칙 수정에서 생긴 회귀다. 8차 코드와 비교해 확인했다.
+  - MEDIUM 2건:
+    - R9-1: 끄기 토큰 안의 부정 → cancel. 20건, 접두형 4건 포함.
+    - R9-3: 조사가 붙은 ralph 단어 → cancel이 안 된다. 접두형 4건은 loop가 된다.
+  - LOW-MEDIUM 1건: R9-2. 끄기 어간으로 시작하는 과제 명사 → cancel. 5건, 접두형 과제 4건 포함.
+- 판정을 정하는 근거: R9-1. `ラルフを止めるな`, `랄프 끄지말아줘`, `랄프: 종료안해`는 부정이 있는데 cancel이 된다. 계약의 "부정이 없을 때"를 어긴다.
+- 나머지 결과:
+  - 비접두형 loop 0건.
+  - `npm test` 3회 통과 (372/372). 그중 한 번은 끊긴 실행을 다시 돌린 것이다.
+  - validate 통과.
+  - 이전 결함 수동 확인 3건 모두 유지.
+- 미검증:
+  - 대화형 세션과 Linux
+  - 헤드리스 모델 판단
+  - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
+
+ROUND9: DEFECTS FOUND
