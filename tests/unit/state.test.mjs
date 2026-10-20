@@ -116,3 +116,16 @@ test('M7 N9: reclaim never removes a lock that was replaced by a new file with t
   assert.equal(reclaimLock(lock, '', oldIno), true);
   assert.ok(_ex(lock), 'the new owner\'s lock is kept');
 });
+
+test('M7 N9-fs: a fresh empty lock is kept even when the filesystem reuses the old inode number', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, ''); // brand-new owner mid-create; the reclaimer judged an older empty lock with this same inode number
+  const { statSync } = require_fs;
+  assert.equal(reclaimLock(lock, '', statSync(lock).ino), true);
+  assert.ok(_ex(lock), 'a lock younger than the orphan age is never removed');
+  const old = (Date.now() - 10000) / 1000;
+  require_fs.utimesSync(lock, old, old);
+  assert.equal(reclaimLock(lock, '', statSync(lock).ino), true);
+  assert.ok(!_ex(lock), 'a still-old empty lock is reclaimed');
+});

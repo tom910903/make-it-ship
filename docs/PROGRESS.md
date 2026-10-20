@@ -173,7 +173,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 둔 채 `.worktrees/<run>-T<n>/…` 파일을 편집하면, guard가 그 task가 소유한 파일도 계획 범위 밖으로 판정해 ask를 냈다. **수정함.** 이제 파일 편집은 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 범위를 판정한다(`scripts/guard.mjs`). 테스트: `tests/integration/guard.test.mjs` "a file inside a task worktree is scoped by that worktree". npm test 320/320.
 
 ## RISKS
-- (M7 N8·N9) run lock 회수: 회수자는 `.reclaim` 표식으로 직렬화되고, 지우기 전에 lock 내용과 inode가 판단 시점과 같은지 확인한다(빈 lock도 구분). 남은 이론상 위험: 회수자가 `.reclaim`을 쥔 채 5초 넘게 멈추거나 죽으면 다른 회수자가 표식을 지우고 겹칠 수 있다. M7 4차 스트레스(160회, writer 8~12, dead-pid·빈 lock·SIGKILL 300건)에서 유실 0건(수정 후 코드 기준).
+- (M7 N8·N9) run lock 회수: 회수자는 `.reclaim` 표식으로 직렬화되고, 지우기 전에 lock 내용과 inode가 판단 시점과 같은지 확인한다. pid가 없는(빈·깨진) lock은 inode 번호를 곧바로 재사용하는 파일시스템(ext4 등)에서도 새 lock을 지우지 않도록, 지우는 순간에도 수정 시각이 5초보다 오래됐는지 다시 확인한다(`tests/unit/state.test.mjs` N9-fs). 남은 이론상 위험: 회수자가 `.reclaim`을 쥔 채 5초 넘게 멈추거나(SIGSTOP) 죽으면 다른 회수자가 표식을 지우고 겹칠 수 있다. 측정: M7 5차 검증에서 e30ce81 기준 스트레스 160회(성공 쓰기 1398건, SIGKILL 292건) 유실 0건, N9 순서 재현 200회 새 lock 삭제 0건(macOS APFS). 실제 Linux에서는 측정하지 않았다.
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
 - (M1 검증 L-1) 헤드리스 첫 실행에서 모델이 설정 확인을 기다리며 멈추는 경우가 많다(비결정적). 확인 요청은 Spec에 부합하므로 수용한다. 무인 실행 시 요청에 "질문 없이 진행"을 명시.
 - (M1 검증 L-2) `mis doctor`는 설정 파일의 `enabledPlugins`를 읽으므로, 이번 세션에 실제로 로드되지 않은 플러그인도 경고할 수 있다. 플러그인이 로드 목록을 얻을 방법이 없어 "enabled in settings" 문구로 수용.
