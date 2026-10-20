@@ -1401,3 +1401,67 @@ ROUND9: DEFECTS FOUND
   - `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지
 
 ROUND10: DEFECTS FOUND
+
+## 11차 검증 (round 11)
+
+대상: `develop` fabcb61 (10차 수정: 영어 끄기 어간을 단어 앞부분으로 매칭, NFKC 정규화, `no`·`more` 목록에서 제거). 검증자는 구현하지 않았다. 저장소는 이 절 추가 말고는 바꾸지 않았다. 임시 저장소·상태(`HOME`, `MIS_STATE_HOME`)는 `/private/tmp/claude-501/r11`에 두었다.
+
+- 키워드 판정은 `detectKeywords`로 했고, 문장마다 기대값(C/L/nC/nL)을 손으로 붙였다. 대표 문장 9개는 실제 `hooks.mjs UserPromptSubmit` 경로로도 돌렸다.
+- 판정 기준은 결함 (a)~(d)다. hint는 결함으로 세지 않았다.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` ×3 | 3회 모두 tests 374 · pass 374 · fail 0 · cancelled 0 |
+| `claude plugin validate .` | `✔ Validation passed` |
+| 키워드 대조 | 10차 재검증 22개 + 새 문장 99개 + 계약 경계 11개. 합계 132개. **위반 0** |
+
+### 10차 결함·참고 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R10-1 영어 활용형 접두형 → loop | FIXED | 14문장 모두 hint (`ralph: stopped`, `/ralph cancelling`, `ralph: disabled`, `ralph mode: cancelled` 등).<br>`ralph: stopwatch`, `ralph: stop_server`도 hint.<br>훅 경로: `ralph: stopped`, `ralph mode: cancelled`, `/ralph stopping` → loop-hint |
+| 참고 2 `no`로 만든 부정 | 해소 | `ralph: no stop`, `ralph: no more stop`, `stop ralph? no`, `ralph off? no!`, `no more ralph` → 모두 hint (cancel 아님) |
+| 참고 4 전각 `ｓｔｏｐ` | 해소 | `ralph: ｓｔｏｐ` → cancel. `ralph: ＳＴＯＰＰＥＤ`, `ralph: ｃａｎｃｅｌｌｉｎｇ` → hint |
+| 참고 1 `end`/`turn` 계약 모순 | **남음** | 아래 참고 1 |
+
+### 새 문장 대조
+
+| 분류 | 문장 수 | 위반 | 예 |
+|---|---|---|---|
+| (a) 목록 밖 단어가 있는 문장 → cancel 아니어야 | 22 | 0 | `ralph stop pls`, `ralph stop 🙏`, `ralph (stop)`, `ralph stopped`, `ralph stop​`, `ralph never stop`, `ralph の 停止 理由`, `ralph stop ２`, `ラルフを止めるな`, ralph 3개 문장 → hint/none |
+| (b) 비접두형·끄기 어간 든 접두형 → loop 아니어야 | 36 | 0 | 대소문자·전각·반각(`ralph: ｷｬﾝｾﾙ`→cancel), NFD 한글(`ralph: 꺼줘` 분해형→cancel), 줄바꿈 뒤 어간, `ralph: shutting off`, `ralph: switched-off`, `ralph: 멈췄어`, `ralph: やめた`, `ralph: 止めろ`, `RALPH MODE： CANCELLED`, `ralph: killer feature`. 비접두형 `please ralph: fix`, `/ralph-fix`, `fix it\nralph: go`, `​ralph: fix`, `> ralph: fix` |
+| (c) 규칙을 정확히 만족 → cancel | 17 | 0 | `ＲＡＬＰＨ ＳＴＯＰ`, `ﾗﾙﾌ 止めて`, `Ralph, STOP!!`, `ralph stop, ok?`, `ralph loop kill it`, `ラルフモード、キャンセルしてください。`, `ｃａｎｃｅｌｏｍｃ`, 7토큰 `ralph quit ×6`, `ralph\tstop\nnow` |
+| (d) 끄기 어간 없는 접두형 → loop | 24 | 0 | `ralph: offloading the cache`, `ralph: unstoppable build`, `ralph: nonstop test run`, `ralph: …backoff`, `ralph: skill tree`, `ralph: offset bug`, `ralph: turnstile`, `ralph: ending credits`, `/ralph`, `ralph:`, `ralph: ok`, `ralph :fix`, `　ralph: fix`(전각 공백), `ralph: why is login broken?` |
+| 계약 경계 | 11 | — | 참고 1~4 |
+
+훅 경로 9문장도 하네스와 같다: `ralph: ＳＴＯＰＰＥＤ` → loop-hint, `ralph: ｷｬﾝｾﾙ`·`ＲＡＬＰＨ ＳＴＯＰ`·`ralph: end` → cancel, `ralph: unstoppable build`·`ralph: fix login` → loop.
+
+### 새 결함
+
+없음.
+
+**참고 (판정에 넣지 않음)**
+1. 10차 참고 1이 그대로다. `end`, `turn`은 `EN_OFF`에 있고 `OFF_STEM`에는 없다. `ralph: end`, `ralph: turn`, `ralph: end it`, `ralph: turn it now` → cancel. (c)와 (d)를 동시에 만족할 수 없다. 코드는 안전한 cancel 쪽이다. 계약 문구만 정리하면 된다.
+2. NFKC는 끄기 어간·cancel 판정에만 걸린다. 접두형 판정(`PREFIX`)과 hint(`mentionsRalph`)는 원문으로 본다. 그래서 `ｒａｌｐｈ: fix`, `ＲＡＬＰＨ: fix` → 아무것도 없음 (loop도 hint도 아님). `ｒａｌｐｈ ｓｔｏｐ ｐｌｚ`도 hint 없음. 해로운 쪽(잘못 켜기·잘못 끄기)은 아니다. 전각 접두를 접두형으로 볼지 계약에 적어 두면 된다.
+3. 일본어 어간은 표기별이다 (`やめ` 히라가나, `止め` 한자). `ラルフ: ヤメテ`, `ralph: ﾔﾒﾃ`(NFKC 후 가타카나), `ralph: とめて` → **loop**. 닫힌 목록 밖 표기이므로 계약상 결함은 아니다 (10차 참고 3의 동의어와 같은 부류). 다만 끄려는 뜻이 loop를 켜는 쪽이다. `ヤメ`·`とめ`를 어간에 넣는 것을 검토할 만하다.
+4. `ラルフ、はやめて` → cancel. 앞의 `は`를 조사로 떼어 `やめて`가 된다. `はやめて`(早めて, "서둘러")로 읽을 수도 있다. 규칙(조사 분리)대로이므로 결함은 아니다.
+
+### 이전 결함 수동 확인 (2건)
+
+| ID | 결과 |
+|---|---|
+| D1/D6 loop 세션 묶기·cancel | 임시 저장소에서 세션 A로 `loop start`.<br>- Stop A → `{"decision":"block", … LOOP 1/20 …}`<br>- Stop B → 출력 없음<br>- 세션 B의 `loop cancel` → "the active loop belongs to another session (A)"<br>- 세션 A의 `loop cancel` → `active: false`, 이후 Stop A → 출력 없음<br>유지 |
+| D10 freeze 실경로 | `freeze src` 후 Write 입력을 `guard.mjs`에 넣었다.<br>- `src/a.js` → 결정 없음 (allow)<br>- `other.js` → deny<br>- `src/../x.js` → deny<br>유지 |
+
+### 판정
+
+**PASS**
+- R10-1 FIXED. 10차 참고 2·4 해소.
+- 결함 (a)·(b)·(c)·(d) 모두 0건 (132문장, 훅 경로 9문장 포함).
+- `npm test` 3회 374/374, validate 통과. 이전 결함 2건 유지.
+- 남은 것: 참고 1 (`end`/`turn` 계약 모순, 10차부터 미정리), 참고 3 (가타카나·히라가나 끄기 표기가 접두형에서 loop).
+- 미검증: 대화형 세션과 Linux, 헤드리스 모델 판단, `/ralph …`가 슬래시 명령 처리 전에 훅까지 오는지.
+
+ROUND11: PASS

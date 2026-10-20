@@ -113,7 +113,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
 ## M6 — 갭 매트릭스 + 상시 계층
-VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아래 표에 추가한다.
+VERIFY: PASSED (11차, `docs/milestones/M6-report.md` ROUND11: PASS) — 태그 `m6-verified` — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아래 표에 추가한다.
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
 | M6-00 | 갭 매트릭스 + ADR-0003 + plugin MCP strict 실측 | DONE | — | ADR-0003 | 3db8b0c | probe 실측 |
@@ -126,7 +126,7 @@ VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아
 | M6-07 | run 밖 guard 정책(careful 상시: main force push 거부, 파괴 명령 ask) + freeze/unfreeze 경계 + README 정정 | DONE | `tests/integration/guard.test.mjs` 확장 | gap §5.2, §6.3 | (이 커밋) | npm test |
 | M6-08 | PostToolUse: 규칙 파일 주입(세션당 1회), 편집 후 검증 알림, 반복 도구 실패 시 근본 원인 안내 | DONE | `tests/integration/hooks-posttool.test.mjs` | gap §2.3 rules-injector·verifier·failure | (이 커밋) | npm test 344 |
 | M6-09 | 새 스킬(loop, cancel, style) + hooks.json 연결 + THIRD_PARTY_NOTICES + README 상시 계층 절 | DONE | `tests/unit/plugin-files.test.mjs` | ADR-0003 | (이 커밋) | npm test 345 |
-| M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | IN_PROGRESS — 1차 검증 DEFECTS(D1~D12) → 수정 커밋 후 2차 | — | VERIFIER_PROMPT | | |
+| M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | DONE — 11차 PASS(`M6-report.md`) | — | VERIFIER_PROMPT | | |
 
 ## M7 — MCP 도구 서버
 VERIFY: PENDING — 범위: gap-matrix §7 M7 행.
