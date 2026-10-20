@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isLocalUrl, lineDiff, toInches, toUrl } from '../../scripts/lib/browse/util.mjs';
+import { isLocalOrigin, lineDiff, toInches, toUrl } from '../../scripts/lib/browse/util.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 import { markdownToHtml } from '../../scripts/lib/markdown.mjs';
 
-test('local URLs: file, about, data, localhost, loopback; real sites and look-alikes are not local', () => {
-  for (const u of ['file:///tmp/a.html', 'about:blank', 'data:text/html,x', 'http://localhost:3000/x', 'http://127.0.0.1:8080',
-    'http://[::1]:5000/', 'http://app.localhost/', 'https://127.1.2.3/']) assert.equal(isLocalUrl(u), true, u);
-  for (const u of ['https://example.com', 'http://localhost.evil.com', 'https://evil.com/?u=http://localhost', 'http://10.0.0.5', 'chrome://settings', 'not a url', '', undefined])
-    assert.equal(isLocalUrl(u), false, String(u));
+test('M8 D0: local origins are file and loopback only; opaque/unknown origins (about:, data:, blob:, "://", "null") and real sites are not local', () => {
+  for (const u of ['file://', 'file:///tmp/a.html', 'http://localhost:3000', 'http://127.0.0.1:8080',
+    'http://[::1]:5000', 'http://app.localhost', 'https://127.1.2.3']) assert.equal(isLocalOrigin(u), true, u);
+  for (const u of ['://', 'null', 'about:blank', 'data:text/html,x', 'blob:http://shop.test/1', 'blob:http://127.0.0.1:5/1',
+    'https://example.com', 'http://localhost.evil.com', 'https://evil.com/?u=http://localhost', 'http://10.0.0.5', 'chrome://settings', 'not a url', '', undefined])
+    assert.equal(isLocalOrigin(u), false, String(u));
 });
 
 test('toUrl: schemes kept, existing files become file URLs, bare hosts get a scheme', () => {

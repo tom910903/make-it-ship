@@ -1,9 +1,9 @@
 // Browser state of the daemon: tabs (one flattened CDP session each), event capture, navigation, element lookup.
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launchChrome, CDP } from './chrome.mjs';
-import { isLocalUrl } from './util.mjs';
+import { launchChrome } from './chrome.mjs';
+import { isLocalOrigin } from './util.mjs';
 
 const CAP = 2000; // per-tab buffer size for console/network/dialog entries
 const push = (arr, x) => { arr.push(x); if (arr.length > CAP) arr.splice(0, arr.length - CAP); };
@@ -21,7 +21,7 @@ export class Browser {
 
   async start(headless = true) {
     this.profile ??= mkdtempSync(join(tmpdir(), 'mis-browse-profile-'));
-    const { proc, wsUrl } = await launchChrome({ exe: this.exe, userDataDir: this.profile, headless: headless || this.headlessOnly, extraArgs: this.extraArgs });
+    const { proc, cdp } = await launchChrome({ exe: this.exe, userDataDir: this.profile, headless: headless || this.headlessOnly, extraArgs: this.extraArgs });
     this.proc = proc; this.headless = headless;
     proc.on('exit', () => {
       if (this.proc !== proc) return;
@@ -29,7 +29,7 @@ export class Browser {
       this.lastTabs = [...this.tabs.values()].map((t) => t.url); // a user closing the visible window mid-handoff: resume reopens these
       this.onExit?.();
     });
-    this.cdp = await CDP.connect(wsUrl);
+    this.cdp = cdp;
     this.cdp.on((m, p, s) => this.event(m, p, s));
     await this.cdp.send('Target.setDiscoverTargets', { discover: true });
     const { targetInfos } = await this.cdp.send('Target.getTargets');
@@ -54,7 +54,13 @@ export class Browser {
 
   async close() {
     await this.shutdown();
-    if (this.profile) rmSync(this.profile, { recursive: true, force: true });
+    if (!this.profile) return;
+    // browser helper processes can still write into the profile for a moment after the browser exits
+    for (let i = 0; i < 10; i++) {
+      rmSync(this.profile, { recursive: true, force: true, maxRetries: 3 });
+      await sleep(200);
+      if (!existsSync(this.profile)) return;
+    }
   }
 
   send(tab, method, params = {}, timeoutMs) { return this.cdp.send(method, params, tab.sessionId, timeoutMs); }
@@ -64,14 +70,16 @@ export class Browser {
     const tab = { id: ++this.seq, targetId, sessionId, url: 'about:blank', title: '', mainFrameId: null, frameId: null, frameUrl: null,
       refs: new Map(), nodeRef: new Map(), refSeq: 0, lastSnapshot: null, contexts: new Map(),
       console: [], network: [], requests: new Map(), dialogs: [], dialogPolicy: { accept: true, text: '' },
-      inflight: 0, lastNet: 0, navTs: 0, loading: false, waiters: new Set() };
+      inflight: 0, lastNet: 0, navTs: 0, loading: false, waiters: new Set(),
+      // main-frame navigation tracking: which document is committed, which has loaded, and event counters
+      loaderId: null, loadedLoader: null, navSeq: 0, sameDocSeq: 0, startSeq: 0, stoppedAtStart: 0, pinned: null };
     this.tabs.set(tab.id, tab); this.bySession.set(sessionId, tab);
     const s = (m, p) => this.send(tab, m, p);
     await Promise.all(['Page', 'Runtime', 'Network', 'DOM', 'Log'].map((d) => s(`${d}.enable`)));
     await s('Accessibility.enable').catch(() => {});
     await this.applyViewport(tab);
     const { frameTree } = await s('Page.getFrameTree');
-    tab.mainFrameId = frameTree.frame.id; tab.url = frameTree.frame.url;
+    tab.mainFrameId = frameTree.frame.id; tab.url = frameTree.frame.url; tab.loaderId = frameTree.frame.loaderId;
     return tab;
   }
 
@@ -110,9 +118,12 @@ export class Browser {
     if (!tab) return;
     const main = (frameId) => frameId === tab.mainFrameId;
     switch (method) {
-      case 'Runtime.executionContextCreated': if (p.context.auxData?.isDefault) tab.contexts.set(p.context.auxData.frameId, p.context.id); break;
+      // origin comes from the browser (not from page JS, which can overwrite self.origin)
+      case 'Runtime.executionContextCreated':
+        if (p.context.auxData?.isDefault) tab.contexts.set(p.context.auxData.frameId, { id: p.context.id, uniqueId: p.context.uniqueId, origin: p.context.origin });
+        break;
       case 'Runtime.executionContextDestroyed':
-        for (const [f, id] of tab.contexts) if (id === p.executionContextId) tab.contexts.delete(f);
+        for (const [f, c] of tab.contexts) if (c.id === p.executionContextId) tab.contexts.delete(f);
         break;
       case 'Runtime.executionContextsCleared': tab.contexts.clear(); break;
       case 'Runtime.consoleAPICalled': {
@@ -150,51 +161,64 @@ export class Browser {
         break;
       case 'Page.frameNavigated':
         if (!p.frame.parentId) {
-          tab.mainFrameId = p.frame.id; tab.url = p.frame.url;
+          tab.mainFrameId = p.frame.id; tab.url = p.frame.url; tab.loaderId = p.frame.loaderId; tab.navSeq++;
           tab.refs.clear(); tab.nodeRef.clear(); tab.refSeq = 0; tab.frameId = null; tab.frameUrl = null;
+          this.wake(tab);
         }
         break;
-      case 'Page.navigatedWithinDocument': if (main(p.frameId)) { tab.url = p.url; this.wake(tab); } break;
-      case 'Page.frameStartedLoading': if (main(p.frameId)) tab.loading = true; break;
-      case 'Page.frameStoppedLoading': if (main(p.frameId)) { tab.loading = false; this.wake(tab); } break;
-      case 'Page.loadEventFired': tab.loading = false; this.wake(tab); break;
+      case 'Page.navigatedWithinDocument': if (main(p.frameId)) { tab.url = p.url; tab.sameDocSeq++; this.wake(tab); } break;
+      case 'Page.frameStartedLoading': if (main(p.frameId)) { tab.loading = true; tab.startSeq++; this.wake(tab); } break;
+      case 'Page.frameStoppedLoading':
+        if (main(p.frameId)) { tab.loading = false; tab.loadedLoader = tab.loaderId; tab.stoppedAtStart = tab.startSeq; this.wake(tab); }
+        break;
+      case 'Page.loadEventFired': tab.loading = false; tab.loadedLoader = tab.loaderId; this.wake(tab); break;
     }
   }
 
-  wake(tab) { for (const w of tab.waiters) w(); tab.waiters.clear(); }
+  wake(tab) { for (const w of [...tab.waiters]) w(); }
 
-  waitLoad(tab, ms = 30000) {
-    let w, timer;
-    const promise = new Promise((resolve, reject) => {
-      w = () => { clearTimeout(timer); resolve(); };
-      timer = setTimeout(() => { tab.waiters.delete(w); reject(new Error(`page did not finish loading within ${ms / 1000}s`)); }, ms);
+  /** Resolves when `done()` holds, re-checked on every navigation event of the tab. */
+  waitFor(tab, done, ms = 30000, what = 'page did not finish loading') {
+    return new Promise((resolve, reject) => {
+      if (done()) return resolve();
+      const w = () => { if (done()) { clearTimeout(timer); tab.waiters.delete(w); resolve(); } };
+      const timer = setTimeout(() => { tab.waiters.delete(w); reject(new Error(`${what} within ${ms / 1000}s`)); }, ms);
       tab.waiters.add(w);
     });
-    return { promise, cancel: () => { clearTimeout(timer); tab.waiters.delete(w); } };
   }
 
+  /**
+   * Navigate and wait for *this* navigation: its own document (loaderId of Page.navigate) has loaded, or loading that
+   * started after the request stopped without a new document (204, download). Late events of the previous page match neither.
+   */
   async navigate(tab, url) {
-    const wait = this.waitLoad(tab);
-    wait.promise.catch(() => {});
+    const start = tab.startSeq;
     const r = await this.send(tab, 'Page.navigate', { url });
-    if (r.errorText) { wait.cancel(); throw new Error(`cannot open ${url}: ${r.errorText}`); }
-    if (!r.loaderId) { wait.cancel(); return null; } // same-document navigation
-    await wait.promise;
+    if (r.errorText) throw new Error(`cannot open ${url}: ${r.errorText}`);
+    if (!r.loaderId) return null; // same-document navigation
+    await this.waitFor(tab, () => tab.loadedLoader === r.loaderId || tab.stoppedAtStart > start);
     return [...tab.network].reverse().find((q) => q.type === 'Document' && q.start >= tab.navTs)?.status ?? null;
+  }
+
+  /** Run a navigation command without a loaderId (history, reload) and wait until a new document committed and stopped loading, or a same-document move. */
+  async waitNav(tab, run, ms = 15000) {
+    const nav = tab.navSeq, same = tab.sameDocSeq;
+    await run();
+    await this.waitFor(tab, () => tab.sameDocSeq > same || (tab.navSeq > nav && !tab.loading), ms, 'the page did not finish navigating');
   }
 
   /** After an input event: if it started a page load, wait for it (bounded). */
   async settle(tab) {
     await sleep(80);
-    if (!tab.loading) return;
-    const w = this.waitLoad(tab, 15000);
-    await w.promise.catch(() => {});
+    await this.waitFor(tab, () => !tab.loading, 15000).catch(() => {});
   }
 
   async evaluate(tab, expression, { byValue = true } = {}) {
-    const contextId = tab.frameId ? tab.contexts.get(tab.frameId) : undefined;
-    if (tab.frameId && !contextId) throw new Error('the selected frame is gone; run `mis browse frame main`');
-    const r = await this.send(tab, 'Runtime.evaluate', { expression, returnByValue: byValue, awaitPromise: true, userGesture: true, ...(contextId ? { contextId } : {}) });
+    // pinned: the document whose origin was checked (gated commands); if it navigated away since, this fails instead of running elsewhere
+    const contextId = tab.frameId ? tab.contexts.get(tab.frameId)?.id : undefined;
+    if (!tab.pinned && tab.frameId && !contextId) throw new Error('the selected frame is gone; run `mis browse frame main`');
+    const where = tab.pinned ? { uniqueContextId: tab.pinned } : contextId ? { contextId } : {};
+    const r = await this.send(tab, 'Runtime.evaluate', { expression, returnByValue: byValue, awaitPromise: true, userGesture: true, ...where });
     if (r.exceptionDetails) throw new Error(errText(r.exceptionDetails));
     return byValue ? r.result.value : r.result;
   }
@@ -237,8 +261,17 @@ export class Browser {
     return this.send(tab, 'Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1, ...extra });
   }
 
-  /** Local main page and (if selected) local frame: storage and page JS run without --remote. */
-  isLocal(tab) { return isLocalUrl(tab.url) && (!tab.frameId || isLocalUrl(tab.frameUrl)); }
+  /**
+   * The page JS context a command will run in (selected frame, else main frame) and its security origin as the browser
+   * reports it. blob: and about:blank documents carry their creator's origin; opaque ones report "://" (not local).
+   */
+  async pageContext(tab) {
+    const frame = tab.frameId ?? tab.mainFrameId;
+    try { await this.waitFor(tab, () => tab.contexts.has(tab.frameId ?? tab.mainFrameId), 5000); } catch { /* reported below */ }
+    const c = tab.contexts.get(tab.frameId ?? tab.mainFrameId);
+    if (!c?.uniqueId) throw new Error(`no script context for the ${frame === tab.mainFrameId ? 'page' : 'selected frame'} yet; try again`);
+    return { ...c, local: isLocalOrigin(c.origin) };
+  }
 
   async tabUrls() {
     if (!this.cdp || this.cdp.closed) return this.lastTabs ?? [];

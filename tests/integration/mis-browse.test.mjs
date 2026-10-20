@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, writeFileSync, statSync, mkdtempSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeRepo, mis } from '../helpers.mjs';
@@ -30,7 +31,17 @@ before(async () => {
   const [line] = await once(server.stdout, 'data');
   base = `http://127.0.0.1:${String(line).trim()}`;
 });
-after(() => { if (chrome) b('stop'); server.kill(); });
+after(() => {
+  if (chrome) b('stop');
+  server.kill();
+  for (const d of [HOME, out]) rmSync(d, { recursive: true, force: true }); // M8 D11: no temp dirs left behind
+});
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+/** poll a sync check until it returns truthy (generous deadline: the machine may be loaded) */
+const until = (fn, what, ms = 30000) => {
+  const end = Date.now() + ms;
+  for (;;) { const v = fn(); if (v) return v; if (Date.now() > end) assert.fail(`timed out waiting for ${what}`); pause(200); }
+};
 
 test('without a browser every page command is BLOCKED; status still answers', () => {
   const r = mis(dir, ['browse', 'goto', 'about:blank'], { env: { ...ENV, MIS_BROWSER: '/nonexistent/chrome' } });
@@ -196,6 +207,80 @@ test('chain runs commands in order and stops at the first error', () => {
   assert.match(ok(b('chain', f))[0].result, /127\.0\.0\.1/);
 });
 
+test('M8 D0: a blob: page and an about:blank popup made by a real site count as that site; opaque origins are not local; file pages are', () => {
+  if (!chrome) return blocked(b('js', '1'));
+  const site = base.replace('127.0.0.1', 'shop.test');
+  ok(b('goto', `${site}/blob.html`));
+  until(() => String(ok(b('url'))).startsWith('blob:'), 'the blob page');
+  failed(b('js', 'self.origin + " " + localStorage.secret'), /non-local page \(http:\/\/shop\.test:\d+\)[\s\S]*--remote/);
+  failed(b('storage'), /--remote/);
+  assert.equal(ok(b('js', 'localStorage.secret', '--remote')).trim(), 'S3CR3T');
+  ok(b('goto', `${site}/pop.html`));
+  ok(b('click', '#open'));
+  const popup = until(() => ok(b('tabs')).find((t) => t.url === 'about:blank'), 'the popup tab');
+  ok(b('tab', String(popup.id)));
+  failed(b('js', 'opener.localStorage.secret'), /--remote/);
+  failed(b('chain', JSON.stringify([['storage']])), /--remote/);
+  ok(b('closetab', String(popup.id)));
+  ok(b('goto', `${base}/xframe`));
+  // a remote frame in a local page is judged by the frame; when Chrome isolates it in its own process it cannot be selected at all
+  const sel = b('frame', '#x');
+  if (sel.code === 0) failed(b('js', '1'), /non-local page \(http:\/\/shop\.test:\d+\)/);
+  else assert.match(sel.err, /frame has no document/);
+  ok(b('frame', 'main'));
+  assert.equal(ok(b('js', 'document.title')).trim(), 'X');
+  ok(b('goto', 'data:text/html,<p>x</p>'));
+  failed(b('js', '1'), /non-local page \(opaque origin\)/);
+  writeFileSync(join(dir, 'local.html'), '<title>Local file</title>');
+  ok(b('goto', 'local.html'));
+  assert.equal(ok(b('js', 'document.title')).trim(), 'Local file', 'file: pages stay local');
+});
+
+test('remote upload: sending a file to a non-local page needs --remote (the guard asks); local pages take it directly', () => {
+  if (!chrome) return blocked(b('upload', '#f', 'x'));
+  const f = join(out, 'up2.txt'); writeFileSync(f, 'internal');
+  ok(b('goto', `${base}/upload.html`));
+  ok(b('upload', '#f', f));
+  ok(b('goto', `${base.replace('127.0.0.1', 'shop.test')}/upload.html`));
+  failed(b('upload', '#f', f), /upload on a non-local page[\s\S]*--remote/);
+  failed(b('chain', JSON.stringify([['upload', '#f', f]])), /--remote/);
+  assert.equal(ok(b('js', 'document.querySelector("#f").files.length', '--remote')).trim(), '0', 'nothing was attached');
+  ok(b('upload', '#f', f, '--remote'));
+});
+
+test('M8 D1: in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {
+  if (!chrome) return blocked(b('chain', '[]'));
+  const site = base.replace('127.0.0.1', 'shop.test');
+  for (let i = 0; i < 3; i++) {
+    failed(b('chain', JSON.stringify([['goto', `${base}/next`], ['goto', `${site}/slow`], ['js', 'location.host']])), /step 3 \(js location\.host\)[\s\S]*--remote/);
+  }
+  const r = ok(b('chain', JSON.stringify([['goto', `${base}/next`], ['goto', `${base}/slow`], ['url']])));
+  assert.equal(r[1].result, `Navigated to ${base}/slow (200)`);
+  assert.equal(r[2].result, `${base}/slow`);
+});
+
+test('M8 D6: back/forward/reload report the page after the navigation; a 204 goto returns instead of hanging', () => {
+  if (!chrome) return blocked(b('back'));
+  ok(b('goto', base)); ok(b('goto', `${base}/next`));
+  assert.equal(ok(b('back')).trim(), `Back to ${base}/`);
+  assert.equal(ok(b('forward')).trim(), `Forward to ${base}/next`);
+  assert.equal(ok(b('reload')).trim(), `Reloaded ${base}/next`);
+  const t0 = Date.now();
+  b('goto', `${base}/nocontent`); // Chrome may report the 204 as aborted; what matters is that it returns
+  assert.ok(Date.now() - t0 < 25000, `204 took ${Date.now() - t0} ms`);
+  assert.equal(ok(b('url')).trim(), `${base}/next`, 'a 204 keeps the current page');
+});
+
+test('M8 D2: the DevTools endpoint is a pipe: no DevToolsActivePort file and no TCP port listening in the browser', () => {
+  if (!chrome) return blocked(b('status'));
+  ok(b('goto', base));
+  const s = ok(b('status'));
+  const st = JSON.parse(readFileSync(join(s.stateDir, 'state.json'), 'utf8'));
+  assert.ok(!existsSync(join(st.profile, 'DevToolsActivePort')));
+  const lsof = spawnSync('lsof', ['-nP', '-a', '-p', String(s.chromePid), '-iTCP', '-sTCP:LISTEN'], { encoding: 'utf8' });
+  if (!lsof.error) assert.equal(lsof.stdout.trim(), '', `browser listens on TCP:\n${lsof.stdout}`);
+});
+
 test('handoff → resume relaunches on the same profile: page and cookies survive', () => {
   if (!chrome) return blocked(b('handoff'));
   ok(b('goto', `${base}/next`));
@@ -235,6 +320,7 @@ test('load-html, scoped/limited snapshot, clip screenshot, frame by url', () => 
   writeFileSync(join(dir, 'card.html'), '<main><h2>Card</h2><section id="s"><button>Inner</button></section><button>Outer</button></main>');
   assert.match(ok(b('load-html', 'card.html')), /Loaded/);
   assert.match(ok(b('text')), /Card[\s\S]*Inner[\s\S]*Outer/);
+  assert.equal(ok(b('js', 'document.querySelector("h2").textContent')).trim(), 'Card', 'a loaded local file is a local page');
   const scoped = ok(b('snapshot', '-s', '#s'));
   assert.match(scoped, /"Inner"/); assert.doesNotMatch(scoped, /Outer/);
   assert.doesNotMatch(ok(b('snapshot', '-d', '0')), /\[button\]/);
@@ -252,17 +338,22 @@ test('stop shuts the daemon and the browser down; restart brings it back', async
   if (!chrome) return blocked(b('restart'));
   const s = ok(b('restart'));
   assert.equal(s.running, true);
+  const profile = JSON.parse(readFileSync(join(s.stateDir, 'state.json'), 'utf8')).profile;
+  assert.ok(existsSync(profile));
   assert.equal(ok(b('stop')).stopped, true);
   assert.equal(ok(b('status')).running, false);
   assert.ok(!existsSync(join(s.stateDir, 'state.json')));
   assert.throws(() => process.kill(s.chromePid, 0));
+  assert.ok(!existsSync(profile), 'M8 D10: the browser profile temp dir is removed');
 });
 
 test('idle shutdown', async () => {
   if (!chrome) return blocked(b('goto', 'about:blank'));
   const d2 = makeRepo();
-  const env = { ...ENV, MIS_BROWSE_IDLE_MS: '1500' };
+  const env = { ...ENV, MIS_BROWSE_IDLE_MS: '6000' }; // long enough that a loaded machine still sends the first command in time
   ok(mis(d2, ['browse', 'goto', 'about:blank'], { env }));
-  await new Promise((r) => setTimeout(r, 3500));
+  const { pid } = ok(mis(d2, ['browse', 'status'], { env }));
+  // poll the process, not `status`: every request to the daemon counts as activity
+  until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 'the idle shutdown', 60000);
   assert.equal(ok(mis(d2, ['browse', 'status'], { env })).running, false);
 });

@@ -7,7 +7,7 @@ description: Make It Ship team pipeline (absorbs OMC team and omc-teams) - N wor
 
 Absorbs: OMC team (staged pipeline, stage routing, handoffs), omc-teams (tmux CLI workers, `omc team start|status|shutdown`, deprecated `omc_run_team_*` MCP tools → `mis team`) · Superpowers dispatching-parallel-agents, subagent-driven-development.
 
-`mis <args>` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <args>`, run from the main working tree. All the rules of `/make-it-ship:run` apply (read `${CLAUDE_PLUGIN_ROOT}/skills/run/SKILL.md` first): approval gates, test-first, only `mis check` creates evidence, only `mis verdict` decides.
+`mis` = the shell function `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` (define it in the same Bash call, or type the full `node` command; not a variable: `M="node …"; $M` fails in zsh), run from the main working tree. All the rules of `/make-it-ship:run` apply (read `${CLAUDE_PLUGIN_ROOT}/skills/run/SKILL.md` first): approval gates, test-first, only `mis check` creates evidence, only `mis verdict` decides.
 
 Invoke only on an explicit request. Arguments: `[N[:claude|codex|gemini]] <task>`. N is 1-10 (default: the number of independent tasks in the current wave, at most 5).
 

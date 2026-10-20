@@ -1,7 +1,7 @@
 // M8-B visual companion (absorbs Superpowers brainstorming visual companion): localhost mockup server.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, appendFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { get as get_ } from 'node:http';
 import { makeRepo, mis } from '../helpers.mjs';
@@ -28,6 +28,12 @@ test('serves an index and pages with the key, auto-reloads on change, records ch
   assert.equal((await get('/../.git/config')).status, 404);
   const raw = await new Promise((res) => get_(`${base}/..%2fREADME.md?key=${key}`, (r) => res(r.statusCode)));
   assert.equal(raw, 404, 'encoded ../ cannot escape the served dir (README.md exists one level up)');
+  writeFileSync(join(dir, 'secret.txt'), 'TOP SECRET');
+  symlinkSync(join(dir, 'secret.txt'), join(dir, 'design', 'link.html'));
+  assert.equal((await get('/link.html')).status, 404, 'M8 D8: a symlink to a file outside the directory is not served');
+  assert.doesNotMatch(await (await get('/')).text(), /link\.html/, 'nor listed');
+  symlinkSync(join(dir, 'design', 'layout-a.html'), join(dir, 'design', 'alias.html'));
+  assert.equal((await get('/alias.html')).status, 200, 'a symlink inside the directory still works');
 
   const res = await get('/__events');
   const reader = res.body.getReader();

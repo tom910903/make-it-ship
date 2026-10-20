@@ -125,7 +125,7 @@ async function start(args, cwd) {
   if (!Number.isInteger(n) || n < 1 || n > 10 || !goal) fail('usage: mis team start <N 1-10> "<task>" [--worker claude|codex|gemini] [--tasks <json-file|->]');
   workerArgv(worker, '');
   const override = process.env.MIS_TEAM_WORKER_CMD;
-  requireTmux();
+  requireTmux('run the team with Claude Code subagents (Agent tool) instead');
   if (!override && spawnSync('sh', ['-c', `command -v ${worker}`]).status !== 0) fail(`BLOCKED: the ${worker} CLI is not installed`);
   const root = repoRoot(cwd);
   let tasks;
@@ -160,7 +160,7 @@ async function start(args, cwd) {
     if (r.status !== 0) { tmux('kill-session', '-t', session); fail(`tmux ${s[0]} failed: ${r.stderr.trim()}`); }
   }
   writeFileSync(join(dir, 'ready'), ''); // workers wait for this, so no pane exits before the layout exists
-  return { id, session, worker, tasks: tasks.length, workers, attach: attachHint(session),
+  return { id, session, worker: override ? 'custom' : worker, ...(override ? { workerCmd: override } : {}), tasks: tasks.length, workers, attach: attachHint(session),
     ...(gitOut(root, 'status', '--porcelain') ? { note: 'the main tree has uncommitted changes; workers start from HEAD and do not see them' } : {}) };
 }
 
@@ -203,20 +203,22 @@ async function runWorker([id, name], cwd) {
 function status(dir) {
   const team = readJson(join(dir, 'team.json'));
   const tasks = listTasks(dir);
-  const counts = { pending: 0, in_progress: 0, done: 0, failed: 0 };
+  const counts = { pending: 0, in_progress: 0, done: 0, failed: 0, stopped: 0 };
+  // after shutdown nothing runs any more: a task that was in progress was interrupted
+  for (const t of tasks) if (team.endedAt && t.status === 'in_progress') t.status = 'stopped';
   for (const t of tasks) counts[t.status]++;
   const alive = tmux('has-session', '-t', team.session).status === 0;
   const workers = team.workers.map((w) => {
     const hb = readJson(join(dir, 'workers', w.name, 'heartbeat.json'));
     const age = hb ? Date.now() - Date.parse(hb.at) : null;
     // Liveness comes from the heartbeat, not from has-session (which can fail transiently under load).
-    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : !hb ? 'starting' : age > STALE_MS ? 'stale' : 'running';
+    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : !hb ? 'starting' : age > STALE_MS ? 'stale' : 'running';
     return { ...w, state, task: hb?.task ?? null, heartbeatAgeSec: age === null ? null : Math.round(age / 1000), log: join(dir, 'workers', w.name, 'log') };
   });
   // Complete = every worker process is gone (drivers exit as soon as no task is left), so merging can start.
   // shortcut: a stale worker's in_progress task is reported, not re-queued; re-run it in a new team if needed.
   const complete = Boolean(team.endedAt) || workers.every((w) => w.state === 'exited' || w.state === 'stale');
-  return { id: team.id, session: team.session, worker: team.worker, ended: team.endedAt, alive, complete, counts,
+  return { id: team.id, session: team.session, worker: team.workerCmd ? 'custom' : team.worker, ended: team.endedAt, alive, complete, counts,
     tasks: tasks.map(({ id, subject, status: s, owner, exitCode }) => ({ id, subject, status: s, owner, exitCode })), workers };
 }
 
@@ -291,7 +293,7 @@ function session([sub, ...args], cwd) {
   if ((kind === 'issue' || kind === 'pr') && !/^\d+$/.test(ref ?? '')) fail(`usage: mis session create ${kind} <number>`);
   const slug = kind === 'feature' ? (ref ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : ref;
   if (!['issue', 'pr', 'feature'].includes(kind) || !slug) fail('usage: mis session create <issue|pr|feature> <ref>');
-  if (wantTmux) requireTmux();
+  if (wantTmux) requireTmux('create the session without --tmux and open a terminal in its worktree');
   const name = { issue: `issue-${ref}`, pr: `pr-${ref}`, feature: `feat-${slug}` }[kind];
   const branch = { issue: `fix/${ref}`, pr: `pr-${ref}-review`, feature: `feature/${slug}` }[kind];
   const path = join(root, '.worktrees', name);

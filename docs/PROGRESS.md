@@ -142,11 +142,11 @@ VERIFY: PENDING — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서�
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
-| M8-01 | 내장 브라우저(CDP 데몬, `mis browse` 명령 그룹, snapshot @e 참조, handoff/resume), guard(cdp·--remote ask) | DONE | `tests/integration/mis-browse*.test.mjs` | gap §5.4 | f3a03c4 | npm test |
-| M8-02 | `mis pdf`(marked 벤더), `mis visual-verdict`(PNG 디코더), Playwright 없는 웹 QA·qa-only·디자인 리뷰·페이지 성능 | DONE | 같은 묶음 | gap §5.1, §2.1 | f3a03c4 | npm test |
-| M8-03 | 팀 런타임(`mis team`, tmux 워커, 공유 task 목록·원자적 claim), team 스킬(plan→exec→verify→fix), codex/gemini 워커 ask | DONE | `tests/integration/mis-team.test.mjs` | gap §2.1·§2.4·§2.6 | c5c04fe | npm test |
+| M8-01 | 내장 브라우저(CDP pipe 데몬, `mis browse`: 수명주기·goto/back/forward/reload/url/wait/load-html·text/html/links/forms/accessibility/data·js/eval/css/attrs/is/console/network/dialog/storage/perf/cdp·click/fill/select/hover/type/press/scroll/viewport/upload/dialog-accept/dismiss·screenshot/responsive/pdf/diff·snapshot -i -c -d -s -D -a -o와 @e 참조·tabs/tab/newtab/closetab/frame·chain·handoff/resume), guard(cdp ask, 비로컬 출처의 storage/js/eval/upload는 --remote + ask). **M9로 이동**: `media`·`style`/`style --undo`/`cleanup`/`prettyscreenshot`·`tab-each`·`snapshot -C`/`@c`(M9 E4), `inspect`·`ux-audit`·쿠키·헤더(E1), `focus`·`state save\|load`·`memory`·connect(E2), 다운로드·스크랩(E3) | DONE (M8 범위) | `tests/integration/mis-browse*.test.mjs` | gap §5.4 | f3a03c4 | npm test |
+| M8-02 | `mis pdf`(marked 벤더), `mis visual-verdict`(PNG 디코더, 콘텐츠 기준 점수 — 판정은 모델이 두 이미지를 보고 함), Playwright 없는 웹 QA·qa-only·디자인 리뷰·페이지 성능. **M9로 이동**: qa-tester의 tmux 대화형 CLI 조작(M9 C2) | DONE (M8 범위) | 같은 묶음 | gap §5.1, §2.1 | f3a03c4 | npm test |
+| M8-03 | 팀 런타임(`mis team`, tmux 워커, 공유 task 목록·원자적 claim), team 스킬(plan→exec→verify→fix), codex/gemini 워커 ask. **M9로 이동**: `mis launch`(OMC `omc launch`, M9 A8) | DONE (M8 범위) | `tests/integration/mis-team.test.mjs` | gap §2.1·§2.4·§2.6 | c5c04fe | npm test |
 | M8-04 | 프로젝트 세션 관리(`mis session`, psm), visual companion(`mis companion`) | DONE | 같은 묶음 | gap §2.1, §3 | c5c04fe | npm test |
-| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS | — | — | | |
+| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS — 1차 검증 DEFECTS(D0~D12, 원격 upload) 수정 후 2차 | — | `docs/milestones/M8-report.md` | | |
 
 ## M9 — 나머지 이전 제외 기능
 VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).

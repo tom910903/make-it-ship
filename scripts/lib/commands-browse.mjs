@@ -20,7 +20,7 @@ const USAGE = `usage: mis browse <command> [args] [--remote]
   snapshot    snapshot [-i] [-c] [-d N] [-s sel] [-D] [-a] [-o path]   (@e refs for click/fill/...)
   tabs        tabs | tab <id> | newtab [url] | closetab [id] | frame <sel|@ref|--name n|--url part|main>
   meta        chain '<json>'|<file>|- | handoff [reason] | resume
-  --remote    allow storage/js/eval on a non-local page (the guard asks the user)`;
+  --remote    allow storage/js/eval/upload on a non-local page (the guard asks the user)`;
 
 function readChain(arg, cwd) {
   const text = arg === undefined || arg === '-' ? readFileSync(0, 'utf8') : existsSync(resolve(cwd, arg)) ? readFileSync(resolve(cwd, arg), 'utf8') : arg;
@@ -84,7 +84,7 @@ function visualVerdict(argv, cwd) {
   const diffImage = resolve(cwd, outArg ?? `${resolve(cwd, shot).replace(/\.png$/i, '')}.diff.png`);
   writeFileSync(diffImage, encodePng(r.diff));
   const verdict = r.score >= threshold ? 'pass' : r.score >= 50 ? 'revise' : 'fail';
-  const pct = Math.round((r.diffPixels * 1000) / r.totalPixels) / 10;
+  const pct = Math.round((r.diffPixels * 1000) / Math.max(1, r.contentPixels)) / 10;
   const differences = [
     ...(r.sizeMatch ? [] : [`size differs: screenshot ${a.width}x${a.height}, reference ${b.width}x${b.height}`]),
     ...r.hotspots.map((h) => `region x ${h.x}-${h.x + h.width}, y ${h.y}-${h.y + h.height}: ${h.percent}% of its pixels differ`),
@@ -95,8 +95,9 @@ function visualVerdict(argv, cwd) {
   ];
   process.exitCode = verdict === 'pass' ? 0 : 1;
   return { score: r.score, verdict, pass: verdict === 'pass', threshold, differences, suggestions,
-    reasoning: `${r.diffPixels} of ${r.totalPixels} pixels (${pct}%) differ beyond tolerance ${tolerance}; score ${r.score} ${verdict === 'pass' ? '>=' : '<'} ${threshold}.`,
-    diffImage, width: Math.max(a.width, b.width), height: Math.max(a.height, b.height), sizeMatch: r.sizeMatch, diffPixels: r.diffPixels, totalPixels: r.totalPixels, tolerance, hotspots: r.hotspots };
+    reasoning: `${r.diffPixels} of ${r.contentPixels} content pixels (${pct}%; the shared background is not counted) differ beyond tolerance ${tolerance}; score ${r.score} ${verdict === 'pass' ? '>=' : '<'} ${threshold}.`,
+    note: 'The pixel score is only an aid. Read both images (and diffImage) and judge yourself whether the screenshot matches the reference; a pass here is not a visual verdict.',
+    diffImage, width: Math.max(a.width, b.width), height: Math.max(a.height, b.height), sizeMatch: r.sizeMatch, diffPixels: r.diffPixels, contentPixels: r.contentPixels, totalPixels: r.totalPixels, tolerance, hotspots: r.hotspots };
 }
 
 export const browseCommands = { browse, pdf, 'visual-verdict': visualVerdict };

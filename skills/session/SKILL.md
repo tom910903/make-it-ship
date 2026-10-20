@@ -7,7 +7,7 @@ description: Make It Ship project session manager (psm, absorbs OMC project-sess
 
 Absorbs: OMC project-session-manager / psm (worktree-first sessions for issues, PRs and features, optional tmux) · Superpowers using-git-worktrees.
 
-`mis <args>` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <args>`, run from the main working tree.
+`mis` = the shell function `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` (define it in the same Bash call, or type the full `node` command; not a variable: `M="node …"; $M` fails in zsh), run from the main working tree.
 
 | Command | Worktree | Branch |
 |---|---|---|

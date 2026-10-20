@@ -60,13 +60,14 @@ if (!HAS_TMUX) {
     const dir = makeRepo();
     const s = ok(mis(dir, ['team', 'start', '2', 'split work', '--tasks', '-'], { env, input: tasksJson(['a', 'b', 'c', 'd']) }));
     assert.equal(s.workers.length, 2);
+    assert.equal(s.worker, 'custom', 'M8 D9: a worker command override is not reported as claude');
     assert.match(s.attach, new RegExp(`tmux -L ${SOCKET} attach -t ${s.session}`));
     const panes = tmux('list-panes', '-s', '-t', s.session, '-F', '#{pane_id}');
     // Workers may already have finished and closed their panes; when the session is alive it has <= 2 panes.
     if (panes.status === 0) assert.ok(panes.stdout.trim().split('\n').length <= 2);
     const w = ok(mis(dir, ['team', 'wait', '--timeout', '60'], { env }));
     assert.equal(w.complete, true);
-    assert.deepEqual(w.counts, { pending: 0, in_progress: 0, done: 4, failed: 0 }, JSON.stringify(w.workers));
+    assert.deepEqual(w.counts, { pending: 0, in_progress: 0, done: 4, failed: 0, stopped: 0 }, JSON.stringify(w.workers));
     assert.deepEqual(readdirSync(join(teamDir(dir, s.id), 'claims')).sort(), ['1', '2', '3', '4']);
     for (const t of w.tasks) assert.ok(s.workers.some((x) => x.name === t.owner), JSON.stringify(t));
     for (const x of s.workers) {
@@ -89,7 +90,7 @@ if (!HAS_TMUX) {
     ok(mis(dir, ['team', 'start', '1', '- ok task\n- FAIL task'], { env }));
     const w = ok(mis(dir, ['team', 'wait', '--timeout', '60'], { env }));
     assert.equal(w.complete, true);
-    assert.deepEqual(w.counts, { pending: 0, in_progress: 0, done: 1, failed: 1 });
+    assert.deepEqual(w.counts, { pending: 0, in_progress: 0, done: 1, failed: 1, stopped: 0 });
     assert.equal(w.tasks.find((t) => t.status === 'failed').exitCode, 1);
     ok(mis(dir, ['team', 'shutdown'], { env }));
   });
@@ -107,7 +108,11 @@ if (!HAS_TMUX) {
     assert.equal(tmux('has-session', '-t', s.session).status === 0, false);
     assert.equal(sd.kept[0].path, s.workers[0].worktree, 'uncommitted work is never deleted');
     assert.ok(existsSync(join(s.workers[0].worktree, 'scratch.txt')));
-    assert.ok(ok(mis(dir, ['team', 'status'], { env })).ended, 'status shows the team ended');
+    const after = ok(mis(dir, ['team', 'status'], { env }));
+    assert.ok(after.ended, 'status shows the team ended');
+    assert.equal(after.workers[0].state, 'stopped', 'M8 D7: a worker killed by shutdown is not "running"');
+    assert.equal(after.counts.in_progress, 0); assert.equal(after.counts.stopped, 1);
+    assert.equal(after.tasks[0].status, 'stopped');
   });
 }
 

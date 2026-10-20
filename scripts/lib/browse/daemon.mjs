@@ -31,7 +31,7 @@ async function shutdown(code, why) {
   stopping = true;
   log(`shutting down: ${why}`);
   try { if (JSON.parse(readFileSync(stateFile, 'utf8')).pid === process.pid) rmSync(stateFile, { force: true }); } catch { /* none */ }
-  await browser.close().catch(() => {});
+  await browser.close().catch((e) => log(`browser close failed: ${e.message}`));
   server?.close();
   process.exit(code);
 }

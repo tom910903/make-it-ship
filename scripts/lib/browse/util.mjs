@@ -4,11 +4,14 @@ import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-/** Local = file/about/data pages or a loopback host. Used to decide when storage/JS access needs --remote. */
-export function isLocalUrl(u) {
+/**
+ * Local = a file: or loopback origin (or URL). Decides when storage/JS/upload need --remote. Opaque or unknown origins
+ * (about:blank and data: documents report "://", sandboxed ones "null") and blob:/about: URLs are not local: fail closed.
+ */
+export function isLocalOrigin(o) {
   let url;
-  try { url = new URL(u); } catch { return false; }
-  if (['file:', 'about:', 'data:', 'blob:'].includes(url.protocol)) return true;
+  try { url = new URL(o); } catch { return false; }
+  if (url.protocol === 'file:') return true;
   if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) return false;
   const h = url.hostname.replace(/^\[|\]$/g, '');
   return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\.\d+\.\d+\.\d+$/.test(h);

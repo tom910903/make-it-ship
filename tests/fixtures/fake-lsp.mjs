@@ -10,7 +10,7 @@ if (process.env.FAKE_LSP_PID_FILE) { // like tsserver under typescript-language-
 }
 const docs = new Map(); // uri -> text
 const pending = new Map();
-let nextId = 1000, configResult = 'none';
+let nextId = 1000, configResult = 'none', configAnswered = null; // hover waits for the configuration answer: no race under load
 
 const send = (m) => { const b = Buffer.from(JSON.stringify({ jsonrpc: '2.0', ...m })); process.stdout.write(`Content-Length: ${b.length}\r\n\r\n`); process.stdout.write(b); };
 const ask = (method, params) => new Promise((res) => { const id = nextId++; pending.set(id, res); send({ id, method, params }); });
@@ -31,7 +31,7 @@ async function onRequest(m) {
     case 'initialize':
       return { capabilities: { hoverProvider: true, definitionProvider: true, referencesProvider: true, documentSymbolProvider: true, workspaceSymbolProvider: true, renameProvider: { prepareProvider: true }, codeActionProvider: { resolveProvider: true }, executeCommandProvider: { commands: ['fake.footer'] } }, serverInfo: { name: 'fake', root: p.rootUri } };
     case 'shutdown': return null;
-    case 'textDocument/hover': return { contents: { kind: 'markdown', value: `hover 한글 ${p.position.line}:${p.position.character} cfg=${configResult}` } };
+    case 'textDocument/hover': await configAnswered; return { contents: { kind: 'markdown', value: `hover 한글 ${p.position.line}:${p.position.character} cfg=${configResult}` } };
     case 'textDocument/definition': return [{ uri, range: range(0, 9, 0, 12) }];
     case 'textDocument/references': return [{ uri, range: range(0, 9, 0, 12) }, { uri, range: range(2, 4, 2, 7) }];
     case 'textDocument/documentSymbol': return [{ name: 'foo', kind: 12, range: range(0, 0, 1, 1), selectionRange: range(0, 9, 0, 12), children: [{ name: 'x', kind: 13, range: range(1, 2, 1, 9), selectionRange: range(1, 6, 1, 7) }] }];
@@ -57,7 +57,7 @@ async function onRequest(m) {
 
 function onNotification(m) {
   const p = m.params;
-  if (m.method === 'initialized') ask('workspace/configuration', { items: [{ section: 'fake' }] }).then((r) => { configResult = JSON.stringify(r); });
+  if (m.method === 'initialized') configAnswered = ask('workspace/configuration', { items: [{ section: 'fake' }] }).then((r) => { configResult = JSON.stringify(r); });
   if (m.method === 'textDocument/didOpen') { docs.set(p.textDocument.uri, p.textDocument.text); publish(p.textDocument.uri); }
   if (m.method === 'textDocument/didChange') { docs.set(p.textDocument.uri, p.contentChanges.at(-1).text); publish(p.textDocument.uri); }
   if (m.method === 'textDocument/didClose') docs.delete(p.textDocument.uri);

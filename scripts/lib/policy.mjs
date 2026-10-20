@@ -74,6 +74,7 @@ function misSub(ws, functions) {
     return null;
   }
   if (/(^|\/)mis\.mjs$/.test(ws[0])) return ws.slice(1);
+  if (ws[0] === 'mis') return ws.slice(1); // the skills' shorthand, possibly defined in the user's shell profile
   if (functions.has(ws[0]) && /mis\.mjs/.test(functions.get(ws[0]))) return ws.slice(1);
   return null;
 }
@@ -121,9 +122,15 @@ const DESTRUCTIVE = [
 function careful(ws, ctx, dir, functions) {
   const browse = misSub(ws, functions);
   if (browse?.[0] === 'browse') {
-    // M8: the browser daemon refuses storage/js/eval on non-local pages without --remote, and cdp inside chain
+    // M8: the browser daemon refuses storage/js/eval/upload on non-local pages without --remote, and cdp inside chain
     if (browse[1] === 'cdp') return ask('raw Chrome DevTools Protocol (mis browse cdp) can read cookies and storage of any site in the browser');
-    if (browse.includes('--remote')) return ask(`mis browse ${browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? ''} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
+    if (browse.includes('--remote')) {
+      const sub = browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? '';
+      if (sub === 'upload' || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
+        return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services)`);
+      }
+      return ask(`mis browse ${sub} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
+    }
   }
   const g = gitSub(ws);
   if (g?.sub === 'push') {

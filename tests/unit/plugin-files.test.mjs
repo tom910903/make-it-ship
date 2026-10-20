@@ -241,3 +241,31 @@ test('M9-C C3: skill authoring skills write only learned-skill locations and tes
   assert.match(readme, /## Skill authoring/);
   for (const a of Object.keys(M9C_AGENTS)) assert.match(readme, new RegExp(`\`${a}\``), `README lists ${a}`);
 });
+
+test('M8 D3: the design review loop and the browse skill make the model look at both images; the pixel score alone never ends it', () => {
+  for (const f of ['skills/run/phases/qa.md', 'skills/browse/SKILL.md']) {
+    const t = readFileSync(join(ROOT, f), 'utf8');
+    assert.match(t, /Read both images/, f);
+    assert.match(t, /only an aid/, f);
+    assert.doesNotMatch(t, /\(90\+ passes\)/, f);
+  }
+});
+
+test('M8 D12/D5: every skill that defines the `mis` shorthand gives a function that works in zsh and that the guard sees through', async () => {
+  const { classify } = await import('../../scripts/lib/policy.mjs');
+  const { spawnSync } = await import('node:child_process');
+  const FN = 'mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }';
+  const files = readdirSync(join(ROOT, 'skills')).map((s) => `skills/${s}/SKILL.md`).filter((f) => existsSync(join(ROOT, f)))
+    .filter((f) => /`mis`( <args>)? (=|means)/.test(read(f)) || /where `mis` =/.test(read(f)));
+  assert.ok(files.includes('skills/browse/SKILL.md'));
+  for (const f of files) {
+    assert.ok(read(f).includes(FN), `${f} defines mis as the function`);
+    assert.doesNotMatch(read(f), /`mis`( <args>)? (=|means) `node /, `${f}: no plain-text alias that invites M="node …"; $M`);
+  }
+  const d = classify({ tool_name: 'Bash', tool_input: { command: `${FN}; mis browse cdp X.y` }, cwd: ROOT }, { repoRoot: ROOT, activeRun: false }).decision;
+  assert.equal(d, 'ask');
+  const zsh = ['/bin/zsh', '/usr/bin/zsh'].find(existsSync);
+  if (!zsh) return; // no zsh on this machine: the bash form is what runs
+  const r = spawnSync(zsh, ['-fc', `${FN}; mis browse help`], { env: { ...process.env, CLAUDE_PLUGIN_ROOT: ROOT }, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /usage: mis browse/);
+});

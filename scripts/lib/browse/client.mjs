@@ -106,6 +106,9 @@ export async function stop(dir) {
   kill(s.pid, DAEMON_MARK);
   for (let i = 0; i < 50 && alive(s.chromePid); i++) await sleep(100);
   kill(s.chromePid, CHROME_MARK);
+  for (let i = 0; i < 30 && alive(s.chromePid); i++) await sleep(100);
+  // the daemon removes the profile too; this covers a browser helper that wrote into it after that
+  if (s.profile?.includes(CHROME_MARK)) rmSync(s.profile, { recursive: true, force: true, maxRetries: 3 });
   rmSync(join(dir, 'state.json'), { force: true });
   return { stopped: true };
 }

@@ -26,11 +26,11 @@ test('visual-verdict: identical images pass (exit 0); a different image fails wi
   assert.equal(ok.json.score, 100); assert.equal(ok.json.verdict, 'pass'); assert.equal(ok.json.pass, true);
   const bad = mis(d, ['visual-verdict', 'shot.png', 'ref.png', '-o', 'diff.png']);
   assert.equal(bad.code, 1);
-  assert.equal(bad.json.score, 50); assert.equal(bad.json.verdict, 'revise');
+  assert.equal(bad.json.score, 0); assert.equal(bad.json.verdict, 'fail');
   assert.ok(bad.json.differences.some((x) => /region x 0-/.test(x)));
   assert.equal(decodePng(readFileSync(join(d, 'diff.png'))).width, 40);
   assert.equal(bad.json.diffImage, join(d, 'diff.png'));
-  const lenient = mis(d, ['visual-verdict', 'shot.png', 'ref.png', '--threshold', '50']);
+  const lenient = mis(d, ['visual-verdict', 'shot.png', 'ref.png', '--threshold', '0']);
   assert.equal(lenient.code, 0);
   const usage = mis(d, ['visual-verdict', 'shot.png']);
   assert.equal(usage.code, 1); assert.match(usage.err, /usage: mis visual-verdict/);

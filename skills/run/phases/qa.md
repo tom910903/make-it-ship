@@ -27,7 +27,7 @@ Real-use verification beyond unit tests. Standard when a user-facing surface cha
    1. Take a screenshot (before).
    2. Make the smallest fix, CSS before structure.
    3. Take a screenshot again (after).
-   4. If a reference image or mock exists, run `mis visual-verdict <after.png> <reference.png>` (90+ passes) and keep fixing the regions it lists.
+   4. If a reference image or mock exists, run `mis visual-verdict <after.png> <reference.png>`, then **Read both images and its diffImage yourself** and judge whether the screen matches (layout, hierarchy, text, color). Your visual judgment decides, as in OMC visual-verdict; the pixel score is only an aid that points at regions. Stop only when your judgment says it matches and the score does not flag a large region you have not explained. A high score alone never ends the loop.
 
    Revert a fix that breaks something else. Stop and ask the user after 5 fixes in a row without progress.
 9. **Performance** (gstack benchmark):
