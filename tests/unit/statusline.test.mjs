@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { renderHud } from '../../scripts/statusline.mjs';
+import { renderHud, renderExtras } from '../../scripts/statusline.mjs';
 import { makeRepo, mis, ROOT } from '../helpers.mjs';
 
 const T = 't', C = 'c';
@@ -83,4 +83,10 @@ test('M6 R2-4: a chain that points back at this status line does not recurse', (
   assert.match(r.stdout, /^MIS ▸ idle .* \| MIS ▸ idle[^|]*\n$/, 'chained once, not again');
   const ps = spawnSync('pgrep', ['-f', home], { encoding: 'utf8' });
   assert.equal(ps.stdout.trim(), '', 'no leftover processes');
+});
+
+test('M9-F1: agents (with stale count) and todos sit between frozen and the branch; absent when zero', () => {
+  assert.equal(renderExtras({ style: 'full', agents: { running: 2, stale: 1 }, todo: { done: 1, total: 3 }, branch: 'main' }), ' · style full · agents 2 (1 stale) · todo 1/3 · main');
+  assert.equal(renderExtras({ style: 'full', agents: { running: 1, stale: 0 }, branch: 'main' }), ' · style full · agents 1 · main');
+  assert.equal(renderExtras({ style: 'full', agents: { running: 0, stale: 0 }, todo: null, branch: 'main' }), ' · style full · main', 'M6 format unchanged without agents/todos');
 });

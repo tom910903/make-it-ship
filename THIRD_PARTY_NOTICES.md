@@ -5,10 +5,10 @@ always-on layer (M6+) follows their designs closely, so their notices are reprod
 
 | Project | Version studied | Copyright | Used for |
 |---|---|---|---|
-| oh-my-claudecode | 4.15.6 | Copyright (c) 2025 Yeachan Heo | keyword router, persistent loop, rules injection, post-tool reminders, HUD elements, team pipeline and tmux worker runtime, project session manager, visual-verdict JSON shape |
+| oh-my-claudecode | 4.15.6 | Copyright (c) 2025 Yeachan Heo | keyword router, persistent loop, rules injection, post-tool reminders, HUD elements, team pipeline and tmux worker runtime, project session manager, visual-verdict JSON shape, subagent tracking, deliverable check, read-only permission handler, workflow drift and code-simplifier Stop hooks, session-end summary, project-memory hot paths and directives (M9-F) |
 | Superpowers | 6.1.1 | Copyright (c) 2025 Jesse Vincent | session-start skill discipline, always-on TDD / verification / debugging rules, brainstorming visual companion |
 | Ponytail | 5.2.0 | Copyright (c) 2026 DietrichGebert | style levels, subagent injection, codebase map |
-| gstack | 1.58.5.0 | Copyright (c) 2026 Garry Tan | careful / freeze guard rules; built-in browser command set, snapshot @refs, handoff, make-pdf print style (M8-A) |
+| gstack | 1.58.5.0 | Copyright (c) 2026 Garry Tan | careful / freeze guard rules; built-in browser command set, snapshot @refs, handoff, make-pdf print style (M8-A); investigate debug scope, timeline and session kind, CLAUDE.md skill routing, proactive suggestions and question format (M9-F) |
 
 MIT License (applies to each project above, with its own copyright line):
 

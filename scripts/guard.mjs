@@ -43,7 +43,7 @@ try {
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
   // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
   const ctx = context(at);
-  let freezeDir = null;
+  let freezeDir = null, debugScope = null;
   try {
     const f = (await import('./lib/home.mjs')).readHome('freeze.json');
     const { realpathSync } = await import('node:fs');
@@ -51,8 +51,10 @@ try {
     const sessionCtx = context(cwd);
     const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
+    const s = (await import('./lib/home.mjs')).readHome('debug-scope.json');
+    if (s?.paths?.length && (s.root ?? null) === root) debugScope = s.paths;
   } catch { /* no home */ }
-  const r = classify(input, { ...ctx, freezeDir });
+  const r = classify(input, { ...ctx, freezeDir, debugScope });
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
