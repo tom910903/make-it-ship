@@ -2,18 +2,35 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRepo, mis } from '../helpers.mjs';
 import { detectQa } from '../../scripts/lib/qa.mjs';
+import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const by = (r) => Object.fromEntries(r.profiles.map((p) => [p.profile, p]));
 
-test('qa detect: web with Playwright → runnable check; web without a runner → BLOCKED proposal', () => {
+test('qa detect: web with Playwright → its runner; without one → built-in browser script (BLOCKED only without any browser)', () => {
   const pw = makeRepo({ 'package.json': { devDependencies: { '@playwright/test': '1' }, dependencies: { react: '18' } } });
   const a = by(ok(mis(pw, ['qa', 'detect'])));
   assert.deepEqual(a.web.check, { name: 'qa-web', argv: ['npx', 'playwright', 'test'], timeoutSec: 900 });
   const bare = makeRepo({ 'package.json': { dependencies: { vite: '5' } }, 'index.html': '<html></html>' });
   const b = by(ok(mis(bare, ['qa', 'detect'])));
-  assert.equal(b.web.check, null);
-  assert.match(b.web.blocked, /no browser test runner/);
+  if (findChrome()) {
+    assert.deepEqual(b.web.check, { name: 'qa-web', argv: ['node', 'qa/web-smoke.mjs'], timeoutSec: 900 });
+    assert.equal(b.web.needsScript, 'qa/web-smoke.mjs');
+    assert.match(b.web.how, /MIS_CLI/);
+    assert.equal(b.web.blocked, undefined);
+  } else {
+    assert.equal(b.web.check, null);
+    assert.match(b.web.blocked, /no browser test runner.*no Chrome/);
+  }
+  const none = by(ok(mis(bare, ['qa', 'detect'], { env: { MIS_BROWSER: '/nonexistent/chrome' } })));
+  assert.equal(none.web.check, null);
+  assert.match(none.web.blocked, /no browser test runner.*no Chrome/);
+});
+
+test('mis check exposes MIS_CLI so qa scripts can drive mis browse', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { probe: { argv: ['node', '-e', 'process.exit(require("fs").existsSync(process.env.MIS_CLI) && /mis\\.mjs$/.test(process.env.MIS_CLI) ? 0 : 3)'] } } } });
+  ok(mis(dir, ['start', '--input', 'probe', '--mode', 'quick']));
+  assert.equal(ok(mis(dir, ['check', 'probe'])).status, 'PASS');
 });
 
 test('qa detect: CLI and API surfaces propose scenario scripts the model writes under qa/', () => {

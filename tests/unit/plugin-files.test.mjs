@@ -15,7 +15,7 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro'];
+const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -165,4 +165,13 @@ test('M6 always-on layer is wired: hooks for every event, skills, notices, READM
   const readme = read('README.md');
   assert.match(readme, /## Always on/);
   assert.match(readme, /asked about \*\*at any time\*\*/);
+});
+
+test('M8-A: web QA uses the built-in browser (report-only, design loop, page benchmark) and the browse skill documents the guard', () => {
+  const qa = read('skills/run/phases/qa.md');
+  for (const re of [/skills\/browse\/SKILL\.md/, /mis browse perf/, /mis visual-verdict/, /Report-only/i, /\$MIS_CLI/, /handoff/]) assert.match(qa, re);
+  assert.doesNotMatch(qa, /BLOCKED reason \(e\.g\. no Playwright/);
+  const b = read('skills/browse/SKILL.md');
+  for (const re of [/snapshot -i/, /stale ref/, /--remote/, /mis browse cdp/, /mis browse resume/, /mis pdf/, /BLOCKED/]) assert.match(b, re);
+  assert.match(read('skills/qa/SKILL.md'), /report only|qa-only/i);
 });

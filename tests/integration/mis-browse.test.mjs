@@ -1,0 +1,268 @@
+// Built-in browser against the real Chrome on this machine; where no Chrome exists, every case asserts BLOCKED instead.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync, writeFileSync, statSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { makeRepo, mis } from '../helpers.mjs';
+import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
+import { decodePng } from '../../scripts/lib/png.mjs';
+
+const chrome = findChrome();
+const SITE = fileURLToPath(new URL('../fixtures/browse-site.mjs', import.meta.url));
+const HOME = mkdtempSync(join(tmpdir(), 'mis-browse-home-'));
+const ENV = { MIS_STATE_HOME: HOME, MIS_BROWSE_IDLE_MS: '180000', MIS_BROWSE_HEADLESS_ONLY: '1',
+  MIS_BROWSE_CHROME_ARGS: '--host-resolver-rules=MAP *.test 127.0.0.1' };
+let dir, server, base, out;
+const b = (...args) => mis(dir, ['browse', ...args], { env: ENV });
+const ok = (r) => { assert.equal(r.code, 0, `exit ${r.code}\n${r.err}${r.out}`); return r.json !== null && typeof r.json === 'object' ? r.json : r.out; };
+const failed = (r, re) => { assert.notEqual(r.code, 0, r.out); assert.match(r.err, re); };
+const blocked = (r) => failed(r, /BLOCKED: no Chrome, Chromium or Edge/);
+
+before(async () => {
+  dir = makeRepo();
+  out = mkdtempSync(join(tmpdir(), 'mis-browse-out-'));
+  // own process: the mis() helper uses spawnSync, which blocks this process's event loop (an in-process server would hang)
+  server = spawn(process.execPath, [SITE], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const [line] = await once(server.stdout, 'data');
+  base = `http://127.0.0.1:${String(line).trim()}`;
+});
+after(() => { if (chrome) b('stop'); server.kill(); });
+
+test('without a browser every page command is BLOCKED; status still answers', () => {
+  const r = mis(dir, ['browse', 'goto', 'about:blank'], { env: { ...ENV, MIS_BROWSER: '/nonexistent/chrome' } });
+  blocked(r);
+  assert.equal(ok(mis(dir, ['browse', 'status'], { env: { ...ENV, MIS_BROWSER: '/nonexistent/chrome' } })).running, false);
+});
+
+test('lifecycle: first command starts one daemon per workspace (state under git-common-dir, token file 0600)', () => {
+  if (!chrome) return blocked(b('goto', base));
+  assert.equal(ok(b('status')).running, false);
+  assert.match(ok(b('goto', base)), /Navigated to .*\(200\)/);
+  const s = ok(b('status'));
+  assert.equal(s.running, true); assert.equal(s.mode, 'headless');
+  assert.match(s.stateDir, /\.git\/make-it-ship\/browse\//);
+  assert.equal(statSync(join(s.stateDir, 'state.json')).mode & 0o777, 0o600);
+  assert.equal(ok(b('status')).pid, s.pid, 'same daemon reused');
+  assert.equal(ok(b('url')).trim(), `${base}/`);
+});
+
+test('reading: text, html, links, forms (passwords redacted), data, accessibility', () => {
+  if (!chrome) return blocked(b('text'));
+  assert.match(ok(b('text')), /Welcome[\s\S]*Bottom/);
+  assert.equal(ok(b('html', 'nav')).trim(), '<a href="/next">Next page</a>');
+  assert.match(ok(b('links')), new RegExp(`Next page → ${base}/next`));
+  const forms = ok(b('forms'));
+  const fields = forms[0].fields;
+  assert.equal(fields.find((f) => f.name === 'pw').value, '[redacted]');
+  assert.ok(fields.find((f) => f.name === 'email'));
+  const data = ok(b('data'));
+  assert.equal(data.og['og:title'], 'OG Home'); assert.equal(data.jsonld[0].name, 'fx');
+  assert.match(ok(b('accessibility')), /\[heading\] "Welcome"/);
+});
+
+test('snapshot: @e refs (stable across snapshots), interactive filter, diff, stale-ref detection', () => {
+  if (!chrome) return blocked(b('snapshot'));
+  const s1 = ok(b('snapshot', '-i'));
+  const ref = (text, role) => (text.match(new RegExp(`(@e\\d+) \\[${role}\\] "${role === 'textbox' ? 'Email' : ''}[^"]*`)) ?? [])[1];
+  const link = s1.match(/(@e\d+) \[link\] "Next page"/)[1];
+  const email = s1.match(/(@e\d+) \[textbox\] "Email"/)[1];
+  const target = s1.match(/(@e\d+) \[button\] "Target"/)[1];
+  assert.ok(ref(s1, 'textbox'));
+  assert.doesNotMatch(s1, /\[heading\]/, '-i lists interactive elements only');
+  assert.match(ok(b('snapshot')), /\[heading\] "Welcome" \[level=1\]/);
+  assert.match(ok(b('snapshot', '-i')), new RegExp(`${link} \\[link\\] "Next page"`), 'same element keeps its ref');
+  ok(b('fill', email, 'me@example.com'));
+  assert.equal(ok(b('js', 'document.querySelector("#email").value')).trim(), 'me@example.com');
+  ok(b('snapshot', '-D'));
+  ok(b('click', '#add'));
+  assert.match(ok(b('snapshot', '-D')), /\+ .*\[listitem\]/);
+  ok(b('click', '#swap'));
+  failed(b('click', target), /stale ref/);
+  failed(b('click', '@e999'), /unknown ref/);
+});
+
+test('interaction: select, check, hover, type, press Enter submits, scroll, viewport, upload, dialogs', () => {
+  if (!chrome) return blocked(b('click', '#add'));
+  ok(b('select', '#size', 'Large'));
+  assert.equal(ok(b('js', 'document.querySelector("#size").value')).trim(), 'l');
+  ok(b('click', '#agree')); assert.equal(ok(b('is', 'checked', '#agree')).trim(), 'true');
+  ok(b('hover', '#hover')); assert.equal(ok(b('attrs', '#hover'))['data-hovered'], 'yes');
+  assert.equal(ok(b('is', 'visible', '#box')).trim(), 'true');
+  ok(b('scroll', '#bottom'));
+  assert.ok(Number(ok(b('js', 'scrollY'))) > 500);
+  ok(b('viewport', '375x812'));
+  assert.equal(ok(b('js', 'innerWidth')).trim(), '375');
+  ok(b('viewport', '1280x720'));
+  const f = join(out, 'up.txt'); writeFileSync(f, 'hello');
+  ok(b('upload', '#file', f));
+  assert.equal(ok(b('js', 'document.querySelector("#file").files[0].name')).trim(), 'up.txt');
+  ok(b('dialog-dismiss'));
+  ok(b('click', '#confirm'));
+  assert.equal(ok(b('js', 'window.lastConfirm')).trim(), 'false');
+  assert.match(ok(b('dialog')), /confirm: Sure\?/);
+  ok(b('dialog-accept'));
+  ok(b('fill', '#email', 'a@b.c'));
+  ok(b('click', '#email'));
+  ok(b('type', 'x'));
+  ok(b('press', 'Enter'));
+  assert.match(ok(b('url')), /\/submitted\?email=a%40b\.cx/);
+  ok(b('back')); assert.equal(ok(b('url')).trim(), `${base}/`);
+  ok(b('forward')); assert.match(ok(b('url')), /submitted/);
+  ok(b('goto', base));
+  ok(b('reload'));
+  ok(b('wait', '#bottom'));
+  failed(b('wait', '#never', '--timeout', '300'), /timed out/);
+});
+
+test('inspection: js (with await), eval file, css, console, network, perf', () => {
+  if (!chrome) return blocked(b('js', '1'));
+  assert.equal(ok(b('js', '1 + 2')).trim(), '3');
+  assert.equal(ok(b('js', 'await Promise.resolve(7)')).trim(), '7');
+  const f = join(dir, 'probe.js'); writeFileSync(f, 'const t = document.title;\nt.toUpperCase()');
+  assert.equal(ok(b('eval', 'probe.js')).trim(), 'FIXTURE HOME');
+  failed(b('eval', '/etc/hosts'), /under the working directory/);
+  assert.equal(ok(b('css', '#box', 'background-color')).trim(), 'rgb(255, 0, 0)');
+  assert.match(ok(b('console', '--errors')), /boom from app/);
+  assert.doesNotMatch(ok(b('console', '--errors')), /app loaded/);
+  assert.match(ok(b('network')), /GET 200 .*\/app\.js/);
+  const perf = ok(b('perf'));
+  assert.ok(perf.transferBytes > 0 && perf.requests >= 3, JSON.stringify(perf));
+  assert.ok(perf.loadMs >= 0 && perf.ttfbMs >= 0);
+  assert.equal(typeof perf.jsBytes, 'number');
+});
+
+test('storage/js on local pages run directly; on real sites they need --remote; cdp never runs inside chain', () => {
+  if (!chrome) return blocked(b('storage'));
+  ok(b('storage', 'set', 'k', 'v'));
+  assert.equal(ok(b('storage')).localStorage.k, 'v');
+  const site = base.replace('127.0.0.1', 'shop.test');
+  assert.match(ok(b('goto', site)), /Navigated/);
+  assert.match(ok(b('text')), /Welcome/);
+  failed(b('storage'), /--remote/);
+  failed(b('js', 'document.cookie'), /--remote/);
+  assert.deepEqual(ok(b('storage', '--remote')).localStorage, {});
+  failed(b('chain', JSON.stringify([['cdp', 'Runtime.evaluate', '{"expression":"1"}']])), /not allowed inside chain/);
+  failed(b('chain', JSON.stringify([['storage']])), /--remote/);
+  assert.equal(ok(b('cdp', 'Runtime.evaluate', '{"expression":"6*7","returnByValue":true}')).result.value, 42);
+});
+
+test('visuals: full-page, viewport and element screenshots, responsive set, pdf, text diff', () => {
+  if (!chrome) return blocked(b('screenshot'));
+  ok(b('goto', base));
+  const full = join(out, 'full.png'), view = join(out, 'view.png'), el = join(out, 'box.png');
+  ok(b('screenshot', full)); ok(b('screenshot', '--viewport', view)); ok(b('screenshot', '#box', el));
+  const F = decodePng(readFileSync(full)), V = decodePng(readFileSync(view)), E = decodePng(readFileSync(el));
+  assert.equal(V.width, 1280); assert.equal(V.height, 720);
+  assert.ok(F.height > 2000, `full page height ${F.height}`);
+  assert.equal(E.width, 120); assert.equal(E.height, 80);
+  assert.deepEqual([...E.data.subarray(0, 4)], [255, 0, 0, 255]);
+  const shots = ok(b('responsive', join(out, 'r')));
+  assert.deepEqual(shots.map((p) => decodePng(readFileSync(p)).width), [375, 768, 1280]);
+  assert.equal(ok(b('js', 'innerWidth')).trim(), '1280', 'viewport restored');
+  const pdf = join(out, 'page.pdf');
+  ok(b('pdf', pdf, '--format', 'a4'));
+  assert.equal(readFileSync(pdf).subarray(0, 5).toString(), '%PDF-');
+  assert.match(ok(b('diff', base, `${base}/next`)), /- Welcome[\s\S]*\+ Home/);
+  assert.match(ok(b('snapshot', '-i', '-a', '-o', join(out, 'ann.png'))), /annotated screenshot/);
+  assert.ok(existsSync(join(out, 'ann.png')));
+});
+
+test('tabs and frames', () => {
+  if (!chrome) return blocked(b('tabs'));
+  ok(b('newtab', `${base}/next`));
+  let tabs = ok(b('tabs'));
+  assert.equal(tabs.length, 2); assert.equal(tabs.find((t) => t.active).title, 'Next');
+  ok(b('tab', String(tabs[0].id)));
+  assert.match(ok(b('text')), /Welcome/);
+  ok(b('closetab', String(tabs[1].id)));
+  assert.equal(ok(b('tabs')).length, 1);
+  ok(b('frame', '#frm'));
+  assert.match(ok(b('text')), /Inside frame/);
+  assert.match(ok(b('snapshot', '-i')), /\[button\] "Frame button"/);
+  ok(b('frame', 'main'));
+  assert.match(ok(b('text')), /Welcome/);
+});
+
+test('chain runs commands in order and stops at the first error', () => {
+  if (!chrome) return blocked(b('chain', '[]'));
+  const r = ok(b('chain', JSON.stringify([['goto', `${base}/next`], ['text']])));
+  assert.match(r[1].result, /Next page/);
+  failed(b('chain', JSON.stringify([['goto', base], ['click', '#missing'], ['text']])), /step 2 \(click #missing\)/);
+  const f = join(out, 'steps.json'); writeFileSync(f, JSON.stringify([['url']]));
+  assert.match(ok(b('chain', f))[0].result, /127\.0\.0\.1/);
+});
+
+test('handoff → resume relaunches on the same profile: page and cookies survive', () => {
+  if (!chrome) return blocked(b('handoff'));
+  ok(b('goto', `${base}/next`));
+  ok(b('js', 'document.cookie = "sess=abc; max-age=3600"'));
+  assert.match(ok(b('handoff', 'solve the CAPTCHA')), /HANDOFF[\s\S]*mis browse resume/);
+  assert.equal(ok(b('status')).mode, 'handoff');
+  const r = ok(b('resume'));
+  assert.match(r, /RESUMED/); assert.match(r, /\[link\] "Home"/);
+  assert.equal(ok(b('url')).trim(), `${base}/next`);
+  assert.match(ok(b('js', 'document.cookie')), /sess=abc/);
+  assert.equal(ok(b('status')).mode, 'headless');
+});
+
+test('resume after the user closed the visible browser reopens the handed-off page', async () => {
+  if (!chrome) return blocked(b('handoff'));
+  ok(b('goto', `${base}/next`));
+  ok(b('handoff'));
+  process.kill(ok(b('status')).chromePid, 'SIGKILL');
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(ok(b('status')).running, true, 'daemon waits for resume');
+  assert.match(ok(b('resume')), /RESUMED at .*\/next/);
+});
+
+test('a crashed daemon: the next command starts a new one and removes the orphaned browser and profile', async () => {
+  if (!chrome) return blocked(b('url'));
+  const s = ok(b('status'));
+  const state = JSON.parse(readFileSync(join(s.stateDir, 'state.json'), 'utf8'));
+  process.kill(s.pid, 'SIGKILL');
+  assert.match(ok(b('goto', base)), /Navigated/);
+  assert.notEqual(ok(b('status')).pid, s.pid);
+  assert.throws(() => process.kill(s.chromePid, 0), 'old browser killed');
+  assert.ok(!existsSync(state.profile), 'old profile removed');
+});
+
+test('load-html, scoped/limited snapshot, clip screenshot, frame by url', () => {
+  if (!chrome) return blocked(b('load-html', 'x.html'));
+  writeFileSync(join(dir, 'card.html'), '<main><h2>Card</h2><section id="s"><button>Inner</button></section><button>Outer</button></main>');
+  assert.match(ok(b('load-html', 'card.html')), /Loaded/);
+  assert.match(ok(b('text')), /Card[\s\S]*Inner[\s\S]*Outer/);
+  const scoped = ok(b('snapshot', '-s', '#s'));
+  assert.match(scoped, /"Inner"/); assert.doesNotMatch(scoped, /Outer/);
+  assert.doesNotMatch(ok(b('snapshot', '-d', '0')), /\[button\]/);
+  failed(b('load-html', 'probe.js'), /\.html/);
+  const clip = join(out, 'clip.png');
+  ok(b('screenshot', '--clip', '0,0,50,40', clip));
+  assert.equal(decodePng(readFileSync(clip)).width, 50);
+  ok(b('goto', base));
+  ok(b('frame', '--url', '/frame'));
+  assert.match(ok(b('text')), /Inside frame/);
+  ok(b('frame', 'main'));
+});
+
+test('stop shuts the daemon and the browser down; restart brings it back', async () => {
+  if (!chrome) return blocked(b('restart'));
+  const s = ok(b('restart'));
+  assert.equal(s.running, true);
+  assert.equal(ok(b('stop')).stopped, true);
+  assert.equal(ok(b('status')).running, false);
+  assert.ok(!existsSync(join(s.stateDir, 'state.json')));
+  assert.throws(() => process.kill(s.chromePid, 0));
+});
+
+test('idle shutdown', async () => {
+  if (!chrome) return blocked(b('goto', 'about:blank'));
+  const d2 = makeRepo();
+  const env = { ...ENV, MIS_BROWSE_IDLE_MS: '1500' };
+  ok(mis(d2, ['browse', 'goto', 'about:blank'], { env }));
+  await new Promise((r) => setTimeout(r, 3500));
+  assert.equal(ok(mis(d2, ['browse', 'status'], { env })).running, false);
+});

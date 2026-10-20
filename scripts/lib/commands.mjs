@@ -26,6 +26,7 @@ import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
+import { browseCommands } from './commands-browse.mjs';
 import { readLoop, endLoop } from './loop.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
@@ -349,7 +350,7 @@ function check([name], cwd) {
   else {
     // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
     const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
-      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env } });
+      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
     else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
@@ -644,7 +645,7 @@ function bench(args, cwd) {
   let failed = null;
   for (let i = 0; i < runs; i++) {
     const t0 = process.hrtime.bigint();
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env } });
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     times.push(Number(process.hrtime.bigint() - t0) / 1e6);
     if (r.status !== 0) { failed = r.error?.message ?? `exit ${r.status ?? r.signal}`; break; }
   }
@@ -700,5 +701,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands };
 export { requiredChecks };

@@ -96,7 +96,7 @@ function classifyBash(cmd, ctx, cwd) {
   let verdict = allow;
   for (const { argv: ws } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
-    let r = careful(ws, ctx, dir);
+    let r = careful(ws, ctx, dir, functions);
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -110,7 +110,13 @@ const DESTRUCTIVE = [
   [/\btruncate\s+(table\s+)?[a-z_]\w*/i, 'SQL TRUNCATE deletes all rows of a table'],
 ];
 
-function careful(ws, ctx, dir) {
+function careful(ws, ctx, dir, functions) {
+  const browse = misSub(ws, functions);
+  if (browse?.[0] === 'browse') {
+    // M8: the browser daemon refuses storage/js/eval on non-local pages without --remote, and cdp inside chain
+    if (browse[1] === 'cdp') return ask('raw Chrome DevTools Protocol (mis browse cdp) can read cookies and storage of any site in the browser');
+    if (browse.includes('--remote')) return ask(`mis browse ${browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? ''} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
+  }
   const g = gitSub(ws);
   if (g?.sub === 'push') {
     const r = classifyPush(g.rest, ctx);
