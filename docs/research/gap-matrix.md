@@ -56,7 +56,7 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | M9-B 단독 계획·리뷰 스킬 | 1 (58행 완료) | 0 |
 | M9-C 에이전트·스킬 작성 | 0 (16행 완료) | 0 |
 | M9-D 연구·운영·배포·외부 | 58 | 39 |
-| M9-E 브라우저 자격 증명·고급 | 19 | 0 |
+| M9-E 브라우저 자격 증명·고급 | 6 (13행 완료, 6행 PARTIAL: 정확히 빠진 부분은 각 행) | 0 |
 | M9-F 남은 훅 | 19 | 0 |
 | **합계** | **130** | **39** |
 
@@ -410,13 +410,13 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | qa-only | skill | 보고만 하는 QA. | ABSORBED | `phases/qa.md` 7단계 (보고 전용 + 건강 점수, M8) | M8 흡수 |
 | gstack | retro | skill | 주간 엔지니어링 회고 (git 이력·핫스팟·사람별). | ABSORBED | `mis retro --git --since 7d` (커밋·핫스팟·작성자별, 리뷰어 적중률) (M9-B) | M9-B 흡수 |
 | gstack | review | skill | 머지 전 PR 리뷰. | ABSORBED | `skills/review/SKILL.md` (spec·quality·security) | — |
-| gstack | scrape | skill | 웹 페이지에서 데이터를 가져온다. | MISSING | — | browse 위 데이터 추출, guard 항상 ask → M9-E |
-| gstack | setup-browser-cookies | skill | 실제 Chromium 쿠키를 헤드리스 세션으로 가져온다. | MISSING | — | 실제 Chromium 쿠키 가져오기, guard 항상 ask → M9-E |
+| gstack | scrape | skill | 웹 페이지에서 데이터를 가져온다. | ABSORBED | `skills/browse/SKILL.md` "Scrape and browser skills" (`text`·`data`·`media`·`js --remote`, `download`·`scrape`·`archive`), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
+| gstack | setup-browser-cookies | skill | 실제 Chromium 쿠키를 헤드리스 세션으로 가져온다. | ABSORBED | `mis browse cookie-import-browser [browser] [--domain host]` (`lib/browse/cookies.mjs`, guard 항상 ask), `skills/browse/SKILL.md` "Credentials: always ask", `tests/integration/mis-browse-m9e.test.mjs` (합성 쿠키 DB + 가짜 `security`) | M9-E. gstack의 대화형 도메인 선택 UI 대신 `--domain` 없이 실행하면 도메인 목록만 출력 (복호화 없음) |
 | gstack | setup-deploy | skill | land-and-deploy용 배포 설정. | MISSING | — | 배포 설정 → M9-D |
 | gstack | setup-gbrain | skill | gbrain CLI 설치, PGLite·Supabase 브레인 초기화, MCP 등록. | MISSING | — | gbrain 계열, 외부 전송마다 guard ask [정책] → M9-D |
 | gstack | sync-gbrain | skill | gbrain을 저장소 코드와 동기화하고 CLAUDE.md 검색 안내 갱신. | MISSING | — | gbrain 계열 [정책] → M9-D |
 | gstack | ship | skill | base 머지, 테스트, diff 리뷰, VERSION 증가, CHANGELOG, 커밋, push, PR. | ABSORBED | `mis version-bump`, PR 제목 `v<버전>`, `phases/ship.md` base 브랜치 병합·"Release details" (M9-B) | M9-B 흡수 |
-| gstack | skillify | skill | 성공한 `/scrape` 흐름을 영구 browser-skill로 저장. | MISSING | — | 성공한 scrape 흐름을 browser-skill로 저장 → M9-E |
+| gstack | skillify | skill | 성공한 `/scrape` 흐름을 영구 browser-skill로 저장. | ABSORBED | `mis browse skillify <name>` (`lib/browse/skills.mjs`: 마지막 `goto` 이후 성공 명령 → C3 형식 SKILL.md(lint 통과) + `steps.json`, 입력값은 `--arg` 매개변수), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. Playwright 스크립트 대신 `mis browse` 단계 재생 (코드 실행 없음) |
 | gstack | spec | skill | 모호한 의도를 5단계로 실행 가능한 spec으로. | ABSORBED | `phases/interview.md` spec 모드(5단계, `docs/make-it-ship/specs/<slug>.md`) (M9-B) | M9-B 흡수 |
 
 ### 5.2 스킬 frontmatter 훅과 preamble 공통 동작
@@ -438,7 +438,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 
 | 원본 | 기능 | 종류 | 한 줄 설명 | MIS 상태 | MIS 대응 위치 | 남은 작업 |
 |---|---|---|---|---|---|---|
-| gstack | chrome-cdp | bin | 원격 디버깅(CDP)을 켠 Chrome 실행. | PARTIAL | `lib/browse/chrome.mjs` (내부용 CDP Chrome 실행, M8) | M8: 헤드리스 내부 실행. 남음: 사용자 Chrome을 CDP로 띄우기, guard ask → M9-E |
+| gstack | chrome-cdp | bin | 원격 디버깅(CDP)을 켠 Chrome 실행. | PARTIAL | `lib/browse/chrome.mjs` (pipe 전용 CDP, `--mis-browse-owner` 표지), `mis browse connect` (영속 프로필 headed, guard ask) | M9-E. 남음(의도적 제외): TCP `--remote-debugging-port` 모드와 사용자 기본 프로필 Chrome의 CDP 실행 — 포트는 토큰 없는 로컬 프로세스가 조종할 수 있고(M8 D2), Chrome 136+는 기본 프로필에서 DevTools를 거부 |
 | gstack | dev-setup | bin | gstack 저장소 안에서 스킬 개발용 링크 설정. | N/A | — | gstack 자체 개발용. 사용자 확인 |
 | gstack | dev-teardown | bin | 개발 링크 제거. | N/A | — | gstack 자체 개발용. 사용자 확인 |
 | gstack | gstack-analytics | bin | 로컬 JSONL 기반 개인 사용 대시보드. | MISSING | — | 로컬 JSONL 사용 대시보드 → M9-D |
@@ -464,7 +464,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-diff-scope | bin | base 대비 diff 범주 분류. | ABSORBED | `mis diff-scope` (code/test/docs/config) (M9-B) | M9-B 흡수 |
 | gstack | gstack-distill-apply | bin | 증류 제안 하나를 사용자 승인 후 적용. | ABSORBED | `mis learn distill --yes` (사용자 승인 후 적용) (M9-B) | M9-B 흡수 |
 | gstack | gstack-distill-free-text | bin | 자유 텍스트 일괄 증류("dream cycle"). | ABSORBED | `mis learn distill <file\|->` (제안만) (M9-B) | M9-B 흡수 |
-| gstack | gstack-extension | bin | Chrome 확장 설치 도우미. | MISSING | — | Chrome 확장 설치 → M9-E |
+| gstack | gstack-extension | bin | Chrome 확장 설치 도우미. | ABSORBED | `mis browse extension` (수동 설치 안내), `mis browse connect` (CDP `Extensions.loadUnpacked`로 자동 로드), `extension/`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
 | gstack | gstack-first-task-detect | bin | 프로젝트를 첫 작업 유형으로 분류. | ABSORBED | `mis init`의 `projectType`(web/cli/library/unknown)·`firstTask` (`lib/setup.mjs`), `tests/integration/mis-setup.test.mjs` | M9-A |
 | gstack | gstack-gbrain-detect | bin | gbrain 상태 JSON. | MISSING | — | gbrain 계열 [정책] → M9-D |
 | gstack | gstack-gbrain-install | bin | gbrain CLI 설치. | MISSING | — | gbrain 계열 [정책] → M9-D |
@@ -484,7 +484,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-memory-ingest.ts | bin | 메모리 수집 도우미. | MISSING | — | 세션·산출물을 gbrain에 수집하는 도구 (gbrain 계열) [정책] → M9-D |
 | gstack | gstack-model-benchmark | bin | 같은 프롬프트를 여러 제공자로 실행. | MISSING | — | [정책] benchmark-models와 함께 → M9-D |
 | gstack | gstack-next-version | bin | ship용 VERSION 할당. | ABSORBED | `mis next-version <level>` (M9-B) | M9-B 흡수 |
-| gstack | gstack-open-url | bin | 플랫폼별 URL 열기. | MISSING | — | `open`/`xdg-open` 래퍼 (companion·browse handoff에서 사용) → M9-E |
+| gstack | gstack-open-url | bin | 플랫폼별 URL 열기. | ABSORBED | `mis open-url <url\|file.html>` (`open`/`xdg-open`, argv만, http(s)·로컬 .html만), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
 | gstack | gstack-patch-names | bin | 접두사 모드용 SKILL.md `name` 수정. | N/A | — | gstack 설치 구조 전용. 사용자 확인 |
 | gstack | gstack-paths | bin | 상태 루트 경로 출력. | ABSORBED | `lib/state.mjs` `stateRoot`, `lib/home.mjs` (`~/.make-it-ship`) | 재판정: 기존 `stateRoot`·`~/.make-it-ship`로 충분 |
 | gstack | gstack-platform-detect | bin | 설치된 AI 코딩 에이전트와 gstack 상태. | ABSORBED | `mis doctor`의 `coding-agents`(PATH 존재만 확인, 실행하지 않음)·plugin 항목, `tests/integration/mis-lifecycle.test.mjs` | M9-A |
@@ -520,22 +520,22 @@ browse는 작업공간별 포트를 쓰는 Bun 기반 Chromium 데몬(`browse/di
 | 원본 | 기능 | 종류 | 한 줄 설명 | MIS 상태 | MIS 대응 위치 | 남은 작업 |
 |---|---|---|---|---|---|---|
 | gstack | browse 데몬 수명주기 (`status`, `stop`, `restart`, 작업공간별 `.gstack/browse.json`) | bin | 데몬 시작·상태·종료, 작업공간 격리. | ABSORBED | `mis browse status\|stop\|restart`, 작업공간별 `.git/make-it-ship/browse/` (`lib/browse/daemon.mjs`, M8) | M8 흡수 |
-| gstack | 읽기 (`text`, `html`, `links`, `forms`, `accessibility`, `media`, `data`) | bin | 페이지 텍스트·구조·구조화 데이터 추출. | PARTIAL | `mis browse text\|html\|links\|forms\|accessibility\|data` (M8) | M8: 대부분 흡수. 남음: `media` → M9-E |
-| gstack | 검사 (`js`, `eval`, `css`, `attrs`, `is`, `console`, `network`, `dialog`, `cookies`, `storage`, `perf`, `inspect`, `ux-audit`, `cdp`) | bin | 페이지 JS 실행, CSS·상태·콘솔·네트워크·성능·CDP 직접 호출. | PARTIAL | `mis browse js\|eval\|css\|attrs\|is\|console\|network\|dialog\|storage\|perf\|cdp` (M8) | M8: 대부분 흡수. 남음: `cookies`, `inspect`, `ux-audit` → M9-E |
+| gstack | 읽기 (`text`, `html`, `links`, `forms`, `accessibility`, `media`, `data`) | bin | 페이지 텍스트·구조·구조화 데이터 추출. | ABSORBED | `mis browse text\|html\|links\|forms\|accessibility\|data` (M8), `media [--images\|--videos\|--audio] [sel]` (M9-E), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
+| gstack | 검사 (`js`, `eval`, `css`, `attrs`, `is`, `console`, `network`, `dialog`, `cookies`, `storage`, `perf`, `inspect`, `ux-audit`, `cdp`) | bin | 페이지 JS 실행, CSS·상태·콘솔·네트워크·성능·CDP 직접 호출. | ABSORBED | `mis browse js\|eval\|css\|attrs\|is\|console\|network\|dialog\|storage\|perf\|cdp` (M8), `cookies` (guard 항상 ask)·`inspect [sel] [--all]` (CSS 규칙·출처 줄·계산값·박스 모델)·`ux-audit` (JSON) (M9-E), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. gstack `inspect --history`(사이드바 선택 이력)는 사이드패널 element picker → `inbox`로 대체 |
 | gstack | 이동 (`goto`, `load-html`, `back`, `forward`, `reload`, `url`, `wait`) | bin | 페이지 이동·대기. | ABSORBED | `mis browse goto\|load-html\|back\|forward\|reload\|url\|wait` (M8) | M8 흡수 |
 | gstack | 조작 (`click`, `fill`, `select`, `hover`, `type`, `press`, `scroll`, `viewport`, `upload`, `dialog-accept`, `dialog-dismiss`) | bin | 사용자 입력 재현. | ABSORBED | `mis browse click\|fill\|select\|hover\|type\|press\|scroll\|viewport\|upload\|dialog-accept\|dialog-dismiss` (M8) | M8 흡수 |
-| gstack | 스타일·정리 (`style`, `style --undo`, `cleanup`, `prettyscreenshot`) | bin | CSS 수정·되돌리기, 광고·쿠키 배너 제거. | MISSING | — | `style`·`--undo`·`cleanup`·`prettyscreenshot` → M9-E |
+| gstack | 스타일·정리 (`style`, `style --undo`, `cleanup`, `prettyscreenshot`) | bin | CSS 수정·되돌리기, 광고·쿠키 배너 제거. | ABSORBED | `mis browse style <sel> <prop> <value>`·`style --undo [N]`·`cleanup [--ads\|--cookies\|--sticky\|--social\|--all]`·`prettyscreenshot [--cleanup] [--hide] [--scroll-to] [--width]`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E. gstack cleanup의 overlays·clutter 범주는 넣지 않음 (본문까지 지우는 오탐이 잦음) |
 | gstack | 시각 (`screenshot`, `pdf`, `responsive`, `diff`) | bin | 스크린샷 5모드, PDF, 375·768·1280 반응형 3장, URL 텍스트 diff. | ABSORBED | `mis browse screenshot\|pdf\|responsive\|diff` (M8) | M8 흡수 |
-| gstack | 쿠키·헤더 (`cookie`, `cookie-import`, `cookie-import-browser`, `header`, `useragent`) | bin | 쿠키 설정·가져오기(실제 브라우저 포함), 요청 헤더. | MISSING | — | cookie·cookie-import·cookie-import-browser·header·useragent, guard 항상 ask → M9-E |
-| gstack | 탭·프레임 (`tabs`, `tab`, `newtab`, `closetab`, `tab-each`, `frame`) | bin | 탭·iframe 전환. | PARTIAL | `mis browse tabs\|tab\|newtab\|closetab\|frame` (M8) | M8: 대부분 흡수. 남음: `tab-each` → M9-E |
-| gstack | 추출 (`download`, `scrape`, `archive`) | bin | 브라우저 쿠키로 다운로드, 미디어 일괄 저장, MHTML 저장. | MISSING | — | download·scrape·archive, guard 항상 ask → M9-E |
-| gstack | 스냅샷 (`snapshot -i -c -d -s -D -a -o -C`, `@e`/`@c` 참조, 참조 만료 감지) | bin | 접근성 트리 + 요소 참조로 안정적 조작. | PARTIAL | `mis browse snapshot -i -c -d -s -D -a -o`, `@e` 참조 (M8) | M8: 대부분 흡수. 남음: `-C`·`-H`, `@c` 참조 → M9-E |
-| gstack | headed 모드 (`connect`, `disconnect`, `focus`, `state save\|load`, `memory`) | bin | 보이는 Chrome 연결, 상태 저장·불러오기, 메모리 진단. | PARTIAL | `mis browse handoff` (보이는 창, M8) | M8: handoff 창만. 남음: `connect`·`disconnect`·`focus`·`state save\|load`·`memory` → M9-E |
+| gstack | 쿠키·헤더 (`cookie`, `cookie-import`, `cookie-import-browser`, `header`, `useragent`) | bin | 쿠키 설정·가져오기(실제 브라우저 포함), 요청 헤더. | PARTIAL | `mis browse cookie\|cookie-import\|cookie-import-browser\|header\|useragent` (guard 항상 ask, chain·tab-each·browser skill·`mis check` 스크립트 안에서는 거부; macOS Keychain·Linux v10/v11 복호화), `tests/integration/mis-browse-m9e.test.mjs`, `tests/unit/policy.test.mjs` | M9-E. 남음: Windows 쿠키 복호화 (Chrome 127+ App-Bound Encryption v20은 Chrome 밖에서 풀 수 없고 DPAPI v10 경로는 넣지 않음) |
+| gstack | 탭·프레임 (`tabs`, `tab`, `newtab`, `closetab`, `tab-each`, `frame`) | bin | 탭·iframe 전환. | ABSORBED | `mis browse tabs\|tab\|newtab\|closetab\|frame` (M8), `tab-each <command>` (탭별 JSON, M9-E), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
+| gstack | 추출 (`download`, `scrape`, `archive`) | bin | 브라우저 쿠키로 다운로드, 미디어 일괄 저장, MHTML 저장. | ABSORBED | `mis browse download <url\|sel\|@ref> [path]` (CDP `Network.loadNetworkResource`: 페이지 쿠키, 교차 출처), `scrape images\|videos\|media` (+`manifest.json`), `archive` (MHTML) — guard 항상 ask, `EXTERNAL_MIS` 등록, `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 빠진 선택지: `download --base64`, `--navigate`(브라우저 자체 다운로드) |
+| gstack | 스냅샷 (`snapshot -i -c -d -s -D -a -o -C`, `@e`/`@c` 참조, 참조 만료 감지) | bin | 접근성 트리 + 요소 참조로 안정적 조작. | ABSORBED | `mis browse snapshot -i -c -d -s -D -a -o` (M8), `-C` (`@c` 참조, 탐색 시 만료), `-H` (색 heatmap) (M9-E), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. gstack과 달리 `-i`가 `-C`를 자동으로 켜지 않음 (`-i -C`로 사용) |
+| gstack | headed 모드 (`connect`, `disconnect`, `focus`, `state save\|load`, `memory`) | bin | 보이는 Chrome 연결, 상태 저장·불러오기, 메모리 진단. | ABSORBED | `mis browse connect`(guard ask)·`disconnect`·`focus [sel]`·`state save\|load <name>`(guard ask, 0600)·`memory`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E. `focus`는 CDP `Page.bringToFront` (gstack의 macOS `osascript` 앱 활성화는 쓰지 않음) |
 | gstack | 인계 (`handoff`, `resume`) | bin | CAPTCHA·MFA 등에서 사용자에게 넘겼다가 다시 받기. | ABSORBED | `mis browse handoff\|resume` (M8) | M8 흡수 |
-| gstack | 메타 (`chain`, `inbox`, `watch`) | bin | 명령 묶음 실행, 사이드바 메시지, 사용자 탐색 관찰. | PARTIAL | `mis browse chain` (M8) | M8: chain. 남음: `inbox`·`watch` → M9-E |
-| gstack | browser-skills 런타임 (`skill list\|show\|run\|test\|rm`, `browser-skills/`) | bin | 사이트별 스크립트 스킬 3단 저장소·실행. | MISSING | — | 사이트별 스크립트 스킬 저장소·실행 → M9-E |
-| gstack | domain-skills (`domain-skill save\|list\|show\|edit\|promote-to-global\|rollback\|rm`) | bin | 사이트별 에이전트 메모, 격리 → 활성 → 전역 승격. | MISSING | — | 사이트별 메모와 승격 → M9-E |
-| gstack | `extension/` (사이드패널·인스펙터·터미널) | bin | headed Chrome 사이드바 확장. | MISSING | — | headed Chrome 사이드바 확장 → M9-E |
+| gstack | 메타 (`chain`, `inbox`, `watch`) | bin | 명령 묶음 실행, 사이드바 메시지, 사용자 탐색 관찰. | ABSORBED | `mis browse chain` (M8), `inbox [--clear]` (사이드패널 메시지를 DevTools pipe로 읽음), `watch [--interval s]`·`watch stop` (M9-E), `tests/integration/mis-browse-m9e.test.mjs` | M9-E |
+| gstack | browser-skills 런타임 (`skill list\|show\|run\|test\|rm`, `browser-skills/`) | bin | 사이트별 스크립트 스킬 3단 저장소·실행. | PARTIAL | `mis browse skill list\|show\|run\|test\|rm` (`lib/browse/skills.mjs`; project `.make-it-ship/browser-skills/` > global `~/.make-it-ship/browser-skills/`), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 번들(플러그인 동봉) tier와 코드를 실행하는 스크립트 스킬 — 의도적으로 `mis browse` 단계 재생만 지원 (guard·원격 게이트가 그대로 적용) |
+| gstack | domain-skills (`domain-skill save\|list\|show\|edit\|promote-to-global\|rollback\|rm`) | bin | 사이트별 에이전트 메모, 격리 → 활성 → 전역 승격. | PARTIAL | `mis browse domain-skill save\|list\|show\|edit\|promote-to-global\|rollback\|rm` (격리 → 3회 읽기 후 활성 → 전역), `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 프롬프트 주입 분류기 (대신 격리 상태 메모는 "데이터로만 취급" 경고와 함께 출력) |
+| gstack | `extension/` (사이드패널·인스펙터·터미널) | bin | headed Chrome 사이드바 확장. | PARTIAL | `extension/` (MV3 사이드패널: 에이전트에게 메모, element picker → `chrome.storage` inbox; 외부 통신 없음), `mis browse inbox`, `tests/integration/mis-browse-m9e.test.mjs` | M9-E. 남음: 사이드패널 터미널(확장 안의 셸은 guard 밖에서 명령을 실행하므로 넣지 않음; Claude Code 터미널 사용), 인스펙터의 CSS 캐스케이드 패널(`mis browse inspect`로 대체), 활동 피드 |
 | gstack | `design/` 바이너리 (generate·variants·compare·iterate·evolve·serve·gallery) | bin | OpenAI API로 디자인 시안 이미지 생성·비교 보드. | MISSING | — | OpenAI 이미지 시안 생성, 호출마다 guard ask [정책] → M9-D |
 | gstack | `supabase/` (edge functions, config) | bin | 텔레메트리·커뮤니티 집계 백엔드. | MISSING | — | 텔레메트리 집계 백엔드 연동, 기본 꺼짐 [정책] → M9-D |
 | gstack | `hosts/` (codex·cursor·factory·kiro·opencode·openclaw·hermes·gbrain), `openclaw/`, `agents/openai.yaml`, `model-overlays/`, `conductor.json` | bin | 다른 호스트·모델용 변환·설정. | N/A | — | 다른 호스트 전용 |

@@ -323,3 +323,39 @@ test('M9-F10: mis setup --write asks even without a run; the dry run does not', 
   assert.equal(d(bash('node /p/scripts/mis.mjs setup routing --write'), noRun), 'ask');
   assert.equal(d(bash('node /p/scripts/mis.mjs setup routing'), noRun), 'allow');
 });
+
+test('M9-E: browser credentials, real-Chrome connect, browser state and downloads ask every time (with or without a run), through every wrapper form', async () => {
+  const { BROWSE_ALWAYS_ASK } = await import('../../scripts/lib/browse/util.mjs');
+  const idle = { ...ctx, activeRun: false };
+  const P = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
+  const forms = (rest) => [
+    `${P} browse ${rest}`, `node "$MIS_CLI" browse ${rest}`, `node /p/scripts/mis.mjs browse ${rest}`, `${P} browse --remote ${rest}`,
+    `mis() { ${P} "$@"; }; mis browse ${rest}`, `function mis { ${P} "$@"; }; mis browse ${rest}`, `mb() { ${P} browse "$@"; }; mb ${rest}`,
+    `alias mis='node \${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs'\nmis browse ${rest}`, `mis browse ${rest}`,
+    `sh -c '${P} browse ${rest}'`, `cd /tmp && ${P} browse ${rest}`, `node /p/scripts/mis.mjs tty send sh 'node /p/scripts/mis.mjs browse ${rest}'`,
+  ];
+  const samples = { cookies: 'cookies', cookie: 'cookie sid=1', 'cookie-import': 'cookie-import c.json', 'cookie-import-browser': 'cookie-import-browser chrome --domain github.com',
+    header: 'header Authorization:Bearer x', useragent: 'useragent X/1', connect: 'connect', state: 'state save s1', download: 'download https://x.test/a.zip', scrape: 'scrape images', archive: 'archive page.mhtml' };
+  assert.deepEqual(Object.keys(samples).sort(), [...BROWSE_ALWAYS_ASK.keys()].sort(), 'every always-ask command has a sample here');
+  for (const [cmd, rest] of Object.entries(samples)) {
+    for (const c of [...forms(rest), `${P} browse chain '${JSON.stringify([['goto', 'http://localhost:3000'], rest.split(' ')])}'`, `${P} browse tab-each ${rest}`]) {
+      for (const c2 of [ctx, idle]) {
+        const r = classify(bash(c), c2);
+        assert.equal(r.decision, 'ask', `${cmd}: ${c}`);
+      }
+    }
+    assert.match(classify(bash(`${P} browse ${rest}`), idle).reason, new RegExp(`mis browse ${cmd}\\b`));
+  }
+  assert.match(classify(bash(`${P} browse cookie-import-browser chrome --domain x.com`), idle).reason, /Keychain|decrypt/);
+  for (const c of ['disconnect', 'focus', 'memory', 'media --images', 'inspect h1', 'ux-audit', 'style h1 color red', 'cleanup --all', 'prettyscreenshot a.png',
+    'tab-each text', 'snapshot -C', 'inbox', 'watch', 'watch stop', 'skill list', 'skill run hn', 'skillify hn', 'domain-skill list', 'extension',
+    `chain '${JSON.stringify([['goto', 'http://localhost:3000'], ['text']])}'`, 'goto https://example.com']) {
+    assert.equal(d(bash(`${P} browse ${c}`), idle), 'allow', c);
+  }
+  assert.equal(d(bash(`${P} open-url http://localhost:3000`), idle), 'allow');
+});
+
+test('M9-E: browser downloads are registered as external transfers', async () => {
+  const { EXTERNAL_MIS } = await import('../../scripts/lib/policy.mjs');
+  for (const sub of ['download', 'scrape']) assert.ok(EXTERNAL_MIS.some(([p]) => p.join(' ') === `browse ${sub}`), sub);
+});

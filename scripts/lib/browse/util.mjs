@@ -55,3 +55,35 @@ export function toInches(dim) {
   if (!m) throw new Error(`bad dimension "${dim}" (use e.g. 1in, 72pt, 2.54cm, 25mm, 96px)`);
   return Number(m[1]) / PER_INCH[m[2]];
 }
+
+/**
+ * M9-E: browse commands that touch credentials, the user's own Chrome, saved browser state or fetch remote content with
+ * the browser's cookies. The guard asks for them every time (run or not); the daemon refuses them inside chain, tab-each
+ * and browser skills, and the CLI refuses them in scripts run by `mis check` (MIS_CLI), where the guard cannot see them.
+ */
+export const BROWSE_ALWAYS_ASK = new Map([
+  ['cookies', 'reads every cookie in the browser (session tokens)'],
+  ['cookie', 'sets a cookie the browser sends to the site'],
+  ['cookie-import', 'loads cookies (logged-in sessions) from a file into the browser'],
+  ['cookie-import-browser', "reads and decrypts your real browser's cookie store (macOS Keychain) and loads the sessions into the built-in browser"],
+  ['header', 'adds a request header (often an auth token) to every request the browser sends'],
+  ['useragent', 'changes the user agent every site sees'],
+  ['connect', 'opens a visible Chrome on a persistent profile whose logins stay on disk'],
+  ['state', 'saves or restores cookies and open pages (logged-in sessions) to/from disk'],
+  ['download', "fetches a URL with the browser's cookies and writes it to disk"],
+  ['scrape', "fetches every image/video on the page with the browser's cookies and writes them to disk"],
+  ['archive', 'saves the whole page (MHTML, with its resources) to disk'],
+]);
+
+/** The always-ask commands a browse argv runs: the subcommand, tab-each's command and inline chain steps. */
+export function alwaysAskIn(browseArgs) {
+  const words = browseArgs.filter((w) => !w.startsWith('-'));
+  const [sub, next] = words, hits = [];
+  if (BROWSE_ALWAYS_ASK.has(sub)) hits.push(sub);
+  if (sub === 'tab-each' && BROWSE_ALWAYS_ASK.has(next)) hits.push(next);
+  if (sub === 'chain') {
+    // a chain file or stdin is invisible here; the daemon refuses these commands inside chain anyway
+    try { for (const s of JSON.parse(next ?? '')) if (Array.isArray(s) && BROWSE_ALWAYS_ASK.has(s[0])) hits.push(s[0]); } catch { /* not inline JSON */ }
+  }
+  return hits;
+}

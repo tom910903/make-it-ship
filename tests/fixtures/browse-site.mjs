@@ -1,5 +1,8 @@
 // Fixture web site for the built-in browser tests. Prints its port on stdout.
 import { createServer } from 'node:http';
+import { encodePng } from '../../scripts/lib/png.mjs';
+
+const PNG = encodePng({ width: 2, height: 2, data: new Uint8Array(16).map((_, i) => (i % 4 === 0 || i % 4 === 3 ? 255 : 0)) });
 
 const HOME_PAGE = `<!doctype html><html><head><title>Fixture Home</title>
 <meta property="og:title" content="OG Home"><link rel="stylesheet" href="/style.css"><script src="/app.js"></script>
@@ -29,6 +32,12 @@ location = URL.createObjectURL(new Blob(['<p id="b">blob page</p>'], { type: 'te
   '/pop.html': ['text/html', `<title>Popup maker</title><script>localStorage.secret = 'S3CR3T';</script>
 <button id="open" onclick="window.open('about:blank')">Open</button>`],
   '/upload.html': ['text/html', '<title>Upload</title><input type="file" id="f">'],
+  '/clutter.html': ['text/html', `<title>Clutter</title><header id="bar" style="position:fixed;top:0;height:40px;width:100%;background:#ccc">Sticky bar</header>
+<div class="cookie-banner" id="cb">We use cookies <button>OK</button></div><div class="ad-banner" id="ad">BUY NOW</div>
+<div class="social-share" id="soc">Share</div><main><h1 id="h">Article</h1><p id="p" style="color: rgb(0, 128, 0)">Body text of the article that is long enough to count as a text block for the audit.</p></main>`],
+  '/cursor.html': ['text/html', `<title>Cursor</title><style>.card { cursor: pointer; padding: 8px } #k { color: rgb(1, 2, 3) }</style>
+<div class="card" id="card" onclick="this.dataset.hit = 'yes'"><span>Open card</span></div><div id="plain">Just text</div><button id="real">Real button</button>
+<p id="k" style="margin-top: 7px">styled</p>`],
 };
 const SLOW_MS = 800; // /slow answers late, so a previous page's late load events race with the new navigation
 
@@ -39,6 +48,20 @@ const server = createServer((req, res) => {
     res.end(`<title>X</title><iframe id="x" src="http://shop.test:${server.address().port}/next"></iframe>`); return;
   }
   if (u.pathname === '/nocontent') { res.writeHead(204); res.end(); return; }
+  if (u.pathname === '/echo') { // what the browser sent: cookies, user agent and x-mis-* headers
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ cookie: req.headers.cookie ?? '', ua: req.headers['user-agent'], x: Object.fromEntries(Object.entries(req.headers).filter(([k]) => k.startsWith('x-mis-'))) })); return;
+  }
+  if (u.pathname === '/pic.png') { res.writeHead(200, { 'content-type': 'image/png' }); res.end(PNG); return; }
+  if (u.pathname === '/private.bin') { // only with the session cookie
+    if (!/sid=s3/.test(req.headers.cookie ?? '')) { res.writeHead(403); res.end('no'); return; }
+    res.writeHead(200, { 'content-type': 'application/octet-stream' }); res.end('PRIVATE-BYTES'); return;
+  }
+  if (u.pathname === '/media.html') { // one same-origin image, one from another origin (no CORS headers), a video
+    const other = `http://shop.test:${server.address().port}`;
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<title>Media</title><img id="a" src="/pic.png" alt="local"><img id="b" src="${other}/pic.png" alt="remote"><video id="v" src="/clip.mp4" poster="/pic.png"></video><audio src="/a.mp3"></audio>`); return;
+  }
   if (u.pathname === '/slow') { setTimeout(() => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<title>Slow</title><p>slow page</p>'); }, SLOW_MS); return; }
   const page = PAGES[u.pathname] ?? (u.pathname === '/submitted' ? ['text/html', `<h1>Submitted</h1><p id="q">${u.search}</p>`] : null);
   if (!page) { res.writeHead(404); res.end('nope'); return; }

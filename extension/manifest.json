@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Make It Ship",
+  "version": "0.1.0",
+  "description": "Side panel for the Make It Ship browser: notes to the agent and an element picker. Talks to nothing outside the browser.",
+  "permissions": ["sidePanel", "storage", "tabs"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Make It Ship" },
+  "content_scripts": [{ "matches": ["http://*/*", "https://*/*", "file:///*"], "js": ["content.js"], "run_at": "document_idle" }]
+}

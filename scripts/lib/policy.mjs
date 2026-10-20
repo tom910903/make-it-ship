@@ -34,6 +34,7 @@ const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.som
 
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
+import { BROWSE_ALWAYS_ASK, alwaysAskIn } from './browse/util.mjs';
 
 const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
@@ -136,6 +137,9 @@ function careful(ws, ctx, dir, functions) {
   if (browse?.[0] === 'browse') {
     // M8: the browser daemon refuses storage/js/eval/upload on non-local pages without --remote, and cdp inside chain
     if (browse[1] === 'cdp') return ask('raw Chrome DevTools Protocol (mis browse cdp) can read cookies and storage of any site in the browser');
+    // M9-E: credentials, the user's Chrome, saved state and downloads ask every time (ADR-0003), wherever they appear
+    const hit = alwaysAskIn(browse.slice(1))[0];
+    if (hit) return ask(`mis browse ${hit} ${BROWSE_ALWAYS_ASK.get(hit)} — credential access needs your approval every time`);
     if (browse.includes('--remote')) {
       const sub = browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? '';
       if (sub === 'upload' || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
@@ -188,7 +192,10 @@ function runOnly(ws, ctx, functions) {
 /** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
 // M9 D0: mis subcommands that send data outside the company boundary always ask, with or without a run.
 // Each entry: [mis argv prefix, reason]. Groups adding an external command register it here (and test it).
-export const EXTERNAL_MIS = [];
+export const EXTERNAL_MIS = [
+  [['browse', 'download'], "mis browse download requests a remote URL with the browser's cookies"],
+  [['browse', 'scrape'], "mis browse scrape requests every media URL of the page with the browser's cookies"],
+];
 function externalMis(mis) {
   if (!mis) return allow;
   for (const [prefix, why] of EXTERNAL_MIS) if (prefix.every((w, i) => mis[i] === w)) return ask(`${why} — data leaves this machine; needs your approval`);

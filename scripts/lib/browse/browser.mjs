@@ -17,11 +17,15 @@ export class Browser {
     this.tabs = new Map(); this.bySession = new Map(); this.seq = 0; this.active = null;
     this.viewport = { width: 1280, height: 720, scale: 1 };
     this.headless = true; this.handoff = null; this.profile = null; this.proc = null; this.cdp = null;
+    // M9-E: request headers / user agent for every tab; connect = a persistent profile (never deleted here) + the extension
+    this.headers = {}; this.userAgent = null; this.connected = null; this.extensionId = null; this.history = []; this.watch = null;
   }
 
   async start(headless = true) {
     this.profile ??= mkdtempSync(join(tmpdir(), 'mis-browse-profile-'));
-    const { proc, cdp } = await launchChrome({ exe: this.exe, userDataDir: this.profile, headless: headless || this.headlessOnly, extraArgs: this.extraArgs });
+    const c = this.connected;
+    const { proc, cdp } = await launchChrome({ exe: this.exe, userDataDir: c?.profile ?? this.profile, headless: headless || this.headlessOnly,
+      extraArgs: this.extraArgs, extensions: !!c?.extension });
     this.proc = proc; this.headless = headless;
     proc.on('exit', () => {
       if (this.proc !== proc) return;
@@ -31,6 +35,7 @@ export class Browser {
     });
     this.cdp = cdp;
     this.cdp.on((m, p, s) => this.event(m, p, s));
+    this.extensionId = c?.extension ? (await cdp.send('Extensions.loadUnpacked', { path: c.extension })).id : null;
     await this.cdp.send('Target.setDiscoverTargets', { discover: true });
     const { targetInfos } = await this.cdp.send('Target.getTargets');
     const pages = targetInfos.filter((t) => t.type === 'page');
@@ -53,6 +58,7 @@ export class Browser {
   }
 
   async close() {
+    if (this.watch) clearInterval(this.watch.timer);
     await this.shutdown();
     if (!this.profile) return;
     // browser helper processes can still write into the profile for a moment after the browser exits
@@ -68,7 +74,7 @@ export class Browser {
   async attach(targetId) {
     const { sessionId } = await this.cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const tab = { id: ++this.seq, targetId, sessionId, url: 'about:blank', title: '', mainFrameId: null, frameId: null, frameUrl: null,
-      refs: new Map(), nodeRef: new Map(), refSeq: 0, lastSnapshot: null, contexts: new Map(),
+      refs: new Map(), nodeRef: new Map(), refSeq: 0, lastSnapshot: null, contexts: new Map(), crefs: new Map(), crefSeq: 0, styleUndo: [], sheets: new Map(),
       console: [], network: [], requests: new Map(), dialogs: [], dialogPolicy: { accept: true, text: '' },
       inflight: 0, lastNet: 0, navTs: 0, loading: false, waiters: new Set(),
       // main-frame navigation tracking: which document is committed, which has loaded, and event counters
@@ -78,6 +84,7 @@ export class Browser {
     await Promise.all(['Page', 'Runtime', 'Network', 'DOM', 'Log'].map((d) => s(`${d}.enable`)));
     await s('Accessibility.enable').catch(() => {});
     await this.applyViewport(tab);
+    await this.applyNetwork(tab);
     const { frameTree } = await s('Page.getFrameTree');
     tab.mainFrameId = frameTree.frame.id; tab.url = frameTree.frame.url; tab.loaderId = frameTree.frame.loaderId;
     return tab;
@@ -102,6 +109,12 @@ export class Browser {
     if (!this.headless) return; // a visible window (handoff) keeps the user's own window size
     const { width, height, scale } = this.viewport;
     return this.send(tab, 'Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile: false });
+  }
+
+  /** Extra request headers and the user agent (header / useragent) on a tab; attach() calls it, so new tabs and relaunches keep them. */
+  async applyNetwork(tab) {
+    await this.send(tab, 'Network.setExtraHTTPHeaders', { headers: this.headers });
+    if (this.userAgent) await this.send(tab, 'Network.setUserAgentOverride', { userAgent: this.userAgent });
   }
 
   event(method, p, sessionId) {
@@ -163,6 +176,7 @@ export class Browser {
         if (!p.frame.parentId) {
           tab.mainFrameId = p.frame.id; tab.url = p.frame.url; tab.loaderId = p.frame.loaderId; tab.navSeq++;
           tab.refs.clear(); tab.nodeRef.clear(); tab.refSeq = 0; tab.frameId = null; tab.frameUrl = null;
+          tab.crefs.clear(); tab.crefSeq = 0; tab.styleUndo = [];
           this.wake(tab);
         }
         break;
@@ -171,6 +185,7 @@ export class Browser {
       case 'Page.frameStoppedLoading':
         if (main(p.frameId)) { tab.loading = false; tab.loadedLoader = tab.loaderId; tab.stoppedAtStart = tab.startSeq; this.wake(tab); }
         break;
+      case 'CSS.styleSheetAdded': tab.sheets.set(p.header.styleSheetId, p.header.sourceURL); break;
       case 'Page.loadEventFired': tab.loading = false; tab.loadedLoader = tab.loaderId; this.wake(tab); break;
     }
   }
@@ -231,8 +246,8 @@ export class Browser {
 
   /** objectId of a CSS selector (auto-waits briefly) or an @e ref from snapshot (stale refs fail fast). */
   async element(tab, target, waitMs = 3000) {
-    if (/^@e\d+$/.test(target)) {
-      const backendNodeId = tab.refs.get(target);
+    if (/^@[ec]\d+$/.test(target)) {
+      const backendNodeId = (target[1] === 'c' ? tab.crefs : tab.refs).get(target);
       if (!backendNodeId) throw new Error(`unknown ref ${target}: run \`mis browse snapshot\` first (refs reset on navigation)`);
       const stale = new Error(`stale ref ${target}: the element is no longer in the page; run \`mis browse snapshot\` again`);
       const obj = await this.send(tab, 'DOM.resolveNode', { backendNodeId }).catch(() => { throw stale; });

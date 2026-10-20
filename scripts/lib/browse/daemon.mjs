@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { Browser } from './browser.mjs';
 import { runCommand, printPdf } from './actions.mjs';
 import { findChrome } from './chrome.mjs';
+import { homeDir } from '../home.mjs';
 
 const dir = process.argv[2];
 const stateFile = join(dir, 'state.json');
@@ -38,13 +39,15 @@ async function shutdown(code, why) {
 
 function touch() {
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => (browser.handoff ? touch() : shutdown(0, 'idle')), IDLE_MS);
+  // a visible window the user works in (handoff, connect) is not idle even when no command arrives
+  idleTimer = setTimeout(() => (browser.handoff || browser.connected ? touch() : shutdown(0, 'idle')), IDLE_MS);
 }
 
 function status() {
   const t = browser.tabs.get(browser.active);
   return { running: true, pid: process.pid, port: server.address().port, chromePid: browser.proc?.pid ?? null, browser: exe,
-    mode: browser.handoff ? 'handoff' : browser.headless ? 'headless' : 'headed', handoff: browser.handoff, tabs: browser.tabs.size,
+    mode: browser.handoff ? 'handoff' : browser.connected ? 'connected' : browser.headless ? 'headless' : 'headed', handoff: browser.handoff, tabs: browser.tabs.size,
+    ...(browser.connected ? { profile: browser.connected.profile, extensionId: browser.extensionId } : {}), watching: !!browser.watch,
     activeTab: t?.id ?? null, url: t?.url ?? null, viewport: browser.viewport, idleShutdownMin: Math.round(IDLE_MS / 600) / 100, stateDir: dir, startedAt: started };
 }
 
@@ -93,7 +96,7 @@ try {
         try {
           const before = browser.proc?.pid;
           const result = body.cmd === '_render-pdf' ? await renderPdf(body.args[0])
-            : await runCommand(browser, body.cmd, body.args ?? [], { cwd: body.cwd, remote: !!body.remote, inChain: false });
+            : await runCommand(browser, body.cmd, body.args ?? [], { cwd: body.cwd, remote: !!body.remote, inChain: false, data: body.data, stateDir: dir, home: homeDir() });
           if (browser.proc?.pid !== before) writeState(); // handoff/resume relaunched the browser
           reply(200, { ok: true, result });
         } catch (e) { reply(200, { ok: false, error: e.message }); }
