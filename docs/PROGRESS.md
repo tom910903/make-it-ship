@@ -2,6 +2,7 @@ STATUS: DONE
 CURRENT: FINAL
 VERIFY: PASSED
 
+> 다른 장비에서 이어서 작업할 때는 `docs/HANDOFF.md`(남은 일·시작 방법·규칙)부터 읽는다.
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
 > 작업 방식: 작업마다 실패 테스트 → 최소 구현 → `npm test` 전체 통과 → 커밋 `M<n>-<id>: 요약`.
 
