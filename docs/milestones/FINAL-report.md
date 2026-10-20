@@ -61,6 +61,8 @@
 
 단계별 절차, PASS 조건, 결과 기록란: `docs/milestones/NEEDS_HUMAN.md`.
 
+후속(2026-10-20): NH-1~NH-4는 Claude가 tmux 안의 대화형 `claude`로 자동 확인했다. 확인 창이 실제로 떴고, 거절하면 상태가 유지되며, 승인하면 진행됐다. 상세는 `docs/milestones/NH-auto-check.md`다. 사람 확인이 아니므로 PASS로 기록하지 않는다. 미발생 경로는 두 가지다: NH-2 재시도 상한, NH-4 승인 후 병합 충돌.
+
 | ID | 항목 | 절차 문서 |
 |---|---|---|
 | NH-1 | 대화형 세션의 `approve plan` 확인 창. 승인·거절 시 동작 | `docs/milestones/NEEDS_HUMAN.md` |

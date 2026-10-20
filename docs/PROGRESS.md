@@ -110,7 +110,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
 ## NEEDS_HUMAN
-전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 미확인이며 통과로 기록하지 않았다.
+전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님).
 - **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용, BSP 실제 빌드·타깃. 절차: `docs/milestones/M5-e2e.md`. 미확인
 - **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: `docs/milestones/NEEDS_HUMAN.md` NH-5. 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
@@ -121,6 +121,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 ## BLOCKED
 
 ## PROPOSALS
+- (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 두고 `.worktrees/<run>-T<n>/…` 파일을 편집하면 guard가 그 task 소유 파일도 계획 범위 밖으로 보고 ask를 낸다. 경로가 해당 worktree 안이면 그 task의 files로 판정하도록 바꾸는 것을 제안한다. 지금은 과잉 확인일 뿐 통과시키지는 않는다.
 
 ## SPEC_CHANGES
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
