@@ -59,7 +59,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task",
         "hooks": [
           {
             "type": "command",
@@ -76,6 +76,28 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" PostToolUseFailure",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" PreCompact",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" SessionEnd",
+            "timeout": 10
           }
         ]
       }

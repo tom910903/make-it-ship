@@ -63,7 +63,17 @@ Installing the plugin is enough; nothing else needs to be installed for these.
 - **Freeze:** `mis freeze <dir>` denies edits outside one directory; `mis unfreeze` lifts it.
 - **After tool calls:** matching `.cursor/rules` and `.github/instructions` files are shown once per session (Claude Code already loads `.claude/rules`), a reminder to run tests after many edits, and a root-cause hint after the same call fails three times.
 - **Status line:** `MIS ▸ idle · style full · frozen src · main · <model> · ctx 42%`, or the run progress when a run exists (register it from `mis init`'s `hud.statusLine`). To keep a status line you already had, put its command in `statusLine.chain` in `~/.make-it-ship/config.json`; its first line is appended after ` | `.
+- **Memory across sessions:** `<remember>…</remember>` in a subagent result or your last answer is kept for 7 days, `<remember priority>…</remember>` permanently; priority notes, project directives and the wiki index are injected at session start and again after compaction.
 - Per-user state lives in `~/.make-it-ship/` (`MIS_STATE_HOME` overrides it). These hooks never block a session on their own errors; only the guard fails closed.
+
+## Tools (MCP server `mis`, bundled)
+The plugin ships an MCP server (`.mcp.json`), so these tools appear as `mcp__plugin_make-it-ship_mis__<name>`:
+- **Memory:** `notepad_*` (priority / working 7 days / manual), `project_memory_*` (stack, commands, notes, directives), `state_*` (mode state; the run, loop, style and freeze are shown live and read-only), `shared_memory_*` (namespaced key/value with TTL for agents). Stored under `.git/make-it-ship/memory/`, never committed.
+- **Knowledge:** `wiki_*` (pages in `.make-it-ship/wiki/`, git-ignored by default — delete its `.gitignore` to commit them), `session_search` (past Claude Code sessions of this project, read-only), `trace_timeline` / `trace_summary` (run events and hook activity), `deepinit_manifest`, `merge_readiness_*` (a check-your-understanding session before merging, using the run's evidence).
+- **Code:** `lsp_*` (hover, definition, references, symbols, diagnostics, rename, code actions — uses language servers already installed: typescript-language-server, pyright/pylsp, gopls, rust-analyzer, clangd, sourcekit-lsp), `ast_grep_search` / `ast_grep_replace` (needs the `ast-grep` CLI), `python_repl` (a persistent `python3`; it is ordinary Python with the same reach as running python from Bash). A missing binary returns an install hint instead of a result.
+- **Skills:** `list_skills`, `load_skills_local`, `load_skills_global`.
+- `ast_grep_replace` and `lsp_rename` change files only with `apply: true`; while a run is active the guard asks before they (and `lsp_code_action_resolve`) rewrite files, and freeze applies to them.
+- Note: Claude Code does not load a plugin's MCP server when started with `--strict-mcp-config`.
 
 ## `mis` CLI
 You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`.

@@ -2,6 +2,7 @@
 // Always-on hooks (M6): SessionStart, SubagentStart, ... One entry, event name in argv[2].
 // Fail-open by design: any error or bad input prints nothing and exits 0 so a session is never blocked.
 // (guard.mjs is the separate fail-closed PreToolUse hook.)
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleRules, currentStyle } from './lib/style.mjs';
@@ -10,6 +11,19 @@ import { contextPercent } from './lib/context.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = (event, text) => text ? { hookSpecificOutput: { hookEventName: event, additionalContext: text } } : null;
+
+/** Text of the last assistant message in a transcript (for <remember> tags). */
+function lastAssistantText(path) {
+  if (!path) return '';
+  const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
+  for (let i = lines.length - 1; i >= 0 && i >= lines.length - 50; i--) {
+    try {
+      const e = JSON.parse(lines[i]);
+      if (e.type === 'assistant') return (e.message?.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+    } catch { /* partial line */ }
+  }
+  return '';
+}
 
 const handlers = {
   async SessionStart(input) {
@@ -28,6 +42,11 @@ const handlers = {
       if (loop.active) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
     } catch { /* not a git repo */ }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
+    try {
+      const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');
+      parts.push(mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
+      if (input.source === 'compact') parts.push(mem.preCompactContext(cwd), wiki.wikiPreCompact(cwd));
+    } catch { /* memory and wiki are optional context */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
     parts.push(buildCodeMap(cwd));
     return context('SessionStart', parts.filter(Boolean).join('\n\n'));
@@ -45,6 +64,7 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
+    try { (await import('./lib/memory.mjs')).extractRemember(lastAssistantText(input.transcript_path), cwd); } catch { /* best effort */ }
     const { loopForSession, writeLoop, endLoop, loopDecision, lastReportAt } = await import('./lib/loop.mjs');
     const loop = loopForSession(cwd, input.session_id);
     if (loop.active) {
@@ -89,6 +109,10 @@ const handlers = {
       if (sess.edits % EDIT_REMINDER_EVERY === 0) out.push(`${sess.edits} edits since the last test run: run the tests (or mis check) and read the output before claiming progress.`);
     }
     if (input.tool_name === 'Bash' && isTestCommand(ti.command)) { sess.edits = 0; sess.failures = {}; }
+    // <remember> tags count only in subagent results (the model's own words), never in files or command output it read.
+    if (['Agent', 'Task'].includes(input.tool_name)) {
+      try { (await import('./lib/memory.mjs')).extractRemember(JSON.stringify(input.tool_response ?? ''), input.cwd || process.cwd()); } catch { /* best effort */ }
+    }
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
     return context('PostToolUse', out.join('\n\n'));
   },
@@ -102,6 +126,15 @@ const handlers = {
     return n >= 3 && n % 3 === 0
       ? context('PostToolUseFailure', `This exact ${input.tool_name} call has failed ${n} times. Stop retrying it: find the root cause first (reproduce, read the full error, test one hypothesis at a time; /make-it-ship:debug).`)
       : null;
+  },
+  async PreCompact(input) {
+    const cwd = input.cwd || process.cwd();
+    const text = [(await import('./lib/memory.mjs')).preCompactContext(cwd), (await import('./lib/wiki.mjs')).wikiPreCompact(cwd)].filter(Boolean).join('\n\n');
+    return text ? { systemMessage: `Make It Ship keeps this across compaction (re-injected at the next session start):\n${text}` } : null;
+  },
+  async SessionEnd(input) {
+    (await import('./lib/wiki.mjs')).wikiSessionEnd(input.cwd || process.cwd(), input);
+    return null;
   },
   SubagentStart(input) {
     const rules = styleRules(currentStyle(input.session_id));
@@ -118,6 +151,7 @@ try {
   for await (const c of process.stdin) raw += c;
   let input = {};
   try { input = raw.trim() ? JSON.parse(raw.replace(/^﻿/, '')) : {}; } catch { input = {}; }
+  try { (await import('./lib/trace.mjs')).appendTrace({ cwd: input.cwd, hook: process.argv[2], tool: input.tool_name }); } catch { /* tracing is optional */ }
   const out = await handlers[process.argv[2]]?.(input);
   if (out) process.stdout.write(JSON.stringify(out) + '\n');
 } catch { /* fail-open */ }
