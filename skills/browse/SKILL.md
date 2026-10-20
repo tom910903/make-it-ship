@@ -30,6 +30,7 @@ mis browse screenshot qa/shots/home.png      # full page; --viewport, or a selec
 ## Safety: local is free, real sites ask
 - `storage`, `js`, `eval` and `upload` run directly on local pages: `localhost`, `127.x`, `*.localhost`, `file:` and pages from `load-html`. The page counts by the origin the browser gives it, so a `blob:` page or an `about:blank` popup made by a real site counts as that site, and pages with no real origin (`about:blank`, `data:`) are not local.
 - On any other site, page JS and storage can read session cookies or tokens, and `upload` sends a local file out of the machine (internal data must not go to outside services). There they refuse unless you add `--remote`, and the guard asks the user first. Plain `goto` to a real site does not ask.
+- `upload` is also judged by where the file goes: on a local page whose form posts to a real site it refuses without `--remote`, and while a page holds a file attached without `--remote` the browser blocks every request to a non-local host (the command that triggered it fails and names the request). To send a file to a real site on purpose, attach it with `upload ... --remote`.
 - `mis browse cdp <Domain.method> [json]` (raw DevTools Protocol) always asks, and is refused inside `chain`.
 - Never type real passwords into reports. Write `[REDACTED]`.
 
@@ -37,7 +38,7 @@ mis browse screenshot qa/shots/home.png      # full page; --viewport, or a selec
 `mis browse handoff "log in with your SSO"` reopens the same pages in a visible Chrome window on the same profile. Tell the user what to do there. When they say they are done, run `mis browse resume`. It returns to headless with their cookies kept and prints a fresh `snapshot -i`. Without a display (Linux with no `DISPLAY`) handoff is BLOCKED.
 
 ## Visual checks and PDFs
-- `mis visual-verdict <screenshot.png> <reference.png>` returns JSON (`score` 0–100, `verdict`, `differences`, `diffImage`). The score counts differing pixels against the page content (a shared background is not counted); below 90 the command exits 1. The score is only an aid: **Read both images and the diffImage and judge yourself** whether they match; your judgment is the verdict, and a passing score alone never means the design is done. Fix the regions it lists, take a new screenshot, and run it again.
+- `mis visual-verdict <screenshot.png> <reference.png>` returns JSON (`score` 0–100, `verdict`, `differences`, `diffImage`). The score counts differing pixels against the page content (a shared background is not counted, a few stray pixels cost a point each, and a whole page moved by up to 3px is aligned first at a point per px, reported as `offset`); below 90 the command exits 1. The score is only an aid: **Read both images and the diffImage and judge yourself** whether they match; your judgment is the verdict, and a passing score alone never means the design is done. Fix the regions it lists, take a new screenshot, and run it again.
 - `mis pdf notes.md [-o notes.pdf] [--page-size a4] [--margins 1in] [--no-page-numbers]` turns markdown into a print-ready PDF in the same Chrome. Remote images are blocked unless you pass `--allow-network`.
 
 ## Lifecycle

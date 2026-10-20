@@ -223,14 +223,15 @@ test('M8 D0: a blob: page and an about:blank popup made by a real site count as 
   failed(b('chain', JSON.stringify([['storage']])), /--remote/);
   ok(b('closetab', String(popup.id)));
   ok(b('goto', `${base}/xframe`));
-  // a remote frame in a local page is judged by the frame; when Chrome isolates it in its own process it cannot be selected at all
-  const sel = b('frame', '#x');
-  if (sel.code === 0) failed(b('js', '1'), /non-local page \(http:\/\/shop\.test:\d+\)/);
-  else assert.match(sel.err, /frame has no document/);
+  // a remote frame in a local page is judged by the frame, not by the page around it (M8 R2-5: always selectable)
+  assert.match(ok(b('frame', '#x')), /Switched to frame http:\/\/shop\.test:\d+\/next/);
+  failed(b('js', '1'), /non-local page \(http:\/\/shop\.test:\d+\)/);
   ok(b('frame', 'main'));
   assert.equal(ok(b('js', 'document.title')).trim(), 'X');
   ok(b('goto', 'data:text/html,<p>x</p>'));
-  failed(b('js', '1'), /non-local page \(opaque origin\)/);
+  const opaque = b('js', '1');
+  failed(opaque, /non-local page \(opaque origin\)[\s\S]*cannot be shown to be local[\s\S]*--remote/);
+  assert.doesNotMatch(opaque.err, /cookies|storage/, 'an opaque document has no cookies or storage of its own');
   writeFileSync(join(dir, 'local.html'), '<title>Local file</title>');
   ok(b('goto', 'local.html'));
   assert.equal(ok(b('js', 'document.title')).trim(), 'Local file', 'file: pages stay local');
@@ -246,6 +247,45 @@ test('remote upload: sending a file to a non-local page needs --remote (the guar
   failed(b('chain', JSON.stringify([['upload', '#f', f]])), /--remote/);
   assert.equal(ok(b('js', 'document.querySelector("#f").files.length', '--remote')).trim(), '0', 'nothing was attached');
   ok(b('upload', '#f', f, '--remote'));
+});
+
+const hits = () => JSON.parse(spawnSync(process.execPath, ['-e', `fetch('${base}/hits').then((r) => r.text()).then((t) => process.stdout.write(t))`], { encoding: 'utf8' }).stdout);
+const remoteHits = () => hits().filter((h) => h.host.startsWith('shop.test'));
+
+test('M8 R2-1: a file attached without --remote never leaves the machine, whatever page holds it and however the page sends it', () => {
+  if (!chrome) return blocked(b('upload', '#f', 'x'));
+  const site = base.replace('127.0.0.1', 'shop.test');
+  const f = join(out, 'secret.txt'); writeFileSync(f, 'internal data');
+  // the verifier's repro: a local file page whose form posts to a real site
+  writeFileSync(join(dir, 'localform.html'), `<form method="post" action="${site}/up" enctype="multipart/form-data"><input type="file" id="f" name="f"><button id="send">Send</button></form>`);
+  ok(b('goto', 'localform.html'));
+  failed(b('upload', '#f', f), /upload[\s\S]*http:\/\/shop\.test:\d+[\s\S]*--remote/);
+  assert.equal(ok(b('js', 'document.querySelector("#f").files.length')).trim(), '0', 'nothing was attached');
+  ok(b('goto', `${base}/remoteform.html`));
+  failed(b('upload', '#f', f), /http:\/\/shop\.test:\d+\/up[\s\S]*--remote/);
+  ok(b('goto', `${base}/formaction.html`));
+  failed(b('upload', '#f', f), /http:\/\/shop\.test:\d+\/up[\s\S]*--remote/); // a submit button's formaction counts too
+  // page script sends the file: the browser blocks every non-local request while the page holds it
+  ok(b('goto', `${base}/jsupload.html`));
+  failed(b('upload', '#f', f), /blocked[\s\S]*shop\.test:\d+\/up\?onchange[\s\S]*--remote/);
+  failed(b('click', '#send'), /blocked[\s\S]*shop\.test:\d+\/up\?click/);
+  failed(b('click', '#redir'), /blocked[\s\S]*shop\.test:\d+\/up\?redirect/);
+  b('click', '#popup'); // the popup's request is blocked while click is still settling or just after: either way it must fail
+  until(() => ok(b('tabs')).find((t) => t.title === 'blocked' || t.title === 'sent'), 'the popup to try sending');
+  assert.ok(ok(b('tabs')).some((t) => t.title === 'blocked'), 'the popup was blocked too');
+  ok(b('goto', `${base}/next`)); ok(b('back'));
+  b('click', '#send'); // back may restore the page with its file (still blocked) or reload it empty: either way nothing may reach the site
+  assert.deepEqual(remoteHits(), [], 'no request reached the remote site');
+  // local destinations take the file directly; --remote sends it on purpose; ordinary remote browsing works afterwards
+  ok(b('goto', `${base}/localform.html`));
+  ok(b('upload', '#f', f));
+  assert.match(ok(b('click', '#send')), /→ http:\/\/127\.0\.0\.1:\d+\/up/);
+  assert.ok(hits().some((h) => h.host.startsWith('127.0.0.1') && h.url === '/up' && h.bytes > 0));
+  ok(b('goto', `${base}/remoteform.html`));
+  ok(b('upload', '#f', f, '--remote'));
+  assert.match(ok(b('click', '#send')), /→ http:\/\/shop\.test:\d+\/up/);
+  assert.equal(remoteHits().length, 1);
+  ok(b('goto', `${site}/next`));
 });
 
 test('M8 D1: in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {
@@ -356,4 +396,17 @@ test('idle shutdown', async () => {
   // poll the process, not `status`: every request to the daemon counts as activity
   until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 'the idle shutdown', 60000);
   assert.equal(ok(mis(d2, ['browse', 'status'], { env })).running, false);
+});
+
+test('M8 R2-2: real screenshots: the same page moved 2px scores high (pass), a different page in the same layout fails', () => {
+  if (!chrome) return blocked(b('goto', 'about:blank'));
+  const body = (margin, h, p, btn) => `<body style="margin:${margin}"><style>body{font:16px sans-serif}</style><h1>${h}</h1><p>${p}</p><button>${btn}</button>`;
+  writeFileSync(join(dir, 'vv-a.html'), body('20px', 'Demo', 'Welcome to the demo page. It has a short paragraph.', 'Start'));
+  writeFileSync(join(dir, 'vv-moved.html'), body('22px 20px', 'Demo', 'Welcome to the demo page. It has a short paragraph.', 'Start'));
+  writeFileSync(join(dir, 'vv-other.html'), body('20px', 'Second', 'This is another page with different words in it.', 'Next'));
+  for (const f of ['vv-a', 'vv-moved', 'vv-other']) { ok(b('goto', `${f}.html`)); ok(b('screenshot', '--viewport', join(out, `${f}.png`))); }
+  const moved = mis(dir, ['visual-verdict', join(out, 'vv-moved.png'), join(out, 'vv-a.png')]).json;
+  assert.ok(moved.score >= 95 && moved.verdict === 'pass', JSON.stringify(moved));
+  const other = mis(dir, ['visual-verdict', join(out, 'vv-other.png'), join(out, 'vv-a.png')]).json;
+  assert.ok(other.score < 50 && other.verdict === 'fail', JSON.stringify(other));
 });

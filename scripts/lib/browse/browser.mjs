@@ -10,6 +10,7 @@ const push = (arr, x) => { arr.push(x); if (arr.length > CAP) arr.splice(0, arr.
 const fmtArg = (a) => a.value !== undefined ? (typeof a.value === 'string' ? a.value : JSON.stringify(a.value)) : a.unserializableValue ?? a.description ?? a.type;
 const errText = (d) => (d.exception?.description ?? d.text ?? 'error').split('\n')[0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pageKey = (url) => `url:${String(url).split('#')[0]}`;
 
 export class Browser {
   constructor({ exe, extraArgs = [], headlessOnly = false }) {
@@ -17,12 +18,13 @@ export class Browser {
     this.tabs = new Map(); this.bySession = new Map(); this.seq = 0; this.active = null;
     this.viewport = { width: 1280, height: 720, scale: 1 };
     this.headless = true; this.handoff = null; this.profile = null; this.proc = null; this.cdp = null;
+    this.blocked = []; // requests refused because a page holds a file attached without --remote (M8 R2-1)
   }
 
   async start(headless = true) {
     this.profile ??= mkdtempSync(join(tmpdir(), 'mis-browse-profile-'));
     const { proc, cdp } = await launchChrome({ exe: this.exe, userDataDir: this.profile, headless: headless || this.headlessOnly, extraArgs: this.extraArgs });
-    this.proc = proc; this.headless = headless;
+    this.proc = proc; this.headless = headless; this.autoAttached = false;
     proc.on('exit', () => {
       if (this.proc !== proc) return;
       this.proc = null;
@@ -72,10 +74,12 @@ export class Browser {
       console: [], network: [], requests: new Map(), dialogs: [], dialogPolicy: { accept: true, text: '' },
       inflight: 0, lastNet: 0, navTs: 0, loading: false, waiters: new Set(),
       // main-frame navigation tracking: which document is committed, which has loaded, and event counters
-      loaderId: null, loadedLoader: null, navSeq: 0, sameDocSeq: 0, startSeq: 0, stoppedAtStart: 0, pinned: null };
+      loaderId: null, loadedLoader: null, navSeq: 0, sameDocSeq: 0, startSeq: 0, stoppedAtStart: 0, pinned: null,
+      holds: new Set(), intercepting: false };
     this.tabs.set(tab.id, tab); this.bySession.set(sessionId, tab);
     const s = (m, p) => this.send(tab, m, p);
     await Promise.all(['Page', 'Runtime', 'Network', 'DOM', 'Log'].map((d) => s(`${d}.enable`)));
+    if (this.holding) await this.intercept(tab); // e.g. a popup of a page that holds a local-only file
     await s('Accessibility.enable').catch(() => {});
     await this.applyViewport(tab);
     const { frameTree } = await s('Page.getFrameTree');
@@ -114,6 +118,8 @@ export class Browser {
       if (gone) { this.tabs.delete(gone.id); this.bySession.delete(gone.sessionId); if (this.active === gone.id) this.active = [...this.tabs.keys()].at(-1) ?? null; }
       return;
     }
+    if (method === 'Target.attachedToTarget' && !sessionId) return this.popupAttached(p);
+    if (method === 'Fetch.requestPaused') return this.screen(sessionId, p);
     const tab = this.bySession.get(sessionId);
     if (!tab) return;
     const main = (frameId) => frameId === tab.mainFrameId;
@@ -166,13 +172,64 @@ export class Browser {
           this.wake(tab);
         }
         break;
-      case 'Page.navigatedWithinDocument': if (main(p.frameId)) { tab.url = p.url; tab.sameDocSeq++; this.wake(tab); } break;
+      case 'Page.navigatedWithinDocument': if (main(p.frameId)) { if (tab.holds.has(tab.loaderId)) tab.holds.add(pageKey(p.url)); tab.url = p.url; tab.sameDocSeq++; this.wake(tab); } break;
       case 'Page.frameStartedLoading': if (main(p.frameId)) { tab.loading = true; tab.startSeq++; this.wake(tab); } break;
       case 'Page.frameStoppedLoading':
         if (main(p.frameId)) { tab.loading = false; tab.loadedLoader = tab.loaderId; tab.stoppedAtStart = tab.startSeq; this.wake(tab); }
         break;
       case 'Page.loadEventFired': tab.loading = false; tab.loadedLoader = tab.loaderId; this.wake(tab); break;
     }
+  }
+
+  /**
+   * M8 R2-1: a file attached by `upload` without --remote may only go to local destinations. The page holding it is
+   * remembered by its document (loaderId) and its URLs: back/forward restores a form's chosen files into a new document
+   * at the same URL, so that URL stays held for the tab's lifetime (over-blocking a later fresh visit is the safe side).
+   * While any tab shows a held page, every tab's requests to non-local hosts fail (form posts, fetch/XHR, beacons,
+   * redirects, popups, workers). Interception is armed before the file is attached, so an onchange upload cannot slip out.
+   * shortcut: WebSocket handshakes are not visible to the Fetch domain and are not blocked; see PROGRESS RISKS.
+   */
+  async holdLocalOnly(tab) {
+    tab.holds.add(tab.loaderId).add(pageKey(tab.url));
+    for (const t of this.tabs.values()) await this.intercept(t);
+    if (this.autoAttached) return;
+    // pages opened later (popups the holder hands the file to) start paused until their requests are intercepted too
+    await this.cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true, filter: [{ type: 'page' }] });
+    this.autoAttached = true;
+  }
+
+  async popupAttached({ sessionId, waitingForDebugger }) {
+    const s = (m, p = {}) => this.cdp.send(m, p, sessionId);
+    if (!waitingForDebugger) return s('Target.detachFromTarget', {}).catch(() => {}); // an existing tab: it has its own session
+    await s('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }).catch(() => {});
+    await s('Runtime.runIfWaitingForDebugger').catch(() => {});
+  }
+
+  get holding() { return [...this.tabs.values()].some((t) => t.holds.has(t.loaderId) || t.holds.has(pageKey(t.url))); }
+
+  async intercept(tab) {
+    if (tab.intercepting) return;
+    await this.send(tab, 'Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] });
+    tab.intercepting = true; // stays on: deciding per request keeps a restored page covered from its first request
+  }
+
+  screen(sessionId, p) {
+    let block = true; // fail closed if deciding throws
+    try {
+      const tab = this.bySession.get(sessionId);
+      // the agent's own goto/back/forward/reload leaves the page (and the file) behind: its main-frame document request
+      // (and that request's redirects) may go anywhere
+      const leaving = tab?.leaving && p.resourceType === 'Document' && p.frameId === tab.mainFrameId;
+      block = this.holding && !leaving && !isLocalOrigin(p.request.url);
+    } catch { /* block */ }
+    if (block) {
+      const what = `${p.request.method} ${p.request.url}`;
+      this.blocked.push(what);
+      const tab = this.bySession.get(sessionId);
+      if (tab) push(tab.console, { type: 'error', text: `mis browse blocked ${what}: a file attached without --remote may not leave this machine` });
+    }
+    this.cdp.send(block ? 'Fetch.failRequest' : 'Fetch.continueRequest', block ? { requestId: p.requestId, errorReason: 'BlockedByClient' } : { requestId: p.requestId }, sessionId)
+      .catch(() => {}); // the request may be gone already (tab closed, navigation cancelled it)
   }
 
   wake(tab) { for (const w of [...tab.waiters]) w(); }
@@ -193,18 +250,24 @@ export class Browser {
    */
   async navigate(tab, url) {
     const start = tab.startSeq;
-    const r = await this.send(tab, 'Page.navigate', { url });
-    if (r.errorText) throw new Error(`cannot open ${url}: ${r.errorText}`);
-    if (!r.loaderId) return null; // same-document navigation
-    await this.waitFor(tab, () => tab.loadedLoader === r.loaderId || tab.stoppedAtStart > start);
+    tab.leaving = true;
+    try {
+      const r = await this.send(tab, 'Page.navigate', { url });
+      if (r.errorText) throw new Error(`cannot open ${url}: ${r.errorText}`);
+      if (!r.loaderId) return null; // same-document navigation
+      await this.waitFor(tab, () => tab.loadedLoader === r.loaderId || tab.stoppedAtStart > start);
+    } finally { tab.leaving = false; }
     return [...tab.network].reverse().find((q) => q.type === 'Document' && q.start >= tab.navTs)?.status ?? null;
   }
 
   /** Run a navigation command without a loaderId (history, reload) and wait until a new document committed and stopped loading, or a same-document move. */
   async waitNav(tab, run, ms = 15000) {
     const nav = tab.navSeq, same = tab.sameDocSeq;
-    await run();
-    await this.waitFor(tab, () => tab.sameDocSeq > same || (tab.navSeq > nav && !tab.loading), ms, 'the page did not finish navigating');
+    tab.leaving = true;
+    try {
+      await run();
+      await this.waitFor(tab, () => tab.sameDocSeq > same || (tab.navSeq > nav && !tab.loading), ms, 'the page did not finish navigating');
+    } finally { tab.leaving = false; }
   }
 
   /** After an input event: if it started a page load, wait for it (bounded). */

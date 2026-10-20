@@ -212,6 +212,11 @@ test('M8 D12/D5: every skill that defines the `mis` shorthand gives a function t
   }
   const d = classify({ tool_name: 'Bash', tool_input: { command: `${FN}; mis browse cdp X.y` }, cwd: ROOT }, { repoRoot: ROOT, activeRun: false }).decision;
   assert.equal(d, 'ask');
+  // M8 R2-6: agents too: no plain-text `node …` alias for mis (it invites M="node …"; $M, which fails in zsh)
+  for (const f of readdirSync(join(ROOT, 'agents')).map((a) => `agents/${a}`)) {
+    assert.doesNotMatch(read(f), /`mis`( <args>)? (=|means)[^\n]*`node /, `${f}: mis is the shell function, not a node alias`);
+    if (/`mis`( <args>)? (=|means)/.test(read(f))) assert.ok(read(f).includes('mis() {'), `${f} defines mis as the function`);
+  }
   const zsh = ['/bin/zsh', '/usr/bin/zsh'].find(existsSync);
   if (!zsh) return; // no zsh on this machine: the bash form is what runs
   const r = spawnSync(zsh, ['-fc', `${FN}; mis browse help`], { env: { ...process.env, CLAUDE_PLUGIN_ROOT: ROOT }, encoding: 'utf8' });

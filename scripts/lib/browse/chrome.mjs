@@ -22,6 +22,21 @@ export function findChrome(env = process.env) {
   return candidates.find(isFile) ?? null;
 }
 
+// M8 R2-3: flags that would reopen a DevTools port, drop the same-origin policy, point at a real profile, load code or
+// reroute traffic. Matched on the switch name, any number of leading dashes, any case.
+const DENIED = /^(remote-debugging-.*|remote-allow-origins|disable-web-security|user-data-dir|profile-directory|load-extension|disable-extensions-except|allow-file-access-from-files|proxy-.*|disable-site-isolation-.*|disable-features)$/;
+
+/** MIS_BROWSE_CHROME_ARGS → extra Chrome flags (split before each "--"); throws on anything risky. */
+export function chromeArgs(value = '') {
+  const args = value.trim() ? value.trim().split(/\s+(?=-)/) : [];
+  for (const a of args) {
+    if (!a.startsWith('-')) throw new Error(`MIS_BROWSE_CHROME_ARGS: "${a}" is not a flag (Chrome would open it as a page at startup)`);
+    const name = a.replace(/^-+/, '').split('=')[0].toLowerCase();
+    if (DENIED.test(name)) throw new Error(`MIS_BROWSE_CHROME_ARGS: ${a} is not allowed (it would weaken the browser's isolation from this machine and other sites)`);
+  }
+  return args;
+}
+
 /**
  * Launch the browser on a throwaway profile with CDP over a pipe (fds 3/4): no DevTools TCP port that other local
  * processes could reach without the daemon's token. Resolves once the browser answers.
@@ -32,8 +47,8 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [] 
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
     '--disable-domain-reliability', '--disable-client-side-phishing-detection', '--metrics-recording-only',
     '--password-store=basic', '--use-mock-keychain', '--disable-extensions',
-    // cross-origin iframes stay in-process so `frame` can reach them through one session
-    '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process',
+    // cross-origin iframes stay in-process so `frame` can reach them through one session (the features alone no longer do it)
+    '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process', '--disable-site-isolation-trials',
     ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...extraArgs, 'about:blank'];
   const proc = spawn(exe, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], detached: false });
   const cdp = new CDP(proc.stdio[3], proc.stdio[4]);

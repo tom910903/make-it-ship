@@ -84,9 +84,11 @@ function visualVerdict(argv, cwd) {
   const diffImage = resolve(cwd, outArg ?? `${resolve(cwd, shot).replace(/\.png$/i, '')}.diff.png`);
   writeFileSync(diffImage, encodePng(r.diff));
   const verdict = r.score >= threshold ? 'pass' : r.score >= 50 ? 'revise' : 'fail';
+  const offset = r.shift && { dx: -r.shift.dx || 0, dy: -r.shift.dy || 0 }; // where the screenshot's content sits relative to the reference
   const pct = Math.round((r.diffPixels * 1000) / Math.max(1, r.contentPixels)) / 10;
   const differences = [
     ...(r.sizeMatch ? [] : [`size differs: screenshot ${a.width}x${a.height}, reference ${b.width}x${b.height}`]),
+    ...(offset ? [`the screenshot's content is offset from the reference by ${offset.dx}px horizontally, ${offset.dy}px vertically (compared after aligning; each px costs a point)`] : []),
     ...r.hotspots.map((h) => `region x ${h.x}-${h.x + h.width}, y ${h.y}-${h.y + h.height}: ${h.percent}% of its pixels differ`),
   ];
   const suggestions = [
@@ -97,7 +99,7 @@ function visualVerdict(argv, cwd) {
   return { score: r.score, verdict, pass: verdict === 'pass', threshold, differences, suggestions,
     reasoning: `${r.diffPixels} of ${r.contentPixels} content pixels (${pct}%; the shared background is not counted) differ beyond tolerance ${tolerance}; score ${r.score} ${verdict === 'pass' ? '>=' : '<'} ${threshold}.`,
     note: 'The pixel score is only an aid. Read both images (and diffImage) and judge yourself whether the screenshot matches the reference; a pass here is not a visual verdict.',
-    diffImage, width: Math.max(a.width, b.width), height: Math.max(a.height, b.height), sizeMatch: r.sizeMatch, diffPixels: r.diffPixels, contentPixels: r.contentPixels, totalPixels: r.totalPixels, tolerance, hotspots: r.hotspots };
+    diffImage, width: Math.max(a.width, b.width), height: Math.max(a.height, b.height), sizeMatch: r.sizeMatch, diffPixels: r.diffPixels, contentPixels: r.contentPixels, totalPixels: r.totalPixels, tolerance, hotspots: r.hotspots, ...(offset ? { offset } : {}) };
 }
 
 export const browseCommands = { browse, pdf, 'visual-verdict': visualVerdict };

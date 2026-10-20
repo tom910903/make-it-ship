@@ -81,40 +81,85 @@ export function encodePng({ width, height, data }) {
 /**
  * Pixel diff over the union of both canvases (area only one image covers counts as different).
  * A pixel differs when any channel, composited over white, differs by more than `tolerance` (0-255).
- * The score is the share of *content* pixels that match: pixels that are background (the most common color of both
- * images) in both images are left out, so a large shared white page cannot make two different pages look alike.
- * @returns {{score:number, diffPixels:number, contentPixels:number, totalPixels:number, sizeMatch:boolean, hotspots:object[], diff:object}}
+ * The score is the share of *content* that matches: pixels that are background (the most common color of both images)
+ * in both are left out, so a large shared white page cannot make two different pages look alike. The denominator is at
+ * least 100 px, so a few stray pixels cost a point each, not the whole score (a percentage of the canvas would be too
+ * lenient: text pages are often under 1% content). The page may also be moved by up
+ * to `maxShift` px as a whole (each px of shift costs a point, reported as `shift`): a layout nudged by 2px scores high,
+ * while different text in the same layout still differs (whole-image shifts cannot line up different glyphs).
+ * @returns {{score:number, diffPixels:number, contentPixels:number, totalPixels:number, sizeMatch:boolean, hotspots:object[], diff:object, shift?:{dx:number, dy:number}}}
  */
-export function compareImages(a, b, { tolerance = 16, grid = 8 } = {}) {
+export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } = {}) {
   const W = Math.max(a.width, b.width), H = Math.max(a.height, b.height), total = W * H;
-  const diff = { width: W, height: H, data: new Uint8Array(total * 4) };
-  const cw = Math.ceil(W / grid), ch = Math.ceil(H / grid), cells = new Array(grid * grid).fill(0);
-  const over = (img, o, k) => 255 - ((255 - img.data[o + k]) * img.data[o + 3]) / 255;
+  const flat = (img) => { // RGB composited over white
+    const o = new Uint8Array(img.width * img.height * 3);
+    for (let i = 0, j = 0; i < img.data.length; i += 4, j += 3) for (let k = 0; k < 3; k++) o[j + k] = 255 - ((255 - img.data[i + k]) * img.data[i + 3]) / 255;
+    return o;
+  };
+  const fa = flat(a), fb = flat(b);
   const counts = new Map();
-  for (const img of [a, b]) for (let o = 0; o < img.data.length; o += 4) {
-    const key = ((over(img, o, 0) >> 3) << 10) | ((over(img, o, 1) >> 3) << 5) | (over(img, o, 2) >> 3);
+  for (const f of [fa, fb]) for (let o = 0; o < f.length; o += 3) {
+    const key = ((f[o] >> 3) << 10) | ((f[o + 1] >> 3) << 5) | (f[o + 2] >> 3);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   let bgKey = 0, best = -1;
   for (const [k, c] of counts) if (c > best) { best = c; bgKey = k; }
-  const bg = [((bgKey >> 10) << 3) + 4, (((bgKey >> 5) & 31) << 3) + 4, ((bgKey & 31) << 3) + 4];
-  const isBg = (img, o) => [0, 1, 2].every((k) => Math.abs(over(img, o, k) - bg[k]) <= Math.max(tolerance, 4));
-  let n = 0, shared = 0;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const o = (y * W + x) * 4, inA = x < a.width && y < a.height, inB = x < b.width && y < b.height;
-    const oa = (y * a.width + x) * 4, ob = (y * b.width + x) * 4;
-    let differs = !inA || !inB;
-    if (!differs) for (let k = 0; k < 3 && !differs; k++) differs = Math.abs(over(a, oa, k) - over(b, ob, k)) > tolerance;
-    if (!differs && isBg(a, oa) && isBg(b, ob)) shared++;
-    if (differs) { n++; cells[Math.floor(y / ch) * grid + Math.floor(x / cw)]++; diff.data.set([255, 0, 0, 255], o); }
-    else { const g = 200 + Math.round((0.3 * over(b, ob, 0) + 0.59 * over(b, ob, 1) + 0.11 * over(b, ob, 2)) * 55 / 255); diff.data.set([g, g, g, 255], o); }
+  const bg = [((bgKey >> 10) << 3) + 4, (((bgKey >> 5) & 31) << 3) + 4, ((bgKey & 31) << 3) + 4], bgTol = Math.max(tolerance, 4);
+  const isBg = (f, o) => Math.abs(f[o] - bg[0]) <= bgTol && Math.abs(f[o + 1] - bg[1]) <= bgTol && Math.abs(f[o + 2] - bg[2]) <= bgTol;
+  const floor = 100;
+  // one pass with b moved by (dx, dy); b's own edge pixels fill in what the move uncovers
+  const pass = (dx, dy, mark) => {
+    let n = 0, shared = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const inA = x < a.width && y < a.height, inB = x < b.width && y < b.height;
+      const oa = (y * a.width + x) * 3;
+      const ob = (Math.min(b.height - 1, Math.max(0, y - dy)) * b.width + Math.min(b.width - 1, Math.max(0, x - dx))) * 3;
+      let differs = !inA || !inB;
+      if (!differs) differs = Math.abs(fa[oa] - fb[ob]) > tolerance || Math.abs(fa[oa + 1] - fb[ob + 1]) > tolerance || Math.abs(fa[oa + 2] - fb[ob + 2]) > tolerance;
+      if (!differs && isBg(fa, oa) && isBg(fb, ob)) shared++;
+      if (differs) n++;
+      if (mark) mark(x, y, differs, ob);
+    }
+    const content = total - shared, d = Math.max(content, floor);
+    let score = content ? Math.floor(((d - n) * 100) / d) : 100;
+    if (n && score === 100) score = 99;
+    return { n, content, score: Math.max(0, score - Math.abs(dx) - Math.abs(dy)), dx, dy };
+  };
+  let pick = pass(0, 0);
+  if (pick.n && maxShift && a.width === b.width && a.height === b.height) {
+    // candidate shift from row/column profiles of content pixels (cheap), then full passes for at most three candidates
+    const profile = (f, rows) => {
+      const p = new Float64Array(rows ? H : W);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isBg(f, (y * W + x) * 3)) p[rows ? y : x]++;
+      return p;
+    };
+    const bestOffset = (pa, pb) => {
+      let off = 0, low = Infinity;
+      for (let d = -maxShift; d <= maxShift; d++) {
+        let cost = 0;
+        for (let i = 0; i < pa.length; i++) cost += Math.abs(pa[i] - (pb[i - d] ?? pb[i < d ? 0 : pb.length - 1]));
+        if (cost < low || (cost === low && Math.abs(d) < Math.abs(off))) { low = cost; off = d; }
+      }
+      return off;
+    };
+    const dy = bestOffset(profile(fa, true), profile(fb, true)), dx = bestOffset(profile(fa, false), profile(fb, false));
+    for (const [x, y] of [[dx, dy], [0, dy], [dx, 0]]) {
+      if (!x && !y) continue;
+      const r = pass(x, y);
+      if (r.score > pick.score) pick = r;
+    }
   }
-  const content = total - shared;
-  let score = content ? Math.floor(((content - n) * 100) / content) : 100;
-  if (n && score === 100) score = 99;
+  const diff = { width: W, height: H, data: new Uint8Array(total * 4) };
+  const cw = Math.ceil(W / grid), ch = Math.ceil(H / grid), cells = new Array(grid * grid).fill(0);
+  pass(pick.dx, pick.dy, (x, y, differs, ob) => {
+    const o = (y * W + x) * 4;
+    if (differs) { cells[Math.floor(y / ch) * grid + Math.floor(x / cw)]++; diff.data.set([255, 0, 0, 255], o); }
+    else { const g = 200 + Math.round((0.3 * fb[ob] + 0.59 * fb[ob + 1] + 0.11 * fb[ob + 2]) * 55 / 255); diff.data.set([g, g, g, 255], o); }
+  });
   const hotspots = cells.map((c, i) => {
     const x = (i % grid) * cw, y = Math.floor(i / grid) * ch, w = Math.min(cw, W - x), h = Math.min(ch, H - y);
     return { x, y, width: w, height: h, diffPixels: c, percent: Math.round((c * 1000) / Math.max(1, w * h)) / 10 };
   }).filter((c) => c.diffPixels > 0).sort((p, q) => q.diffPixels - p.diffPixels).slice(0, 5);
-  return { score, diffPixels: n, contentPixels: content, totalPixels: total, sizeMatch: a.width === b.width && a.height === b.height, hotspots, diff };
+  return { score: pick.score, diffPixels: pick.n, contentPixels: pick.content, totalPixels: total, sizeMatch: a.width === b.width && a.height === b.height,
+    hotspots, diff, ...(pick.dx || pick.dy ? { shift: { dx: -pick.dx || 0, dy: -pick.dy || 0 } } : {}) }; // shift: where the second image's content sits
 }

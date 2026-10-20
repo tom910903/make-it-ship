@@ -82,13 +82,13 @@ test('compare: small differences within tolerance are ignored; size mismatch cou
   assert.equal(r.score, 100);
   const s = compareImages(solid(10, 10, [0, 0, 0, 255]), solid(10, 20, [0, 0, 0, 255]));
   assert.equal(s.diffPixels, 100);
-  assert.ok(s.score < 50, `score ${s.score}`);
+  assert.equal(s.score, 0, 'all there is besides the shared background is the area only one image has');
   assert.equal(s.sizeMatch, false);
 });
 
 test('compare: one differing pixel never rounds up to a perfect score', () => {
   const b = solid(100, 100, [0, 0, 0, 255]); b.data.set([255, 255, 255, 255], 0);
-  assert.ok(compareImages(b, solid(100, 100, [0, 0, 0, 255])).score < 100);
+  assert.equal(compareImages(b, solid(100, 100, [0, 0, 0, 255])).score, 99);
 });
 
 // "Text lines": dark bars on a white page at the given rows.
@@ -100,8 +100,20 @@ const page = (rows, w = 400, h = 300) => {
 
 test('M8 D3: clearly different pages on a shared white background fail; the background does not count as matching content', () => {
   const r = compareImages(page([10, 30, 50]), page([150, 170, 190, 210]));
-  assert.ok(r.score < 50, `score ${r.score}`);
+  assert.equal(r.score, 0);
   assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).score, 100);
   const small = compareImages(page([10, 30, 50, 70, 90, 110, 130, 150, 170, 190]), page([10, 30, 50, 70, 90, 110, 130, 150, 170, 190, 210]));
-  assert.ok(small.score >= 50 && small.score < 100, `one added line of ten: ${small.score}`);
+  assert.equal(small.score, 90, 'one added line of ten');
+});
+
+test('M8 R2-2: the score is proportional: one pixel on a white page is 99, a 2px shift of the same page stays high, a blank page is 0', () => {
+  const w = solid(100, 100, [255, 255, 255, 255]), one = solid(100, 100, [255, 255, 255, 255]);
+  one.data.set([0, 0, 0, 255], (50 * 100 + 50) * 4);
+  assert.equal(compareImages(one, w).score, 99);
+  const shifted = page([12, 32, 52]);
+  const r = compareImages(page([10, 30, 50]), shifted);
+  assert.equal(r.score, 98, 'the same page moved 2px down: high, but not perfect');
+  assert.deepEqual(r.shift, { dx: 0, dy: 2 });
+  assert.equal(compareImages(page([]), page([10, 30, 50])).score, 0, 'missing content is still caught');
+  assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).shift, undefined);
 });

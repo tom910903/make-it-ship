@@ -217,6 +217,19 @@ test('M8 browse: raw CDP and --remote storage/JS on real sites ask, with or with
   }
 });
 
+test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser executable) on a mis browse command ask', () => {
+  const idle = { ...ctx, activeRun: false };
+  for (const c of [ctx, idle]) {
+    for (const cmd of ["MIS_BROWSE_CHROME_ARGS='--remote-debugging-port=0' node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/",
+      'export MIS_BROWSE_CHROME_ARGS="--disable-web-security"; node /p/scripts/mis.mjs browse goto x',
+      'MIS_BROWSER=/tmp/wrapper.sh node /p/scripts/mis.mjs browse goto x', 'MIS_BROWSER_EXE=/tmp/c node /p/scripts/mis.mjs browse status']) {
+      assert.equal(d(bash(cmd), c), 'ask', cmd);
+    }
+    assert.equal(d(bash('node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/'), c), 'allow');
+  }
+  assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
+});
+
 test('M8: team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {

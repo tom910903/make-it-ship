@@ -140,13 +140,14 @@ VERIFY: PENDING — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서�
 
 ## M8 — 브라우저·팀·문서 변환
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
+참고: 아래 "M9 E1~E4/C2/A8" 항목 ID는 m9 브랜치(`m9-wip`)의 `docs/research/m9-plan.md`에 정의돼 있다 (이 브랜치에는 그 파일이 없다).
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
 | M8-01 | 내장 브라우저(CDP pipe 데몬, `mis browse`: 수명주기·goto/back/forward/reload/url/wait/load-html·text/html/links/forms/accessibility/data·js/eval/css/attrs/is/console/network/dialog/storage/perf/cdp·click/fill/select/hover/type/press/scroll/viewport/upload/dialog-accept/dismiss·screenshot/responsive/pdf/diff·snapshot -i -c -d -s -D -a -o와 @e 참조·tabs/tab/newtab/closetab/frame·chain·handoff/resume), guard(cdp ask, 비로컬 출처의 storage/js/eval/upload는 --remote + ask). **M9로 이동**: `media`·`style`/`style --undo`/`cleanup`/`prettyscreenshot`·`tab-each`·`snapshot -C`/`@c`(M9 E4), `inspect`·`ux-audit`·쿠키·헤더(E1), `focus`·`state save\|load`·`memory`·connect(E2), 다운로드·스크랩(E3) | DONE (M8 범위) | `tests/integration/mis-browse*.test.mjs` | gap §5.4 | f3a03c4 | npm test |
 | M8-02 | `mis pdf`(marked 벤더), `mis visual-verdict`(PNG 디코더, 콘텐츠 기준 점수 — 판정은 모델이 두 이미지를 보고 함), Playwright 없는 웹 QA·qa-only·디자인 리뷰·페이지 성능. **M9로 이동**: qa-tester의 tmux 대화형 CLI 조작(M9 C2) | DONE (M8 범위) | 같은 묶음 | gap §5.1, §2.1 | f3a03c4 | npm test |
 | M8-03 | 팀 런타임(`mis team`, tmux 워커, 공유 task 목록·원자적 claim), team 스킬(plan→exec→verify→fix), codex/gemini 워커 ask. **M9로 이동**: `mis launch`(OMC `omc launch`, M9 A8) | DONE (M8 범위) | `tests/integration/mis-team.test.mjs` | gap §2.1·§2.4·§2.6 | c5c04fe | npm test |
 | M8-04 | 프로젝트 세션 관리(`mis session`, psm), visual companion(`mis companion`) | DONE | 같은 묶음 | gap §2.1, §3 | c5c04fe | npm test |
-| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS — 1차 검증 DEFECTS(D0~D12, 원격 upload) 수정 후 2차 | — | `docs/milestones/M8-report.md` | | |
+| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS — 2차 검증 DEFECTS(R2-1~R2-6) 수정 후 3차 | — | `docs/milestones/M8-report.md` | | |
 
 ## M9 — 나머지 이전 제외 기능
 VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
@@ -193,3 +194,6 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (M2 2차 R2-R2) 모델이 `M="node …"; $M` 형태를 습관적으로 쓰면 zsh에서 실패한다. 스킬이 지시한 형태는 아니다.
 - (M5 2차) SwiftPM 저장소에 `/.build`가 `.gitignore`에 없으면 `swift test` check가 통과 직후 STALE이 된다(안전한 쪽 오류). `.gitignore`에 빌드 산출물을 넣어야 한다.
 - (M5 2차) `mis ios bridge-scan`은 Markdown 파일을 제외한다(DocC 안 코드는 놓침, Swift 주석 속 이름은 보수적으로 잡음).
+- (M8 2차 R2-4) 정적 guard는 위치 인자를 다시 짜거나 실행 시점에 만들어지는 명령을 풀지 못한다: `f() { local s=$1; shift; mis $s "$@"; }`, `f() { mis "$1" "${@:2}"; }`, `set -- browse cdp X.y; mis "$@"`, 배열 `a=(browse cdp X.y); mis "${a[@]}"`, `mis browse $(echo cdp) X.y`, `echo cdp | xargs -I{} mis browse {} X.y`, `| sh`, `sh 파일`, `source 파일` → allow. 같은 형태의 `git push --force`도 마찬가지다 (M8 이전부터 있던 정적 guard의 공통 한계). 데몬 쪽 검사(비로컬 페이지의 storage/js/eval/upload 거부, chain 안 cdp 거부, upload 목적지 차단)는 guard와 무관하게 동작한다.
+- (M8 2차 R2-1) upload 목적지 차단은 Chrome의 Fetch 가로채기로 한다. WebSocket 핸드셰이크는 Fetch에도 `Network.setBlockedURLs`에도 보이지 않아 막지 못한다(실측). 즉 로컬 페이지의 스크립트가 `--remote` 없이 붙인 파일을 WebSocket으로 원격에 보내는 경로는 남는다. 붙였던 페이지 URL은 그 탭이 닫힐 때까지 계속 "보유 중"으로 본다(뒤로 가기가 파일 선택을 되살리므로). 그 URL을 새로 열어도 원격 요청이 막히는 것은 안전한 쪽 과차단이다.
+- (M8 2차 R2-5) 교차 사이트 iframe을 `frame`으로 고를 수 있도록 내장 브라우저는 `--disable-site-isolation-trials`로 뜬다(일회용 프로필, 에이전트 전용). 사이트 격리가 막는 렌더러 간 공격(Spectre류) 방어는 이 브라우저에서 약해진다.

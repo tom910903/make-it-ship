@@ -103,6 +103,7 @@ function classifyBash(cmd, ctx, cwd) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     let r = careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
+    if (r.decision === 'allow') r = browserLaunchOverride(misSub(ws, functions), text);
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -163,6 +164,12 @@ function runOnly(ws, ctx, functions) {
   if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) return ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
   if (isInstall(ws)) return ask('package install needs your approval (supply chain)');
   return allow;
+}
+
+/** M8 R2-3: launch overrides change what the browser runs with (flags, or a wrapper executable that can add any flag). */
+function browserLaunchOverride(mis, text) {
+  if (mis?.[0] !== 'browse' || !/\b(MIS_BROWSE_CHROME_ARGS|MIS_BROWSER|MIS_BROWSER_EXE)=/.test(text)) return allow;
+  return ask('mis browse with a browser launch override (MIS_BROWSE_CHROME_ARGS / MIS_BROWSER): extra flags or another executable can open a DevTools port or turn off web security — needs your approval');
 }
 
 /** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
