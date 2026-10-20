@@ -2,6 +2,7 @@
 // One line per module so parallel work adds modules without conflicts.
 const MODULES = [
   './tools/skills.mjs',
+  './tools/knowledge.mjs',
 ];
 
 export async function loadTools() {
