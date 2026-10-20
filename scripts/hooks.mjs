@@ -26,6 +26,17 @@ const handlers = {
     parts.push(buildCodeMap(cwd));
     return context('SessionStart', parts.filter(Boolean).join('\n\n'));
   },
+  async UserPromptSubmit(input) {
+    const { detectKeywords, styleSwitch, learnedSkills, promptContext } = await import('./lib/keywords.mjs');
+    const { homeDir } = await import('./lib/home.mjs');
+    const prompt = String(input.prompt ?? '');
+    const style = styleSwitch(prompt);
+    if (style) { const { setStyle } = await import('./lib/style.mjs'); setStyle(style); }
+    let root = null;
+    try { const { repoRoot } = await import('./lib/tree-hash.mjs'); root = repoRoot(input.cwd || process.cwd()); } catch { /* not a repo */ }
+    const text = promptContext(detectKeywords(prompt, { disabled: globalConfig().keywords.disabled }), style, learnedSkills(prompt, root, homeDir()));
+    return context('UserPromptSubmit', text);
+  },
   SubagentStart(input) {
     const rules = styleRules(currentStyle());
     if (!rules) return null;

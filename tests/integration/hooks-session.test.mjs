@@ -72,3 +72,14 @@ test('code map: one line per folder, shared folders first, budget respected', ()
   assert.doesNotMatch(map, /nope/);
   assert.ok(buildCodeMap(dir, 10).length < 200, 'tiny budget lists nothing but the header');
 });
+
+test('UserPromptSubmit: keyword context injected, style phrase persists the level, plain prompts inject nothing', () => {
+  const dir = makeRepo(), h = home();
+  const r = hook('UserPromptSubmit', { prompt: 'ralph: fix the importer', cwd: dir }, { MIS_STATE_HOME: h });
+  assert.equal(r.json.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(r.ctx, /make-it-ship:loop/);
+  const s = hook('UserPromptSubmit', { prompt: 'normal mode from now', cwd: dir }, { MIS_STATE_HOME: h });
+  assert.match(s.ctx, /Style level is now off/);
+  assert.equal(mis(dir, ['style'], { env: { MIS_STATE_HOME: h } }).json.level, 'off');
+  assert.equal(hook('UserPromptSubmit', { prompt: 'rename the variable', cwd: dir }, { MIS_STATE_HOME: h }).out, '');
+});

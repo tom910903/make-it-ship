@@ -120,7 +120,7 @@ VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아
 | M6-01 | 전역 상태·설정(`~/.make-it-ship`, `MIS_STATE_HOME`) + 스타일 레벨 off/lite/full/ultra 규칙 빌더 + `mis style [lvl]`, `mis style default <lvl>` | DONE | `tests/unit/style.test.mjs` | gap §4 Ponytail 레벨·config | (이 커밋) | npm test |
 | M6-02 | 상시 훅 디스패처 `scripts/hooks.mjs`(fail-open) + SessionStart: 스킬 사용 규율·상시 TDD/검증/디버그 규율, 스타일 규칙, 활성 run·모드 안내, 코드베이스 지도 | DONE | `tests/integration/hooks-session.test.mjs` | gap §3 using-superpowers, §4 activate·map, §2.3 session-start | (이 커밋) | npm test 327 |
 | M6-03 | SubagentStart: 스타일 규칙 주입(`subagentMatcher`) | DONE | 같은 파일 | gap §4 subagent | (이 커밋) | npm test 327 |
-| M6-04 | UserPromptSubmit 키워드 라우터(§2.5 전 키워드, 한국어 변형, 비활성 목록) + 스타일 전환 문구 + 학습 스킬 주입 + `mis test-prompt` | TODO | `tests/unit/keywords.test.mjs` | gap §2.5, §2.3 skill-injector, §4 mode-tracker | | |
+| M6-04 | UserPromptSubmit 키워드 라우터(§2.5 전 키워드, 한국어 변형, 비활성 목록) + 스타일 전환 문구 + 학습 스킬 주입 + `mis test-prompt` | DONE | `tests/unit/keywords.test.mjs` | gap §2.5, §2.3 skill-injector, §4 mode-tracker | (이 커밋) | npm test 334 |
 | M6-05 | 지속 모드(loop: ralph/autopilot/ultrawork) `mis loop start/status/cancel` + Stop 훅(증거 기반 종료, 반복 상한) + 컨텍스트 경고 | TODO | `tests/integration/loop.test.mjs` | gap §2.3 persistent-mode·context-guard | | |
 | M6-06 | statusLine 통합: run 없이도 스타일·모드·브랜치·모델·컨텍스트 표시 + run 정보 | TODO | `tests/unit/statusline.test.mjs` 확장 | gap §6.2 | | |
 | M6-07 | run 밖 guard 정책(careful 상시: main force push 거부, 파괴 명령 ask) + freeze/unfreeze 경계 + README 정정 | TODO | `tests/integration/guard.test.mjs` 확장 | gap §5.2, §6.3 | | |

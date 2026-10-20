@@ -1,0 +1,106 @@
+// UserPromptSubmit keyword router (absorbs OMC magic keywords and Ponytail mode tracking; see THIRD_PARTY_NOTICES.md).
+// Pure functions: detect → instructions; hooks.mjs injects them, `mis test-prompt` shows them.
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const K = (name, re, context) => ({ name, re, context });
+// Priority order: earlier wins in conflict resolution.
+const KEYWORDS = [
+  K('cancel', /\b(cancelomc|stopomc|cancel[\s-]?mis|stop[\s-]?mis)\b/i,
+    'Cancel active Make It Ship modes: run `mis loop cancel`. If the user also wants to drop the current run, run `mis cancel`.'),
+  K('loop', /\bralph\b|랄프(?!로렌)/i,
+    "Invoke /make-it-ship:loop with the user's task. It keeps working (plan → implement → verify) until `mis verdict` is VERIFIED or the iteration limit is reached; do not stop early."),
+  K('run', /\b(autopilot|auto[\s-]pilot|full auto)\b|오토파일럿|\b(build|create|make)\s+me\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bi\s+want\s+an?\s+(app|feature|project|tool|plugin|website|api|server|cli|script|system|service|dashboard|bot|extension)\b|\bhandle\s+it\s+all\b|\bend\s+to\s+end\b|\be2e\s+this\b/i,
+    "Invoke /make-it-ship:run with the user's request: plan, approval, test-first implementation, checks, reviews, and an honest report."),
+  K('ultragoal', /\bultragoal\b/i,
+    'Invoke /make-it-ship:run and put each goal in the plan as its own task with acceptance criteria; keep going with /make-it-ship:loop until every goal is VERIFIED.'),
+  K('parallel', /\b(ultrawork|ulw|uw)\b|울트라워크/i,
+    'Maximum parallel work: split the request into independent pieces and dispatch them to subagents in a single message (Agent tool). Inside a run use the parallel phase (`mis parallel`, task worktrees). Verify the combined result.'),
+  K('second-opinion', /\b(ccg|claude-codex-gemini)\b|씨씨지/i,
+    'Second opinion from other models: run `mis second-opinion detect`. Calling an external model CLI sends code outside the company boundary, so it needs the user\'s approval (the guard asks). Record it with `mis note second-opinion`; it never changes the verdict.'),
+  K('plan-consensus', /\bralplan\b|랄플랜/i,
+    'Consensus planning: write the plan, then invoke /make-it-ship:plan-review; revise and repeat until the critic returns ACCEPT (at most 3 rounds), then show the plan to the user for approval.'),
+  K('interview', /\b(deep[\s-]interview|ouroboros)\b|딥\s?인터뷰/i,
+    'Invoke /make-it-ship:interview: turn the request into goal, constraints and testable acceptance criteria, asking only high-impact questions one at a time.'),
+  K('simplify', null,
+    'Clean up AI slop in the named scope: invoke /make-it-ship:review focused on simplicity (dead code, duplication, needless abstraction or wrappers, unused dependencies), then remove the findings test-first with the suite green before and after. Behavior must not change.'),
+  K('tdd', /\b(tdd|test\s+first|red\s+green)\b|테스트\s?퍼스트/i,
+    'TDD mode: for each behavior write a failing test, run it and see it fail for the right reason, write the minimal code, then run the full suite. No production code without a failing test first.'),
+  K('review', /\b(code\s+review|review\s+(the\s+)?code)\b|코드\s?리뷰(?!어)/i,
+    'Invoke /make-it-ship:review on the current changes (spec and quality reviewers, findings with severity and evidence).'),
+  K('security-review', /\b(security\s+review|review\s+security)\b|보안\s?리뷰(?!어)/i,
+    'Invoke /make-it-ship:review including the security reviewer (agents/security-reviewer.md): trust boundaries, authn/authz, injection, secrets, unsafe deserialization; each finding with severity and evidence.'),
+  K('think', /\b(ultrathink|think\s+hard|think\s+deeply)\b|울트라\s?씽크/i,
+    'Think deeply before answering: lay out the options, check each assumption against the code, and verify before concluding.'),
+  K('search', /\bdeepsearch\b|딥\s?서치|\bsearch\s+(the\s+)?(codebase|code|files?|project)\b|\bfind\s+(in\s+)?(the\s+)?(codebase|all\s+files?)\b/i,
+    'Search the codebase thoroughly before answering: dispatch the make-it-ship:explorer agent (several in parallel for separate areas) and answer with file:line references.'),
+  K('analyze', /\b(deep[\s-]?analy[sz]e)\b|딥\s?분석/i,
+    'Deep analysis: invoke /make-it-ship:debug — reproduce, trace, test one hypothesis at a time, and record the root cause before any fix.'),
+];
+
+const SLOP_EXPLICIT = /\b(ai[\s-]?slop|anti[\s-]?slop|de[\s-]?slop)\b/i;
+const SLOP_ACTION = /\b(clean(?:\s*up)?|cleanup|refactor|simplify|dedupe|prune)\b/i;
+const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abstract\w*|wrapper\s+layers?|needless\s+abstractions?|tech\s+debt)\b/i;
+const HELP_QUERY = /\b(what\s+is|what's|how\s+(do\s+i|to)\s+use|explain|describe|tell\s+me\s+about|why)\b|사용법|뭐야|뭐지|무엇|설명|왜/i;
+const DIRECTIVE = /\b(fix|implement|build|add|refactor)\b|해줘|하자|해 줘|부탁|돌려/i;
+
+/** Remove reference content so only the user's own words can trigger a mode. */
+export function sanitize(text) {
+  return String(text ?? '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`\n]+`/g, '')
+    .replace(/<(\w[\w-]*)[\s>][\s\S]*?<\/\1>/g, '')
+    .replace(/https?:\/\/[^\s)>\]]+/g, '')
+    .replace(/^\s*>.*$/gm, '')
+    .replace(/^\s*\|(?:[^|\n]*\|){2,}\s*$/gm, '')
+    .replace(/(?<=^|[\s"'(])\/?(?:[\w.\-가-힯]+\/)+[\w.\-가-힯]*/gm, '');
+}
+
+export function detectKeywords(prompt, { disabled = [] } = {}) {
+  const text = sanitize(prompt);
+  if (HELP_QUERY.test(text) && /[?？]/.test(text) && !DIRECTIVE.test(text)) return [];
+  let hits = KEYWORDS.filter((k) => k.name === 'simplify'
+    ? SLOP_EXPLICIT.test(text) || (SLOP_ACTION.test(text) && SLOP_SMELL.test(text))
+    : k.re.test(text));
+  hits = hits.filter((k) => !disabled.includes(k.name));
+  if (hits.some((k) => k.name === 'cancel')) hits = hits.filter((k) => k.name === 'cancel');
+  if (hits.some((k) => k.name === 'loop')) hits = hits.filter((k) => k.name !== 'run');
+  return hits.map(({ name, context }) => ({ name, context }));
+}
+
+/** Natural-language style changes; returns the new level or null. */
+export function styleSwitch(prompt) {
+  const t = sanitize(prompt);
+  const m = t.match(/\bponytail\s+(lite|full|ultra|off)\b/i) ?? t.match(/\bstyle\s+(lite|full|ultra|off)\b/i);
+  if (m) return m[1].toLowerCase();
+  if (/\bnormal\s+mode\b|\bstop\s+(ponytail|style|mis\s+style)\b|스타일\s?(끄|꺼)/i.test(t)) return 'off';
+  return null;
+}
+
+/** Learned skills whose frontmatter `triggers` appear in the prompt (repo `.make-it-ship/skills`, then home `skills`). */
+export function learnedSkills(prompt, repoDir, homeDir) {
+  const text = String(prompt ?? '').toLowerCase();
+  const found = [];
+  for (const base of [repoDir && join(repoDir, '.make-it-ship', 'skills'), homeDir && join(homeDir, 'skills')]) {
+    if (!base || !existsSync(base)) continue;
+    for (const d of readdirSync(base)) {
+      const path = join(base, d, 'SKILL.md');
+      try {
+        const fm = readFileSync(path, 'utf8').match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
+        const triggers = (fm.match(/^triggers:\s*\[(.*)\]\s*$/m)?.[1] ?? '').split(',').map((s) => s.trim().replace(/^["']|["']$/g, '').toLowerCase()).filter(Boolean);
+        if (triggers.some((t) => text.includes(t))) {
+          found.push({ name: fm.match(/^name:\s*(.+)$/m)?.[1].trim() ?? d, description: fm.match(/^description:\s*(.+)$/m)?.[1].trim() ?? '', path });
+        }
+      } catch { /* unreadable skill is skipped */ }
+    }
+  }
+  return found.slice(0, 3);
+}
+
+export function promptContext(matches, style, skills) {
+  const parts = matches.map((m) => `[MAKE IT SHIP: ${m.name}] ${m.context}`);
+  if (style) parts.push(`[MAKE IT SHIP: style] Style level is now ${style}${style === 'off' ? ' (style rules no longer apply)' : ''}.`);
+  for (const s of skills) parts.push(`[MAKE IT SHIP: learned skill] ${s.name} — ${s.description}. If it applies, read ${s.path} and follow it.`);
+  return parts.join('\n');
+}
