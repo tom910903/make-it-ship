@@ -159,3 +159,19 @@ test('M6 R2-7: freeze applies only to the repo it was set in; broken links do no
   assert.equal(w(dir, join(dir, 'README.md')), 'deny');
   assert.equal(w(dir, join(dir, 'src', 'dangling.js')), 'deny', 'dangling link pointing outside');
 });
+
+test('M6 R3-4: in a session inside the frozen repo, writes anywhere outside the frozen dir are denied (other repos, outside paths, links)', () => {
+  const dir = makeRepo({ 'src/a.js': '' }), other = makeRepo({ 'b.js': '' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-out-'));
+  symlinkSync(outside, join(dir, 'src', 'escape'));
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'freeze', 'src'], { cwd: dir, encoding: 'utf8', env });
+  const w = (cwd, p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p }, cwd }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  for (const p of [join(dir, 'src', 'escape', 'p.js'), join(outside, 'x.js'), join(other, 'b.js'), join(dir, '..', 'zz.js')]) assert.equal(w(dir, p), 'deny', p);
+  assert.equal(w(dir, join(dir, 'src', 'ok.js')), 'allow');
+  assert.equal(w(other, join(other, 'b.js')), 'allow', 'a session in another repo is not frozen');
+});

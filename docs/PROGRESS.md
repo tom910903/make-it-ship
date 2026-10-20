@@ -161,6 +161,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (사용자 결정, 2026-10-20, M6 3차) ralph 키워드: 휴리스틱 3회 실패 후 "확실한 형태만 자동 + 나머지는 모델 판단 힌트"로 결정. 명시형(`ralph:`, `/ralph`, `use ralph`, `랄프로`, `ラルフで`)만 loop를 켜고, 그 밖의 언급은 `loop-hint`(모델이 판단)만 주입한다. OMC 원본과 다른 동작이다.
 - (사용자 결정, 2026-10-20, ADR-0003) 원본 4종 전체 대체: Spec §14.4 제외표 해제(알림·BSP 제외), PRD 11.2 "자동 프로세스 자가 수정" 대신 승인 게이트 있는 self-improve, ADR-003 무의존 원칙은 신규 범위에서 npm 허용(코어 `mis`·guard는 무의존 유지). 단독 설치 전제. Spec·기획서 본문은 수정하지 않는다.
 - (사용자 결정, 2026-10-20) Spec §11 M5의 "BSP QA 프로파일"을 제거했다. `scripts/lib/qa.mjs`의 Yocto/Buildroot/커널 탐지와 `build-bsp`/`qa-bsp` 제안, QA 스킬 문서, README 항목을 삭제했고 NH-9는 해당 없음이다. Spec 문서 본문은 수정하지 않았다. 일반 위험 플래그 `hardware`는 유지한다. 회귀 테스트: `mis-qa.test.mjs` "BSP QA profile was removed".
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.

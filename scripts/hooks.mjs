@@ -38,11 +38,13 @@ const handlers = {
       }
       const f = (await import('./lib/home.mjs')).readHome('freeze.json');
       const { realpathSync } = await import('node:fs');
-      const frozen = f?.dir && (f.root ?? null) === realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)) ? f.dir : null;
+      const frozen = f?.dir && f.root && f.root === realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)) ? f.dir : null;
       if (frozen) parts.push(`Edits are frozen to ${frozen}: Write/Edit outside it are denied until the user runs mis unfreeze.`);
       const loop = (await import('./lib/loop.mjs')).readLoop(cwd);
       if (loop.active && (!loop.session || loop.session === input.session_id)) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
-    } catch { /* not a git repo */ }
+    } catch {
+      try { const f = (await import('./lib/home.mjs')).readHome('freeze.json'); if (f?.dir && !f.root) parts.push(`Edits are frozen to ${f.dir}: Write/Edit outside it are denied until the user runs mis unfreeze.`); } catch { /* no home */ }
+    }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     try {
       const mem = await import('./lib/memory.mjs'), wiki = await import('./lib/wiki.mjs');

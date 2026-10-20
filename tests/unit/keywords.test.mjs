@@ -11,7 +11,7 @@ const names = (p, opts) => detectKeywords(p, opts).map((m) => m.name);
 test('every keyword triggers in English and Korean', () => {
   const cases = {
     cancel: ['cancelomc please', 'stopomc'],
-    loop: ['ralph fix the login bug', '랄프로 끝까지 해줘'],
+    loop: ['ralph: fix the login bug', '랄프로 끝까지 해줘'],
     run: ['autopilot: add csv export', 'build me an app for notes', 'I want a cli that counts words', 'handle it all', '오토파일럿으로 해줘'],
     ultragoal: ['ultragoal ship these three things'],
     parallel: ['ulw refactor the parsers', 'ultrawork this', '울트라워크로 해줘'],
@@ -41,8 +41,8 @@ test('reference content does not trigger: code, quotes, URLs, paths, questions a
 
 test('conflicts: cancel wins alone; loop absorbs run; disabled keywords are dropped', () => {
   assert.deepEqual(names('cancelomc and ralph'), ['cancel']);
-  assert.deepEqual(names('ralph autopilot the importer'), ['loop']);
-  assert.deepEqual(names('ralph tdd this', { disabled: ['tdd'] }), ['loop']);
+  assert.deepEqual(names('ralph: autopilot the importer'), ['loop']);
+  assert.deepEqual(names('ralph: tdd this', { disabled: ['tdd'] }), ['loop']);
   const m = detectKeywords('code review the diff')[0];
   assert.match(m.context, /make-it-ship:review/);
 });
@@ -67,7 +67,7 @@ test('learned skills: frontmatter triggers in repo and home dirs, at most 3', ()
 
 test('mis test-prompt shows matches, style switch, and the injected context without changing state', () => {
   const dir = makeRepo(), env = { MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) };
-  const r = mis(dir, ['test-prompt', 'ralph fix it'], { env }).json;
+  const r = mis(dir, ['test-prompt', 'ralph: fix it'], { env }).json;
   assert.deepEqual(r.matches, ['loop']);
   assert.match(r.context, /make-it-ship:loop/);
   assert.equal(mis(dir, ['test-prompt', 'normal mode'], { env }).json.style, 'off');
@@ -79,9 +79,9 @@ test('M6 D2/D7: names, quotes, complaints and casual words do not start modes', 
     'Ralph from QA reported a bug in login, fix it', 'Our new intern Ralph wrote this module', 'Rename the ralph variable to worker',
     'He said "ralph" was the codename', '랄프가 어제 회의에서 말한 버그 고쳐줘', 'ralph keeps looping, make it stop', '랄프가 계속 반복돼, 멈춰줘',
     'the UW campus map is broken',
-  ]) assert.deepEqual(names(p), [], p);
+  ]) assert.ok(!names(p).includes('loop') && !names(p).includes('parallel'), `${p}: ${names(p)}`);
   assert.deepEqual(names('stop the ralph loop'), ['cancel']);
-  for (const p of ['ralph: fix the importer', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode on the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘'])
+  for (const p of ['ralph: fix the importer', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode: port the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘'])
     assert.deepEqual(names(p), ['loop'], p);
 });
 
@@ -97,13 +97,19 @@ test('M6 D4: style phrases only when the prompt is just the phrase', () => {
   assert.equal(styleSwitch('use ponytail ultra for the parser rewrite'), null);
 });
 
-test('M6 R2-2: turning ralph off cancels; names, thanks and complaints do nothing; real invocations still start the loop', () => {
-  for (const p of ['turn off ralph', 'disable ralph', 'ralph stop', 'ralph off', 'ralph cancel', 'end ralph', 'no more ralph', 'ralph 그만', 'ralph 멈춰', '랄프 꺼줘', '랄프 꺼', 'ラルフ止めて', 'ラルフを止めて'])
-    assert.deepEqual(names(p), ['cancel'], p);
-  for (const p of ['the ralph loop is stuck again', 'the ralph mode is annoying, disable it', 'Ralph Smith reported a bug in login, fix it',
-    'Ralph Lauren product page is broken, fix it', 'Ralph, Mike and Sue need a login page', 'Thanks Ralph', 'I talked with Ralph', '랄프 씨가 만든 모듈 고쳐줘'])
-    assert.ok(!names(p).includes('loop'), `${p}: ${names(p)}`);
-  for (const p of ['ralph: fix the importer', 'ralph fix the login bug', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode: port the parser',
-    'fix the parser with ralph', '랄프로 끝까지 해줘', '랄프 모드로 해줘', '랄프 켜줘', 'ラルフで直して', 'please ralph this: add csv export'])
+test('M6 R3 (user decision): explicit forms start the loop, off-requests cancel, every other mention is only a hint for the model', () => {
+  for (const p of ['ralph: fix the importer', 'ralph: fix the end-to-end tests', 'ralph: add a front end for the cli', '/ralph finish it', 'use ralph to fix the stop button',
+    'use ralph to finish the migration', 'start ralph on the parser', 'ralph mode: port the parser', '랄프로 끝까지 해줘', '랄프 모드로 해줘', '랄프 켜줘',
+    '랄프로 데이터 꺼내는 함수 고쳐줘', 'ラルフで直して', 'ラルフ 起動して直して'])
     assert.deepEqual(names(p), ['loop'], p);
+  for (const p of ['turn off ralph', 'disable ralph', 'ralph stop', 'ralph off', 'ralph cancel', 'end ralph', 'no more ralph', 'stop the ralph loop',
+    'ralph 그만', 'ralph 멈춰', '랄프 꺼줘', '랄프 꺼', 'ラルフ止めて', 'ラルフを止めて', 'cancelomc'])
+    assert.deepEqual(names(p), ['cancel'], p);
+  for (const p of ['ralph fix the login bug', 'Ralph fixed the bug already', 'ralph broke my repo', 'Ralph reviewed the PR yesterday', 'Ralph Smith reported a bug, fix it',
+    'Thanks Ralph', 'I talked with Ralph', 'the ralph loop is stuck again', "don't use ralph anymore", 'please don\'t start ralph', '랄프로 하지 말고 그냥 고쳐줘',
+    'ラルフで直さないで', '랄프 씨가 만든 모듈 고쳐줘', 'ralph stop the server before deploy'])
+    assert.deepEqual(names(p), ['loop-hint'], p);
+  assert.match(detectKeywords('Ralph fixed it')[0].context, /only if the user is asking/i);
+  assert.ok(names('stop the loop in parser.js and add a test first').includes('tdd'), 'a coding sentence about a loop is not a cancel');
+  assert.ok(!names('stop the loop in parser.js and add a test first').includes('cancel'));
 });

@@ -402,3 +402,142 @@ statusline: 빈 입력, `garbage`, `[]`, `null`, 없는 디렉터리, 숫자 모
   - Linux 환경
 
 ROUND2: DEFECTS FOUND
+
+## 3차 검증 (round 3)
+
+- 검증일: 2026-10-20 · 브랜치 develop (HEAD a2d5473) · Claude Code 2.1.292
+- 검증자: 독립 verifier (구현에 참여하지 않음). 커밋 메시지의 수정 주장은 믿지 않았다. 2차 재현 절차와 새 변형을 직접 실행했다.
+- 모든 실험은 저장소 밖 scratchpad에서 했고 `MIS_STATE_HOME`을 임시 디렉터리로 지정했다. 세션 관련 시험에서는 `CLAUDE_CODE_SESSION_ID`를 명시적으로 지정하거나 `env -u`로 지웠다. 저장소에서 바꾼 것은 이 절 하나뿐이다.
+- 키워드 판정은 `detectKeywords`(훅과 같은 함수)와 OMC 4.15.6 `keyword-detector.mjs`(임시 HOME·cwd)에 같은 문장을 넣어 대조했다. 대표 문장은 실제 `hooks.mjs UserPromptSubmit` 경로로도 확인했다.
+
+### 판정
+
+**DEFECTS FOUND**
+- 2차 결함 8건: FIXED 6 · PARTIAL 2 (R2-2, R2-7).
+- 1차 결함 회귀: D9·D10이 다시 열렸다.
+- 남은 문제와 새 문제: HIGH 1 · MEDIUM 3 · LOW 2.
+
+### 명령과 수치
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | tests 367 · pass 367 · fail 0 · skipped 0 · todo 0 · exit 0 (2차 360 → 367) |
+| `claude plugin validate .` | `✔ Validation passed` · exit 0 |
+| 헤드리스 dogfood (데모 d) | 17턴, $0.51, 96초. 아래 절 참조 |
+| 키워드 대조 | 2차 21문장 + 양성 9문장 + 새 변형 약 150문장 (끄기 EN 20 · KO 15 · JA 15, 부정형 15, 이름 30, 불만 19, 호칭 8, 명확한 호출 31, 산문 cancel 4) |
+
+### 2차 결함 재검증
+
+| ID | 판정 | 증거 |
+|---|---|---|
+| R2-1 SessionStart loop 안내 | FIXED | sessA가 저장소 R에서 시작한 loop: SessionStart sessB → 안내 없음, sessA → 안내 있음. worktree에서도 sessB 0건, sessA 1건.<br>`mis loop cancel`을 sessB에서 실행 → exit 1 "the active loop belongs to another session (sessA)". loop는 active로 남는다. 세션이 없는 터미널에서 cancel하면 끝난다(설계대로).<br>참고: sessB가 `mis cancel`(run 취소)을 실행하면 A의 loop도 `endReason: cancelled`로 끝난다. run은 저장소 공용이므로 남은 위험으로만 기록한다. |
+| R2-2 ralph 오탐 | **PARTIAL (남은 문제 HIGH)** | 2차 21문장 모두 loop 아님. 끄기 13문장은 `cancel`, 불만·이름 8문장은 `[]`. 양성 9문장은 모두 loop.<br>하지만 새 변형에서 같은 종류의 오탐과, 이번 수정이 만든 미탐이 나온다. R3-1, R3-2, R3-3 참조. |
+| R2-3 옛 run 재보고로 종료 | FIXED | dogfood 사본(REPORTED·VERIFIED)에서 `loop start "add feature X: export CSV"` → Stop은 block. `mis report` 재실행 후 Stop도 block ("a report alone does not count"). `mis check unit`은 REPORTED run에서 거부된다("run is REPORTED"). 그래서 그 뒤 report를 해도 block이고, 3/20까지 active로 남는다. |
+| R2-4 chain 자기 참조 | FIXED | `statusLine.chain`을 MIS statusline 자신으로 설정하고 한 번 실행 → 0.59초에 `MIS … \| MIS …`를 출력하고 exit 0. 이후 10초 동안 2초마다 `pgrep -f scripts/statusline.mjs` → 계속 0개. |
+| R2-5 style 스킬 문구 | FIXED | `skills/style/SKILL.md`: "It applies to this session only (new subagents included) … New sessions start at the default level." |
+| R2-6 터미널 loop의 전역 포획 | FIXED | 저장소 밖 NR1에서 세션 없이 `loop start` → exit 1 "outside a git repository a loop must be started from a Claude Code session". 세션 sessX로 시작하면 NR2의 sessC Stop은 출력 없음, sessX는 block. statusline도 sessX에만 `loop 1/20`을 보인다. SessionStart sessC는 0건. |
+| R2-7 freeze 잔여 | **PARTIAL** | 고쳐진 것:<br>- 끊어진 링크 `src/dang`과 `src/dang/a.js`에 Write → deny.<br>- 링크 cwd(`Flink`)에서 `rm -rf node_modules` → allow.<br>- 저장소 F에서 freeze해도 다른 저장소 R7의 Write는 allow이고, R7의 SessionStart·statusline에도 안내가 나오지 않는다.<br>- 저장소 밖에서 freeze하면 statusline에 `frozen <절대경로>` 배지가 나온다.<br>남은 것:<br>- 저장소 밖에서 freeze했을 때 SessionStart 안내가 여전히 0건이다 (LOW, R3-6).<br>- 이번 수정 때문에 D10이 다시 열렸다 (R3-4). |
+| R2-8 쓰기 실패 시 거짓 알림 | FIXED | `MIS_STATE_HOME`이 파일일 때 `style lite`·`normal mode` → 출력 없음, exit 0. `ralph: fix the parser` → loop 맥락은 그대로 주입된다. 쓸 수 있는 홈에서는 `Style level is now lite`가 정상으로 나온다. |
+
+### 1차 결함 회귀 검사 (D1–D12)
+
+| ID | 결과 |
+|---|---|
+| D1 | 유지. sA의 loop에서 other-B의 Stop(저장소·worktree) → 출력 없음. sA의 worktree Stop → block. `/nonexistent` statusline에 loop 없음. |
+| D2 | 유지. 1차 8문장 모두 loop 아님. `stop the ralph loop` → cancel. |
+| D3 | 유지. S1 `style lite` + `style default ultra` → 새 세션 S2는 ultra, S1은 lite. |
+| D4 | 유지. 산문 속 "normal mode" → 변경 없음. 단독 `normal mode` → off. |
+| D5 | 유지. R2-3의 1단계와 같다. |
+| D6 | 유지. `loop start; start; mis cancel` → loop `cancelled`, 이후 Stop 출력 없음. |
+| D7 | 유지. `the UW campus map is broken` → `[]`, `ulw fix the tests` → parallel. |
+| D8 | 유지. `git restore --staged .` → allow, `git restore .`·`git checkout .` → ask. |
+| **D9** | **다시 열림.** 1차 재현 `ラルフ 起動して直して` → MIS `[]` (2차에서는 loop였다). OMC는 RALPH로 트리거된다. `ラルフモードで直して`도 `[]`. `コードレビューして` → review, `ウルトラワークで直して` → parallel은 유지. R3-3에 포함한다. |
+| **D10** | **다시 열림.** frozen `src/` 안의 `src/escape`(밖 OUT을 가리키는 링크)를 통한 Write `src/escape/p.js` → **allow**. 7dbe475의 guard(`git archive`로 꺼냄)에 같은 입력을 넣으면 deny. R3-4 참조. |
+| D11 | 유지. freeze 배지 `frozen src` (저장소·링크 cwd), 체인 꼬리 정상. |
+| D12 | 유지. 홈이 파일일 때 Stop·statusline exit 0. |
+
+### 남은 문제와 새 문제
+
+**R3-1 · HIGH · 첫 단어 "Ralph/ralph + 동사" 문장이 loop를 시작한다 (R2-2의 잔여: 이름·불만)**
+- 위치: `scripts/lib/keywords.mjs` `invoked`.
+  - 첫 단어 ralph 뒤의 `START_AFTER` 분기 `\s+(?!(?:loop|mode|is|was|keeps?)\b)[a-z]`가 소문자로 시작하는 단어면 무엇이든 받는다.
+  - `NAME_AFTER`의 동사 목록(from, said, asked, wrote, reported …)에 없는 동사는 모두 통과한다. 대문자 `Ralph` 예외는 문장 중간에만 적용된다.
+- 재현 (`mis test-prompt` → `["loop"]`, 훅 경로에서도 loop 맥락 주입. OMC는 16문장 모두 트리거되지 않음):
+  - 이름: `Ralph reviewed the PR yesterday`, `Ralph fixed the bug already, just verify`, `Ralph pushed a broken commit, revert it`, `Ralph needs help with the parser`, `Ralph left the company, take over his module`, `Ralph approved the PR, merge it`, `Ralph mentioned the cache is stale`, `Ralph updated the schema, regenerate types`, `Ralph found a race condition in the queue`, `Ralph owns this module`
+  - 불만: `ralph broke my repo`, `ralph broke the build`, `ralph ruined my branch`, `ralph deleted my tests`, `ralph wasted an hour`, `ralph made a mess, clean it up`
+- 영향:
+  - README의 "not as a name or in a complaint"와 모순된다. OMC 원본보다 나쁘다.
+  - 특히 불만 문장은 loop가 이미 피해를 준 상황인데, 다시 "do not stop early" 지시와 loop 스킬을 부른다.
+  - 2차 R2-2와 같은 종류이므로 HIGH를 유지한다.
+
+**R3-2 · MEDIUM · 부정형 끄기 요청이 loop를 시작한다 (R2-2의 잔여: 끄기 요청)**
+- 위치: `keywords.mjs` `VERB_BEFORE` (`use|start|run …` 바로 뒤면 성립. 앞의 부정어를 보지 않는다), `PARTICLE_AFTER` (`로`·`で` 뒤의 부정을 보지 않는다).
+- 재현 → `["loop"]`:
+  - `don't use ralph anymore`, `don't use ralph for this`, `do not use ralph`, `never use ralph again`, `no need to use ralph here`, `please don't start ralph`, `I didn't ask you to use ralph`. 이 7문장은 OMC도 RALPH로 트리거된다(원본과 같음).
+  - `랄프로 하지 말고 그냥 고쳐줘`, `ラルフで直さないで`. 이 2문장은 OMC가 트리거되지 않는다(원본보다 나쁨).
+- 영향: 과제 기준의 "명확한 끄기 요청이 loop를 시작함"에 해당한다. 영어는 원본과 같은 수준이고 한·일은 회귀이므로 MEDIUM으로 둔다.
+- 참고 (결함 아님. loop가 시작되지 않으므로 무해한 cancel 미탐): `exit/quit/abort/deactivate ralph`, `ralph, stop`, `ralph please stop`, `pause ralph for now`, `stop using ralph`, `랄프 끝내/종료/해제`, `랄프 모드 꺼줘`, `랄프 이제 그만`, `ラルフを停止して`, `ラルフ終了`, `ラルフ停止`, `ラルフをキャンセル` → `[]`.
+
+**R3-3 · MEDIUM · 명확한 호출이 loop를 시작하지 않는다 (2차 수정의 부작용, D9 재발 포함)**
+- 위치: `keywords.mjs` `invoked`.
+  - `OFF_NEAR`가 ralph 앞뒤 20자 안에서 `stop|off|cancel|disable|kill|halt|end|pause|turn|꺼|끄|멈 …`을 찾으면 그 일치를 버린다. 과제 본문에 흔히 나오는 단어들이다.
+  - 첫 단어 ralph 뒤는 `START_AFTER`가 라틴 소문자만 받는다. `PARTICLE_AFTER`의 일본어 분기는 `で`뿐이다.
+  - `NAME_AFTER`의 `and` 때문에 `start ralph and …`도 이름으로 처리된다.
+- 재현 → `[]` (영어 12문장은 OMC가 모두 RALPH로 트리거한다):
+  - `ralph: fix the end-to-end tests` (훅 경로에서도 출력 없음), `ralph: stop the server from crashing on startup`, `ralph: make the pause button work`, `ralph: turn the sidebar into a drawer`, `ralph fix the cancel flow`, `ralph: add a front end for the API`, `ralph: off-by-one error in pagination, fix it`, `ralph: implement the kill switch feature`, `ralph: halt condition in scheduler is wrong`, `ralph: fix the end date picker`, `use ralph to fix the stop button`, `start ralph and fix the parser`
+  - 한국어: `랄프로 데이터 꺼내는 함수 고쳐줘`, `랄프로 앱 끄면 저장 안 되는 버그 고쳐줘`
+  - 일본어: `ラルフ 起動して直して` (1차 D9 재현, OMC RALPH), `ラルフモードで直して`
+  - 반대 방향: `ralph stop the server from crashing on startup` → `cancel`. 호출이 취소로 바뀐다.
+- 영향:
+  - README의 "`ralph` starts a loop only when clearly invoked ("ralph: …" …)"와 모순된다. `ralph: <과제>` 형식이 과제 내용에 따라 조용히 무시된다.
+  - 사용자는 loop가 걸렸다고 믿지만 모델은 한 번만 작업하고 멈춘다. 오류도 알림도 없다.
+  - 데이터 손실은 없으므로 MEDIUM으로 둔다.
+
+**R3-4 · MEDIUM · freeze가 저장소 밖 경로를 막지 않는다 (D10 재발, 2차 수정의 회귀)**
+- 위치: `scripts/guard.mjs` (`const ctx = context(at)`. `at`은 cwd가 아니라 **대상 파일**의 가장 가까운 기존 디렉터리다. 그 디렉터리의 저장소 루트를 `freeze.json`의 `root`와 비교하고, 다르면 freeze를 적용하지 않는다).
+- 재현: 저장소 F에서 `mis freeze src` (`root: F`). cwd F에서 Write·Edit:
+  - `F/src/escape/p.js` (`src/escape` → 밖 OUT 링크) → **allow**. 2차(7dbe475) guard → deny.
+  - `NR1/a.js` (저장소 밖 디렉터리) → **allow**. 2차 → deny.
+  - `R7/a.js` (다른 저장소), `../R7/b.js` (상대 경로) → **allow**. 2차 → deny.
+  - `OUT/cfg.json` Edit → **allow**.
+  - 대조: `F/other.js`, `F/src/../x.js`, 링크 cwd의 `Flink/other.js` → deny (정상).
+- 영향:
+  - freeze는 "한 디렉터리 밖의 편집을 막는다"는 기능이다. 그런데 frozen 저장소 밖으로 나가는 편집이 전부 허용된다. README의 "symlinks are followed"와도 모순된다.
+  - 1차 D10은 결함으로 셌고 2차에서 FIXED로 판정했다. 같은 재현이 다시 통과하므로 회귀 결함으로 센다(난독화가 아니라 일반 경로이므로 "guard 범위 밖 우회"가 아니다).
+  - 의도는 "다른 저장소의 세션에는 영향을 주지 않는다"였을 것이다. 그렇다면 비교 기준은 대상 파일이 아니라 세션 cwd의 저장소여야 한다.
+
+**R3-5 · LOW · 코딩 산문 속 "stop/end/cancel the loop"가 cancel로 판정되고 다른 키워드를 지운다**
+- 위치: `keywords.mjs` cancel 정규식 `\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?(ralph|loop|ultrawork)\b` (2차에서 end·disable·turn off·no more가 추가됨), 그리고 cancel이 있으면 나머지 키워드를 모두 버리는 87행.
+- 재현 → `["cancel"]` (OMC는 모두 트리거되지 않음):
+  - `fix the worker so it can stop the loop when the queue is empty`
+  - `the retry code should end the loop after 3 tries`
+  - `add a button to cancel the loop in the UI`
+- 영향: loop가 활성인 세션에서 이런 과제를 말하면 모델이 "run `mis loop cancel`" 지시를 받는다. loop가 없으면 무해하다(`mis loop cancel`은 아무것도 하지 않음).
+
+**R3-6 · LOW · 저장소 밖에서 건 freeze는 SessionStart 안내가 없다 (R2-7의 잔여)**
+- 재현: NR3에서 `mis freeze keep` (`root: null`) → NR3의 Write `x.js` → deny, statusline `frozen <절대경로>`. 그러나 SessionStart의 `frozen` 안내는 0건이다.
+- 위치: `hooks.mjs` SessionStart (freeze 안내가 `repoRoot(cwd)`를 부르는 try 블록 안에 있다).
+
+### 헤드리스 dogfood (데모 d)
+
+- 명령: `env -u CLAUDE_CODE_SESSION_ID MIS_STATE_HOME=<tmp>/doghome claude -p "ralph: do the task in TASK.md (quick mode; I approve writing .make-it-ship.json with mis init --write)" --plugin-dir … --setting-sources project --strict-mcp-config --permission-mode bypassPermissions --output-format stream-json --verbose`
+- init 플러그인: make-it-ship + builtin뿐 (ADR-0003 단독 설치).
+- 모델의 진행: Skill `make-it-ship:loop` → `mis loop start --max 20 …` → Skill `make-it-ship:run` → `doctor`·`init` → `init --write`·`start` → `plan set` → `task T1 start`·`check unit`·root-cause 기록 → 수정 → `task T1 done` → quality-reviewer 서브에이전트 → `review add quality` → `mis report`.
+  - 이번에도 첫 Bash에서 모델이 `$M` 변수에 명령을 담아 실행해 실패했다(MIS 문제 아님). 다음 시도에서 바로 고쳤다.
+- 결과: 17턴, $0.51, 96초. 마지막에 호스트 알림 "Stop says: Make It Ship loop finished: run 20261020-1339-b13d is REPORTED with verdict VERIFIED."
+- 직접 확인한 상태:
+  - `mis loop status`: `active:false`, `endReason:"verified"`, `iteration:0`, `session:"6025a00c-b1a5-43fc-b413-9967e9fc9467"`.
+  - 이 값은 init·result의 `session_id`와 같다. `mis loop start`의 tool_result(같은 출력에 `startedAt`이 있음)에도 이미 같은 session이 찍혀 있었다. 즉 Stop 때 가져간 것이 아니라 시작할 때 묶였다.
+  - `mis verdict`: VERIFIED (unit PASS, reasons 없음, state REPORTED).
+  - `mis status`: 1/1 DONE, quality 0 blocking / 0 major.
+  - 데모 `npm test`: pass 3 / fail 0.
+- 판정: PASS. 1·2차와 마찬가지로 iteration 0으로 끝났다. 이번 실행에서도 Stop block 경로는 일어나지 않았다.
+
+### 남은 위험 (결함으로 세지 않음)
+
+- 다른 세션의 `mis cancel`(run 취소)은 소유 세션의 loop도 끝낸다. run이 저장소 공용이라 자연스러운 결과지만, "loop는 소유 세션만 끝낸다"는 R2-1 수정의 범위 밖이다.
+- loop는 runId나 과제에 묶여 있지 않다. loop 시작 시점에 이미 진행 중이던 다른 run에서 새 check와 report가 나오면, 그 run의 VERIFIED로 loop가 끝난다. 새 증거가 있기는 하므로 결함으로 세지 않았다.
+- 호칭형(`Ralph, can you fix the login bug`, `ralph, fix this`)은 `[]`, `Ralph: fix the parser`·`Ralph fix the parser`는 loop다. 애매한 경우이므로 판단하지 않았다. OMC도 같은 결과다.
+- 미검증: 대화형 세션의 키워드 판정, Linux 환경, 서브에이전트 Bash의 `CLAUDE_CODE_SESSION_ID`.
+
+ROUND3: DEFECTS FOUND
