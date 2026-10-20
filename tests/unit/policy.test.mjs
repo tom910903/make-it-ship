@@ -241,3 +241,12 @@ test('M9 D0: registered external mis subcommands ask with or without a run; tele
     }
   } finally { EXTERNAL_MIS.pop(); }
 });
+
+test('M9-C: what mis tty runs or types is classified like the same Bash command; a custom skill-test agent asks', () => {
+  const mis = 'node /p/scripts/mis.mjs';
+  for (const c of [`${mis} tty start x -- git push origin main`, `${mis} tty send sh 'npm install foo'`, `${mis} tty start r -- sh -c 'rm -rf /'`,
+    `MIS_SKILL_TEST_CMD="codex exec" ${mis} skill test a s.json`]) assert.equal(d(bash(c)), 'ask', c);
+  assert.equal(d(bash(`${mis} tty send sh 'rm -rf ~'`), { ...ctx, activeRun: false }), 'ask', 'careful rules apply without a run too');
+  assert.equal(d(bash(`${mis} tty send sh 'cat .git/make-it-ship/runs/r/state.json'`)), 'deny');
+  for (const c of [`${mis} tty start calc -- node repl.mjs`, `${mis} tty send calc '2+3'`, `${mis} tty expect calc '^5$'`, `${mis} skill test a s.json`]) assert.equal(d(bash(c)), 'allow', c);
+});

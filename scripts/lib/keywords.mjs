@@ -2,6 +2,7 @@
 // Pure functions: detect → instructions; hooks.mjs injects them, `mis test-prompt` shows them.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseSkill } from './skills.mjs';
 
 const K = (name, re, context) => ({ name, re, context });
 // Priority order: earlier wins in conflict resolution.
@@ -103,11 +104,8 @@ export function learnedSkills(prompt, repoDir, homeDir) {
     for (const d of readdirSync(base)) {
       const path = join(base, d, 'SKILL.md');
       try {
-        const fm = readFileSync(path, 'utf8').match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
-        const triggers = (fm.match(/^triggers:\s*\[(.*)\]\s*$/m)?.[1] ?? '').split(',').map((s) => s.trim().replace(/^["']|["']$/g, '').toLowerCase()).filter(Boolean);
-        if (triggers.some((t) => text.includes(t))) {
-          found.push({ name: fm.match(/^name:\s*(.+)$/m)?.[1].trim() ?? d, description: fm.match(/^description:\s*(.+)$/m)?.[1].trim() ?? '', path });
-        }
+        const s = parseSkill(readFileSync(path, 'utf8'));
+        if (s?.triggers?.some((t) => text.includes(t))) found.push({ name: s.name || d, description: s.description ?? '', path });
       } catch { /* unreadable skill is skipped */ }
     }
   }

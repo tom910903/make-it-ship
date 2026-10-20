@@ -42,28 +42,28 @@
 
 | 원본 | ABSORBED | PARTIAL | MISSING | EXCLUDED-BY-USER | N/A | 합계 |
 |---|---|---|---|---|---|---|
-| OMC (스킬 41 + 명령 2, 에이전트 19, 훅 27, MCP 도구 58, 키워드 18, HUD·CLI 24) | 115 (9) | 46 (49) | 22 (125) | 5 (5) | 1 (1) | 189 |
-| Superpowers (스킬 14 + visual companion 1, 훅·호스트 4) | 9 (3) | 6 (9) | 1 (4) | 0 | 3 (3) | 19 |
+| OMC (스킬 41 + 명령 2, 에이전트 19, 훅 27, MCP 도구 58, 키워드 18, HUD·CLI 24) | 130 (9) | 32 (49) | 21 (125) | 5 (5) | 1 (1) | 189 |
+| Superpowers (스킬 14 + visual companion 1, 훅·호스트 4) | 10 (3) | 6 (9) | 0 (4) | 0 | 3 (3) | 19 |
 | Ponytail (스킬 6, 레벨·명령·키워드 7, 훅·상태줄·기타 13) | 16 (1) | 2 (3) | 4 (18) | 0 | 4 (4) | 26 |
 | gstack (스킬 54, 훅·preamble 10, bin 74행 = 75개 파일, browse·기타 20) | 28 (7) | 49 (52) | 74 (92) | 0 | 7 (7) | 158 |
-| **합계** | **168 (20)** | **103 (113)** | **101 (239)** | **5 (5)** | **15 (15)** | **392** |
+| **합계** | **184 (20)** | **89 (113)** | **99 (239)** | **5 (5)** | **15 (15)** | **392** |
 
-M9 묶음별 남은 행(PARTIAL+MISSING 204행):
+M9 묶음별 남은 행(PARTIAL+MISSING 188행; M9-C 완료로 204→188):
 
 | 묶음 | 행 수 | 그중 [정책] |
 |---|---|---|
 | M9-A 설치·수명주기 | 33 | 0 |
 | M9-B 단독 계획·리뷰 스킬 | 59 | 0 |
-| M9-C 에이전트·스킬 작성 | 16 | 0 |
+| M9-C 에이전트·스킬 작성 | 0 (16행 완료) | 0 |
 | M9-D 연구·운영·배포·외부 | 58 | 39 |
 | M9-E 브라우저 자격 증명·고급 | 19 | 0 |
 | M9-F 남은 훅 | 19 | 0 |
-| **합계** | **204** | **39** |
+| **합계** | **188** | **39** |
 
 읽는 법:
-- ABSORBED가 20개에서 168개(43%)로 늘었다. 늘어난 148개는 M6(상시 훅·키워드·스타일·loop·careful/freeze·상태줄) 58개, M7(MCP 도구 54개와 기억·wiki 훅) 65개, M8(브라우저·QA·팀·세션·companion·pdf) 24개, 기존 기능 재판정 1개다.
-- MISSING 101개 중 58개가 M9-D(대부분 [정책] 외부 전송·gbrain 계열)이고, 나머지는 설치·업그레이드 명령, 빠진 에이전트·스킬 작성, 브라우저 자격 증명 기능이다.
-- PARTIAL 103개의 공통 원인은 여전히 "run 단계 지시문에만 있고 단독 명령이 없음"(M9-B 59행)이다.
+- ABSORBED가 20개에서 184개(47%)로 늘었다. M9-C(에이전트 11개, qa-tester tmux 조작, skill·skillify·learner·writing-skills) 16개가 더해졌다. 그 전 168개까지 늘어난 148개는 M6(상시 훅·키워드·스타일·loop·careful/freeze·상태줄) 58개, M7(MCP 도구 54개와 기억·wiki 훅) 65개, M8(브라우저·QA·팀·세션·companion·pdf) 24개, 기존 기능 재판정 1개다.
+- MISSING 99개 중 58개가 M9-D(대부분 [정책] 외부 전송·gbrain 계열)이고, 나머지는 설치·업그레이드 명령, 브라우저 자격 증명 기능이다.
+- PARTIAL 89개의 공통 원인은 여전히 "run 단계 지시문에만 있고 단독 명령이 없음"(M9-B 59행)이다.
 - 결함 이력: M6 1~5차, M7 1~2차 검증 결함은 수정 커밋이 있으나 재검증 전이고, M8은 아직 검증 보고서가 없다. 재검증에서 특정 기능의 결함이 남으면 그 행을 PARTIAL로 되돌린다.
 
 ## 2. OMC (oh-my-claudecode 4.15.6)
@@ -87,7 +87,7 @@ M9 묶음별 남은 행(PARTIAL+MISSING 204행):
 | OMC | deepinit | skill | 계층형 `AGENTS.md` 문서를 만들어 코드베이스를 초기화한다. | PARTIAL | `agents/explorer.md`, `deepinit_manifest` (M7) | M7: 매니페스트 도구. 남음: 계층형 `AGENTS.md` 생성 스킬 → M9-B |
 | OMC | external-context | skill | document-specialist 여러 개로 외부 문서를 병렬 검색한다. | PARTIAL | `phases/discover.md` (context7 있으면 사용) | 병렬 외부 문서 조사 절차 → M9-B |
 | OMC | hud | skill | HUD 상태줄의 레이아웃·프리셋·표시 요소를 설정한다. | PARTIAL | `scripts/statusline.mjs` (run 없이도 스타일·loop·freeze·브랜치·모델·ctx, 체이닝, M6) | M6: 상시 표시 흡수. 남음: 에이전트 수·todo 요소, 요소 선택·프리셋 → M9-F |
-| OMC | learner | skill | 현재 대화에서 재사용 가능한 스킬을 추출한다. | PARTIAL | `mis learn add` (`lib/learn.mjs`) | 학습을 스킬 파일로 추출 → M9-C |
+| OMC | learner | skill | 현재 대화에서 재사용 가능한 스킬을 추출한다. | ABSORBED | `skills/skillify/SKILL.md` (learner 모드), `mis skill add` (`lib/commands-skill.mjs`) | M9-C 흡수. 대화의 교훈을 learned skill(SKILL.md+triggers)로 추출. learner는 skillify 스킬에 합침 |
 | OMC | local-build-reminder | skill | OMC 포크에서 TypeScript를 고친 뒤 재빌드를 알린다. | N/A | — | OMC 개발용 포크 전용이고 MIS에는 빌드 단계가 없다. 사용자 확인 |
 | OMC | mcp-setup | skill | 자주 쓰는 MCP 서버를 설정한다. | MISSING | — | MCP 서버 등록 마법사 → M9-A |
 | OMC | merge-readiness | skill | 상태 기반 머지 준비 보고서와 설명 가능성 퀴즈. | ABSORBED | `mis ship`, `merge_readiness_*` 5개 (퀴즈 포함, `mcp/tools/knowledge.mjs`, M7) | M7 흡수 |
@@ -104,8 +104,8 @@ M9 묶음별 남은 행(PARTIAL+MISSING 204행):
 | OMC | sciomc | skill | scientist 에이전트를 병렬로 돌려 분석한다. | MISSING | — | 병렬 분석 오케스트레이션 → M9-D |
 | OMC | self-improve | skill | 토너먼트 선택 방식의 자율 진화 코드 개선. | MISSING | — | 토너먼트 개선 루프, 적용 전 사용자 승인 → M9-D |
 | OMC | setup | skill | setup·doctor·MCP 요청을 알맞은 흐름으로 보낸다. | MISSING | — | setup·doctor·mcp-setup 라우터 → M9-A |
-| OMC | skill | skill | 로컬 스킬 목록·추가·삭제·검색·편집. | PARTIAL | `list_skills`, `load_skills_local/global` (M7) | M7: 목록·로드만. 남음: 추가·삭제·검색·편집 명령 → M9-C |
-| OMC | skillify | skill | 반복 작업을 재사용 스킬 초안으로 만든다. | MISSING | `phases/retro.md`는 프로세스 변경 제안만 함 | 반복 작업을 스킬 초안으로 생성 → M9-C |
+| OMC | skill | skill | 로컬 스킬 목록·추가·삭제·검색·편집. | ABSORBED | `skills/skill/SKILL.md`, `mis skill list\|search\|add\|edit\|remove\|lint` (`lib/commands-skill.mjs`, `lib/skills.mjs`) | M9-C 흡수. 프로젝트·사용자 위치만 쓰고 플러그인 스킬은 읽기 전용. setup 마법사는 없음 |
+| OMC | skillify | skill | 반복 작업을 재사용 스킬 초안으로 만든다. | ABSORBED | `skills/skillify/SKILL.md`, `mis skill add`, `mis test-prompt`로 triggers 확인 | M9-C 흡수. 만든 SKILL.md의 triggers가 `learnedSkills`에 매칭됨(테스트) |
 | OMC | team | skill | 공유 task 목록으로 N개 에이전트를 단계별로 조율한다. | ABSORBED | `skills/team/SKILL.md` (plan→exec→verify→fix), `mis team` (M8) | M8 흡수 |
 | OMC | trace | skill | 경쟁 가설을 여러 tracer로 동시에 검증한다. | PARTIAL | `phases/debug.md`, `trace_timeline`/`trace_summary` (M7, 실행 기록용) | 남음: 경쟁 가설 병렬 추적 스킬 → M9-B |
 | OMC | ultragoal | skill | 여러 목표의 계획·원장을 `.omc/ultragoal`에 저장하고 `/goal` 인계문을 출력한다. | PARTIAL | `plan.json` task, `ultragoal` 키워드 → run + loop (M6) | M6: 키워드 흡수. 남음: 다중 목표 원장, `/goal` 인계문 → M9-B |
@@ -122,25 +122,25 @@ M9 묶음별 남은 행(PARTIAL+MISSING 204행):
 
 | 원본 | 기능 | 종류 | 한 줄 설명 | MIS 상태 | MIS 대응 위치 | 남은 작업 |
 |---|---|---|---|---|---|---|
-| OMC | analyst | agent | 계획 전 요구사항 분석 (Opus). | PARTIAL | `phases/interview.md` (메인 세션) | 위임 가능한 분석 에이전트 → M9-C |
+| OMC | analyst | agent | 계획 전 요구사항 분석 (Opus). | ABSORBED | `agents/analyst.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | architect | agent | 설계·디버깅 자문 (읽기 전용). | ABSORBED | `agents/architect.md` | — |
 | OMC | code-reviewer | agent | 심각도별 종합 코드 리뷰. | ABSORBED | `agents/spec-reviewer.md`, `agents/quality-reviewer.md` | — |
-| OMC | code-simplifier | agent | 기능을 유지하며 코드를 단순화한다. | PARTIAL | `phases/simplify.md` (메인 세션) | 단순화 에이전트 → M9-C |
+| OMC | code-simplifier | agent | 기능을 유지하며 코드를 단순화한다. | ABSORBED | `agents/code-simplifier.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | critic | agent | 계획·코드 비판 검토 (Opus). | ABSORBED | `agents/critic.md` | — |
-| OMC | debugger | agent | 근본 원인 분석, 회귀 격리, 빌드 오류 해결. | PARTIAL | `phases/debug.md` (메인 세션) | 디버거 에이전트 → M9-C |
-| OMC | designer | agent | UI/UX 설계·구현. | PARTIAL | `phases/design-explore.md` (메인 세션) | 디자이너 에이전트 → M9-C |
-| OMC | document-specialist | agent | 외부 문서·레퍼런스 조사. | PARTIAL | `phases/discover.md` | 문서 조사 에이전트 → M9-C |
-| OMC | executor | agent | 구현 작업 실행 (Sonnet). | PARTIAL | `agents/implementer.md` (run task + worktree 전용) | run 밖 일반 구현 위임 에이전트 → M9-C |
+| OMC | debugger | agent | 근본 원인 분석, 회귀 격리, 빌드 오류 해결. | ABSORBED | `agents/debugger.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | designer | agent | UI/UX 설계·구현. | ABSORBED | `agents/designer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | document-specialist | agent | 외부 문서·레퍼런스 조사. | ABSORBED | `agents/document-specialist.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | executor | agent | 구현 작업 실행 (Sonnet). | ABSORBED | `agents/executor.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | explore | agent | 파일·코드 패턴 탐색. | ABSORBED | `agents/explorer.md` | — |
-| OMC | git-master | agent | 원자적 커밋·rebase·이력 관리. | PARTIAL | `phases/ship.md` 4단계 | git 전담 에이전트 → M9-C |
-| OMC | planner | agent | 인터뷰 포함 전략 계획 (Opus). | PARTIAL | `phases/plan.md` (메인 세션) | 계획 에이전트 → M9-C |
-| OMC | qa-tester | agent | tmux로 CLI를 실제 조작해 테스트한다. | PARTIAL | `agents/qa-tester.md` (시나리오 설계, `mis browse` 사용 안내 M8) | 남음: tmux로 대화형 CLI를 직접 조작 → M9-C |
+| OMC | git-master | agent | 원자적 커밋·rebase·이력 관리. | ABSORBED | `agents/git-master.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | planner | agent | 인터뷰 포함 전략 계획 (Opus). | ABSORBED | `agents/planner.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | qa-tester | agent | tmux로 CLI를 실제 조작해 테스트한다. | ABSORBED | `agents/qa-tester.md` + `mis tty start\|send\|keys\|expect\|capture\|save\|stop` (`lib/commands-tty.mjs`) | M9-C 흡수. tmux로 대화형 CLI를 조작하고 `qa/*.sh` 재생 스크립트를 남김. tmux 없으면 BLOCKED |
 | OMC | scientist | agent | 데이터 분석·연구 실행. | MISSING | — | 분석 에이전트 (`python_repl`은 M7에 있음) → M9-D |
 | OMC | security-reviewer | agent | OWASP·비밀값·위험 패턴 탐지. | ABSORBED | `agents/security-reviewer.md` | — |
-| OMC | test-engineer | agent | 테스트 전략, e2e, flaky 테스트 보강, TDD. | PARTIAL | `phases/implement.md` (TDD 지시) | 테스트 전담 에이전트 → M9-C |
-| OMC | tracer | agent | 경쟁 가설 기반 인과 추적. | PARTIAL | `phases/debug.md` | tracer 에이전트 → M9-C |
+| OMC | test-engineer | agent | 테스트 전략, e2e, flaky 테스트 보강, TDD. | ABSORBED | `agents/test-engineer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
+| OMC | tracer | agent | 경쟁 가설 기반 인과 추적. | ABSORBED | `agents/tracer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 | OMC | verifier | agent | 완료 증거 검증. | ABSORBED | `mis verdict` (기계 판정, 원본보다 강함) | — |
-| OMC | writer | agent | README·API 문서·주석 작성 (Haiku). | PARTIAL | `phases/ship.md` 1단계 | 문서 작성 에이전트 → M9-C |
+| OMC | writer | agent | README·API 문서·주석 작성 (Haiku). | ABSORBED | `agents/writer.md` | M9-C 흡수. 역할에 맞는 최소 도구 허용목록, 증거 규칙(`mis check`·실제 명령 출력) 포함 |
 
 ### 2.3 훅 (`hooks/hooks.json`, 이벤트별 스크립트)
 
@@ -317,7 +317,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | Superpowers | using-superpowers | skill | 모든 대화 시작 시 스킬 사용 규율(응답 전에 Skill 도구 호출)을 확립한다. | ABSORBED | `lib/discipline.mjs` (SessionStart 스킬 목록·호출 규율, M6) | M6 흡수 |
 | Superpowers | verification-before-completion | skill | 완료·통과를 말하기 전에 검증 명령을 실행하고 출력을 확인한다. | ABSORBED | SessionStart 규율 (M6), `mis check`·`mis verdict` | M6 흡수 |
 | Superpowers | writing-plans | skill | 코드를 건드리기 전에 다단계 구현 계획을 쓴다. | PARTIAL | `phases/plan.md` (`plan.json`) | 단독 계획 문서 작성 → M9-B |
-| Superpowers | writing-skills (+ `render-graphs.js`, 테스트 방법) | skill | 스킬을 만들고 서브에이전트로 시험한 뒤 배포한다. | MISSING | — | 스킬 작성·서브에이전트 시험 → M9-C |
+| Superpowers | writing-skills (+ `render-graphs.js`, 테스트 방법) | skill | 스킬을 만들고 서브에이전트로 시험한 뒤 배포한다. | ABSORBED | `skills/writing-skills/SKILL.md`, `mis skill test` (기준선·스킬 포함 서브에이전트 실행, `MIS_SKILL_TEST_CMD`로 교체 가능), `mis skill lint`, `mis skill graphs` | M9-C 흡수. RED/GREEN 판정, render-graphs는 graphviz `dot`로 SVG(없으면 BLOCKED) |
 | Superpowers | SessionStart: `hooks/session-start` (startup·clear·compact) | hook | `using-superpowers` 전문을 `<EXTREMELY_IMPORTANT>`로 세션 맥락에 주입한다. | ABSORBED | `hooks.mjs` SessionStart (startup·resume·clear·compact, M6) | M6 흡수 |
 | Superpowers | `hooks/run-hook.cmd` | hook | Windows·Unix 공용 훅 실행 래퍼. | N/A | — | MIS는 macOS·Linux만 지원 (README). 사용자 확인 |
 | Superpowers | `hooks/hooks-cursor.json` | hook | Cursor용 훅 설정. | N/A | — | Cursor 전용 |

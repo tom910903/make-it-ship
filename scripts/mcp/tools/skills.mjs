@@ -1,23 +1,11 @@
 // Skill listing/loading (absorbs OMC list_omc_skills / load_omc_skills_local / load_omc_skills_global).
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { homeDir } from '../../lib/home.mjs';
-
-const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
-function scan(base, scope) {
-  if (!existsSync(base)) return [];
-  return readdirSync(base).flatMap((d) => {
-    const path = join(base, d, 'SKILL.md');
-    if (!existsSync(path)) return [];
-    const fm = readFileSync(path, 'utf8').match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
-    return [{ name: fm.match(/^name:\s*(.+)$/m)?.[1].trim() ?? d, scope, description: fm.match(/^description:\s*(.+)$/m)?.[1].trim() ?? '', path }];
-  });
-}
+import { PLUGIN_SKILLS, scanSkills as scan } from '../../lib/skills.mjs';
 
 const sources = (cwd) => ({
-  plugin: scan(join(PLUGIN, 'skills'), 'plugin'),
+  plugin: scan(PLUGIN_SKILLS, 'plugin'),
   local: scan(join(cwd, '.make-it-ship', 'skills'), 'local'),
   global: scan(join(homeDir(), 'skills'), 'global'),
 });

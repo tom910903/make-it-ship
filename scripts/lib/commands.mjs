@@ -28,6 +28,8 @@ import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
 import { browseCommands } from './commands-browse.mjs';
 import { teamCommands, excludeWorktrees } from './commands-team.mjs';
+import { skillCommands } from './commands-skill.mjs';
+import { ttyCommands } from './commands-tty.mjs';
 import { readLoop, endLoop } from './loop.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
@@ -705,5 +707,5 @@ function init(args, cwd) {
 
 const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands };
+export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands, ...browseCommands, ...teamCommands, ...skillCommands, ...ttyCommands };
 export { requiredChecks };

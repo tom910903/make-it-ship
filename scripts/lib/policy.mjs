@@ -102,6 +102,7 @@ function classifyBash(cmd, ctx, cwd) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     let r = careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
+    if (r.decision === 'allow') r = misInner(misSub(ws, functions), text, ctx, dir);
     if (r.decision === 'allow') r = externalMis(misSub(ws, functions));
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
@@ -166,6 +167,16 @@ export const EXTERNAL_MIS = [];
 function externalMis(mis) {
   if (!mis) return allow;
   for (const [prefix, why] of EXTERNAL_MIS) if (prefix.every((w, i) => mis[i] === w)) return ask(`${why} — data leaves this machine; needs your approval`);
+  return allow;
+}
+
+/** M9-C: `mis tty start -- <cmd>` runs and `mis tty send <text>` types a command line: classify it as that Bash command. */
+function misInner(mis, text, ctx, dir) {
+  if (mis?.[0] === 'skill' && mis[1] === 'test' && /\bMIS_SKILL_TEST_CMD=/.test(text)) return ask('a custom skill-test agent command (MIS_SKILL_TEST_CMD) may send the skill and scenarios to another service — needs your approval');
+  if (mis?.[0] !== 'tty') return allow;
+  const q = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
+  if (mis[1] === 'start' && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
+  if (mis[1] === 'send') return classifyBash(mis.slice(3).filter((w) => w !== '--no-enter').join(' '), ctx, dir);
   return allow;
 }
 

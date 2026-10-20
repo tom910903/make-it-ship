@@ -31,7 +31,7 @@ Step-by-step instructions are in `docs/milestones/NEEDS_HUMAN.md` (NH-5). This i
 /make-it-ship:run Fix the bug described in ISSUE.md
 /make-it-ship:status
 ```
-Optional single-phase commands: `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`.
+Optional single-phase commands: `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. Skills: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
 
 What happens:
 1. **Setup.** `mis doctor` checks the environment. `mis init` proposes `.make-it-ship.json`, which holds the check commands (detected from `package.json`, Python tests, a `Makefile`, Cargo, Go, or SwiftPM). You confirm it before it is written.
@@ -72,12 +72,27 @@ Installing the plugin is enough; nothing else needs to be installed for these.
 - **Sessions (psm):** `/make-it-ship:session`, `mis session create issue <n> | pr <n> | feature "<name>" [--base <ref>] [--tmux]`, `mis session list`, `mis session remove <name>`. Each gets its own worktree under `.worktrees/` (`fix/<n>`, `pr-<n>-review` fetched from `pull/<n>/head`, `feature/<slug>`). Remove refuses while the worktree has uncommitted changes and keeps the branch.
 - **Visual companion:** `mis companion start [dir]` serves HTML mockups and diagrams (default `design/`) on 127.0.0.1 with a page index, live reload and clickable `data-choice` options (`mis companion status` lists clicks); `mis companion stop`. The URL carries an access key. The design phases offer it when a question is visual.
 
+## Agents
+Subagents in `agents/`, each with the narrowest tool allowlist for its role (no nested agents, no MCP). All of them treat repository content as untrusted and never call work done without real command output (inside a run, only `mis check` results and `mis verdict` count); none pushes.
+- **Read-only** (`Read, Grep, Glob, Bash`): `explorer`, `analyst` (acceptance criteria, gaps, questions), `planner` (task plan as text), `tracer` (competing hypotheses with evidence), `architect`, `critic`, `spec-reviewer`, `quality-reviewer`, `security-reviewer`, `product-reviewer`, `qa-tester` (scenarios; drives interactive CLIs with `mis tty` and leaves only the replay script under `qa/`). `document-specialist` adds `WebFetch, WebSearch` for official docs and never puts repository code into a query.
+- **Git only** (`Read, Grep, Glob, Bash`): `git-master` (atomic commits in the repo's style, history forensics; no push, no rewriting shared history).
+- **Writers** (`Read, Write, Edit, Grep, Glob, Bash`): `implementer` (one run task in its own worktree), `executor` (one change outside a run), `debugger` (root cause first, regression test), `designer` (UI with all states and rendered evidence), `test-engineer` (strategy, missing tests, flaky-test hardening), `code-simplifier` (same behavior, less code, tests before and after), `writer` (docs whose commands were actually run).
+
+## Interactive CLI QA
+`mis tty start <name> -- <command…>` runs a program in a tmux session (BLOCKED without tmux); `mis tty send <name> <text>`, `mis tty keys <name> C-c`, `mis tty expect <name> <regex> [--timeout ms]` (only output after the last input counts), `mis tty capture <name>`, `mis tty stop <name>`. `mis tty save <name> qa/<file>.sh` writes the successful steps as a replay script that fails when the expected output does not appear; register it as a `qa-*` check.
+
+## Skill authoring
+Learned skills are `SKILL.md` files with `name`, `description` and a one-line `triggers: [..]`; the prompt router offers one when a trigger phrase is in your prompt. They live in the project (`.make-it-ship/skills/<name>/`) or for you everywhere (`~/.make-it-ship/skills/<name>/`); the plugin's own `skills/` are never written.
+- `/make-it-ship:skill` — `mis skill list | search <text> | add <file|-> [--scope project|user] | edit <name> [<file|->] | remove <name> | lint [<name>]`. `add` and `edit` lint first and write nothing on an error.
+- `/make-it-ship:skillify` (also "learner") — turns a repeatable workflow or a hard-won fix from the session into a skill draft and saves it with `mis skill add`.
+- `/make-it-ship:writing-skills` — test-first authoring: `mis skill test <name> <scenarios.json>` runs each scenario through a fresh subagent without and with the skill (default `claude -p --safe-mode --tools Read,Grep,Glob` in an empty directory; `MIS_SKILL_TEST_CMD` replaces it) and reports GREEN only when every scenario fails without the skill and passes with it. `mis skill graphs <name>` renders its ```dot flowcharts with graphviz.
+
 ## Tools (MCP server `mis`, bundled)
 The plugin ships an MCP server (`.mcp.json`), so these tools appear as `mcp__plugin_make-it-ship_mis__<name>`:
 - **Memory:** `notepad_*` (priority / working 7 days / manual), `project_memory_*` (stack, commands, notes, directives), `state_*` (mode state; the run, loop, style and freeze are shown live and read-only), `shared_memory_*` (namespaced key/value with TTL for agents). Stored under `.git/make-it-ship/memory/`, never committed.
 - **Knowledge:** `wiki_*` (pages in `.make-it-ship/wiki/`, git-ignored by default — delete its `.gitignore` to commit them), `session_search` (past Claude Code sessions of this project, read-only), `trace_timeline` / `trace_summary` (run events and hook activity), `deepinit_manifest`, `merge_readiness_*` (a check-your-understanding session before merging, using the run's evidence).
 - **Code:** `lsp_*` (hover, definition, references, symbols, diagnostics, rename, code actions — uses language servers already installed: typescript-language-server, pyright/pylsp, gopls, rust-analyzer, clangd, sourcekit-lsp), `ast_grep_search` / `ast_grep_replace` (needs the `ast-grep` CLI), `python_repl` (a persistent `python3`; it is ordinary Python with the same reach as running python from Bash). A missing binary returns an install hint instead of a result.
-- **Skills:** `list_skills`, `load_skills_local`, `load_skills_global`.
+- **Skills:** `list_skills`, `load_skills_local`, `load_skills_global` (managing and writing them: see Skill authoring).
 - `ast_grep_replace` and `lsp_rename` change files only with `apply: true`; while a run is active the guard asks before they (and `lsp_code_action_resolve`) rewrite files, and freeze applies to them.
 - Note: Claude Code does not load a plugin's MCP server when started with `--strict-mcp-config`.
 
@@ -91,7 +106,7 @@ The plugin ships an MCP server (`.mcp.json`), so these tools appear as `mcp__plu
 - Cookie import, connecting to your own Chrome, downloads and scraping are not included yet.
 
 ## `mis` CLI
-You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`, `team start|status|wait|shutdown`, `session create|list|remove`, `companion start|status|stop`.
+You run it as `node scripts/mis.mjs <command>`. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`, `team start|status|wait|shutdown`, `session create|list|remove`, `companion start|status|stop`, `tty start|send|keys|expect|capture|save|stop`, `skill list|search|add|edit|remove|lint|test|graphs`.
 
 ## Configuration: `.make-it-ship.json`
 ```json

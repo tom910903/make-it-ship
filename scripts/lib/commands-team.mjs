@@ -38,11 +38,11 @@ function flag(args, name) {
 // ---------------------------------------------------------------- tmux
 
 const tmuxArgs = (a) => (process.env.MIS_TMUX_SOCKET ? ['-L', process.env.MIS_TMUX_SOCKET, ...a] : a);
-const tmux = (...a) => spawnSync('tmux', tmuxArgs(a), { encoding: 'utf8' });
-function requireTmux() {
-  if (tmux('-V').error) fail('BLOCKED: tmux is not installed (command -v tmux failed). Install tmux, or run the team with Claude Code subagents (Agent tool) instead.');
+export const tmux = (...a) => spawnSync('tmux', tmuxArgs(a), { encoding: 'utf8' });
+export function requireTmux(alt = 'run the team with Claude Code subagents (Agent tool) instead') {
+  if (tmux('-V').error) fail(`BLOCKED: tmux is not installed (command -v tmux failed). Install tmux, or ${alt}.`);
 }
-const attachHint = (s) => `tmux ${process.env.MIS_TMUX_SOCKET ? `-L ${process.env.MIS_TMUX_SOCKET} ` : ''}attach -t ${s}`;
+export const attachHint = (s) => `tmux ${process.env.MIS_TMUX_SOCKET ? `-L ${process.env.MIS_TMUX_SOCKET} ` : ''}attach -t ${s}`;
 
 /** Keep `.worktrees/` out of `git status` (local exclude, never a tracked .gitignore change). */
 export function excludeWorktrees(root) {
