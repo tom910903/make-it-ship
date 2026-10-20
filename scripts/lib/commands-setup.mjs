@@ -1,3 +1,4 @@
+import { setupRouting } from './commands-always.mjs';
 // mis commands of M9-A (setup & lifecycle): setup (global settings + instruction migration, team bootstrap), doctor
 // (+ --fix, session), mcp-setup, config, version, update-check, upgrade, uninstall, launch, and cancel --all.
 // Absorbs OMC omc-setup/setup/install/doctor/debug/mcp-setup/config/version/update/launch/cancel and gstack
@@ -46,7 +47,8 @@ function setupTeam(args, cwd) {
 
 function setup(args, cwd) {
   if (args[0] === 'team') return setupTeam(args.slice(1), cwd);
-  if (args[0] !== undefined && !args[0].startsWith('--')) fail('usage: mis setup [--write] | setup team [--write]');
+  if (args[0] === 'routing') return setupRouting(args, cwd);
+  if (args[0] !== undefined && !args[0].startsWith('--')) fail('usage: mis setup [--write] | setup team [--write] | setup routing [--write]');
   const { changes, review } = planSetup();
   const reviewNote = review.length ? 'These lines refer to plugins Make It Ship replaces; edit them by hand if they no longer apply.' : undefined;
   if (!args.includes('--write') && !args.includes('--apply')) {

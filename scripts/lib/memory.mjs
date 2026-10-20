@@ -230,7 +230,8 @@ const directiveLines = (m) => (m?.userDirectives ?? []).map((d) => `- ${d.priori
 function projectBlock(m) {
   const langs = m?.techStack?.languages ?? [];
   const cmds = Object.entries(m?.build ?? {}).filter(([, v]) => v).map(([k, v]) => `${k.replace(/Command$/, '')}: \`${v}\``);
-  return langs.length || cmds.length ? `## Project\n${[langs.length ? `languages: ${langs.join(', ')}` : '', ...cmds].filter(Boolean).join('\n')}` : '';
+  const hot = (m?.hotPaths ?? []).slice(0, 5).map((h) => h.path);
+  return langs.length || cmds.length || hot.length ? `## Project\n${[langs.length ? `languages: ${langs.join(', ')}` : '', ...cmds, hot.length ? `often read: ${hot.join(', ')}` : ''].filter(Boolean).join('\n')}` : '';
 }
 
 /** The project facts block alone ('' when unknown). */

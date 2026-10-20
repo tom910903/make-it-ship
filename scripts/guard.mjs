@@ -43,7 +43,7 @@ try {
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
   // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
   const ctx = context(at);
-  let freezeDir = null;
+  let freezeDir = null, debugScope = null;
   try {
     const f = (await import('./lib/home.mjs')).readHome('freeze.json');
     const { realpathSync } = await import('node:fs');
@@ -51,6 +51,8 @@ try {
     const sessionCtx = context(cwd);
     const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
     if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
+    const s = (await import('./lib/home.mjs')).readHome('debug-scope.json');
+    if (s?.paths?.length && (s.root ?? null) === root) debugScope = s.paths;
   } catch { /* no home */ }
   // M9-B: scan the commits a push would send for secrets; the result goes into the push ask (never blocks silently).
   let pushScan = null;
@@ -60,7 +62,7 @@ try {
       && (await import('./lib/shell.mjs')).commandsOf(String(input.tool_input.command)).commands.some(isPush)) {
     try { pushScan = (await import('./lib/redact.mjs')).prePushScan(ctx.repoRoot); } catch (e) { pushScan = { error: e.message.split('\n')[0].slice(0, 120) }; }
   }
-  const r = classify(input, { ...ctx, freezeDir, pushScan });
+  const r = classify(input, { ...ctx, freezeDir, debugScope, pushScan });
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {

@@ -86,7 +86,7 @@ M9 묶음별 남은 행(PARTIAL+MISSING 130행; M9-C 완료로 204→188, M9-B �
 | OMC | deep-interview | skill | 모호성 점수로 실행 승인을 막는 소크라테스식 인터뷰. | ABSORBED | `phases/interview.md`, `skills/interview/SKILL.md`, `deep interview` 키워드 (M6) | — |
 | OMC | deepinit | skill | 계층형 `AGENTS.md` 문서를 만들어 코드베이스를 초기화한다. | ABSORBED | `phases/discover.md` deepinit 단계 (`deepinit_manifest` diff→변경 디렉터리만 `AGENTS.md`→save), `deepinit` 키워드 (M9-B) | M9-B 흡수 |
 | OMC | external-context | skill | document-specialist 여러 개로 외부 문서를 병렬 검색한다. | ABSORBED | `phases/discover.md` external docs (document-specialist 2-3개 병렬) (M9-B) | M9-B 흡수 |
-| OMC | hud | skill | HUD 상태줄의 레이아웃·프리셋·표시 요소를 설정한다. | PARTIAL | `scripts/statusline.mjs` (run 없이도 스타일·loop·freeze·브랜치·모델·ctx, 체이닝, M6) | M6: 상시 표시 흡수. 남음: 에이전트 수·todo 요소, 요소 선택·프리셋 → M9-F |
+| OMC | hud | skill | HUD 상태줄의 레이아웃·프리셋·표시 요소를 설정한다. | ABSORBED | `scripts/statusline.mjs` (스타일·loop·freeze·에이전트 수·todo·브랜치·모델·ctx, 체이닝) | M6+M9-F 흡수: `agents N (k stale)`·`todo a/b` 추가(F1). 요소 선택·프리셋은 만들지 않음(`statusLine.chain`으로 다른 상태줄 병행) |
 | OMC | learner | skill | 현재 대화에서 재사용 가능한 스킬을 추출한다. | ABSORBED | `skills/skillify/SKILL.md` (learner 모드), `mis skill add` (`lib/commands-skill.mjs`) | M9-C 흡수. 대화의 교훈을 learned skill(SKILL.md+triggers)로 추출. learner는 skillify 스킬에 합침 |
 | OMC | local-build-reminder | skill | OMC 포크에서 TypeScript를 고친 뒤 재빌드를 알린다. | N/A | — | OMC 개발용 포크 전용이고 MIS에는 빌드 단계가 없다. 사용자 확인 |
 | OMC | mcp-setup | skill | 자주 쓰는 MCP 서버를 설정한다. | ABSORBED | `mis mcp-setup list|add <name> [--write]` (`lib/install.mjs` KNOWN_MCP, 실행은 guard ask), `skills/setup/SKILL.md`, `tests/integration/mis-setup.test.mjs` | M9-A |
@@ -157,22 +157,22 @@ MIS `hooks/hooks.json`은 PreToolUse(`scripts/guard.mjs`, fail-closed)와 상시
 | OMC | SessionStart: wiki-session-start.mjs | hook | wiki 맥락과 관련 페이지를 주입하고 색인을 재구성한다. | ABSORBED | `lib/wiki.mjs` `wikiSessionContext` (M7) | M7 흡수 |
 | OMC | SessionStart(init): setup-init.mjs | hook | `.omc` 디렉터리 구조 생성, 설정 검증, 환경 설정. | ABSORBED | SessionStart `.make-it-ship.json` 스키마 경고 한 줄 (`hooks.mjs`), 상태 디렉터리 지연 생성, `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | OMC | SessionStart(maintenance): setup-maintenance.mjs | hook | 오래된 상태 파일 정리, 고아 상태 정리, SQLite vacuum. | ABSORBED | SessionStart `dailyMaintenance` (`lib/update.mjs`: 하루 1회, `maintenance.retainDays`(기본 90, 0=끔) 지난 종료 run·끝난 team·죽은 browse 정리, 활성 run·loop 보존), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
-| OMC | PreToolUse: pre-tool-enforcer.mjs | hook | 모든 도구 실행 전에 상황별 알림(위임·모델 라우팅 등)을 주입한다. | MISSING | `scripts/guard.mjs`는 허용·확인·거부 정책만 담당 | 상황 알림 주입 (guard와 분리, fail-open) → M9-F |
-| OMC | PermissionRequest(Bash): permission-handler.mjs | hook | 안전한 읽기 전용 Bash를 자동 허용한다 (메타문자·heredoc 검사). | MISSING | — | 읽기 전용 Bash 자동 허용 (guard 정책과 일관되게) → M9-F |
+| OMC | PreToolUse: pre-tool-enforcer.mjs | hook | 모든 도구 실행 전에 상황별 알림(위임·모델 라우팅 등)을 주입한다. | ABSORBED | `hooks.mjs` PreToolUse (guard와 별도 항목·프로세스) | M9-F 흡수(F4): Agent 호출 시 산출물 파일 명시 알림(세션 1회)·실행 중 4개 이상 대기 알림, `git commit` 시 열린 todo 알림. 결정은 내지 않고 오류 시 출력 없음 |
+| OMC | PermissionRequest(Bash): permission-handler.mjs | hook | 안전한 읽기 전용 Bash를 자동 허용한다 (메타문자·heredoc 검사). | ABSORBED | `hooks.mjs` PermissionRequest → `lib/readonly.mjs` | M9-F 흡수(F3): guard가 run 유무 모두 allow + 같은 shell 파서로 단일 읽기 전용 명령 + 사용자 `permissions.ask` 미해당일 때만 allow. 메타문자·heredoc·리다이렉트·래퍼·대입은 판단 안 함. guard 테스트의 ask/deny 문자열 전부 자동 허용 안 됨을 테스트 |
 | OMC | PostToolUse: post-tool-verifier.mjs | hook | 도구 결과를 보고 검증 알림을 주고 `<remember>` 태그를 notepad에 저장한다. | ABSORBED | `hooks.mjs` PostToolUse 편집 후 검증 알림 (M6), `<remember>` 처리 (M7) | M6·M7 흡수 |
-| OMC | PostToolUse: project-memory-posttool.mjs | hook | 도구 출력에서 project memory를 학습·갱신한다. | PARTIAL | `lib/memory.mjs` `learnTestCommand` (M7) | M7: test 명령 학습만. 남음: 자주 쓰는 경로·사용자 지시 감지 → M9-F |
+| OMC | PostToolUse: project-memory-posttool.mjs | hook | 도구 출력에서 project memory를 학습·갱신한다. | ABSORBED | `hooks.mjs` PostToolUse/SessionEnd/UserPromptSubmit, `lib/tracking.mjs`, `lib/memory.mjs` | M7+M9-F 흡수(F11): Read 경로를 세션에서 세고 SessionEnd에 상위 10개를 `hotPaths`로 기록(`often read`로 주입). 지시 감지는 UserPromptSubmit에서 하고 directive 후보로 제안만(자동 저장 안 함) |
 | OMC | PostToolUse: post-tool-rules-injector.mjs | hook | 파일 접근 시 관련 규칙 파일(`.claude/rules`, `~/.claude/rules` 등)을 세션당 한 번 주입한다. | ABSORBED | `hooks.mjs` PostToolUse, `lib/posttool.mjs` `matchingRules` (M6) | M6 흡수 (`.claude/rules`는 Claude Code가 직접 로드) |
 | OMC | PostToolUseFailure: post-tool-use-failure.mjs | hook | 도구 실패와 재시도 횟수를 기록해 Stop 훅에 넘긴다. | ABSORBED | `hooks.mjs` PostToolUseFailure (3회 반복 실패 시 근본 원인 안내, M6) | M6 흡수 |
-| OMC | SubagentStart/Stop: subagent-tracker.mjs | hook | 서브에이전트 생성·종료 추적, 5분 이상 정체 감지, HUD 표시, 고아 정리. | MISSING | — | 에이전트 추적, 정체 감지, 상태줄 에이전트 수 → M9-F |
-| OMC | SubagentStop: verify-deliverables.mjs | hook | 완료한 에이전트가 기대 산출물을 실제로 만들었는지 확인한다. | PARTIAL | `phases/parallel.md` 5단계(보고서 확인), `mis verdict` | SubagentStop 훅으로 산출물 자동 검사 → M9-F |
-| OMC | PreCompact: pre-compact.mjs | hook | compact 전에 활성 모드·TODO·notepad 지혜를 체크포인트로 남긴다. | PARTIAL | `hooks.mjs` PreCompact, `lib/memory.mjs` `preCompactContext` (우선 노트·지시·run·loop, M7) | M7: 모드·노트 보존. 남음: TODO 체크포인트 → M9-F |
+| OMC | SubagentStart/Stop: subagent-tracker.mjs | hook | 서브에이전트 생성·종료 추적, 5분 이상 정체 감지, HUD 표시, 고아 정리. | ABSORBED | `hooks.mjs` SubagentStart/SubagentStop, `lib/tracking.mjs` | M9-F 흡수(F1): 에이전트별 파일로 실행 중 수 기록, 5분 이상 stale 표시, 6시간 넘은 고아는 세지 않음, SessionEnd에 정리 |
+| OMC | SubagentStop: verify-deliverables.mjs | hook | 완료한 에이전트가 기대 산출물을 실제로 만들었는지 확인한다. | ABSORBED | `hooks.mjs` SubagentStop, `lib/tracking.mjs` `missingDeliverables` | M9-F 흡수(F2): 보고에서 created/wrote/saved 등으로 언급한 저장소 안 파일이 없으면 그 서브에이전트를 1회 block(이유 포함). `stop_hook_active`면 다시 막지 않음 |
+| OMC | PreCompact: pre-compact.mjs | hook | compact 전에 활성 모드·TODO·notepad 지혜를 체크포인트로 남긴다. | ABSORBED | `hooks.mjs` PreCompact·SessionStart(compact), `lib/tracking.mjs` `todoBlock` | M7+M9-F 흡수(F7): 우선 노트·지시·run·loop에 더해 열린 todo 목록 보존 |
 | OMC | PreCompact: project-memory-precompact.mjs | hook | 사용자 지시·프로젝트 맥락을 compact 후에도 남긴다. | ABSORBED | `preCompactContext` 지시 보존 + compact 후 프로젝트 블록 재주입 (M7) | M7 흡수 |
 | OMC | PreCompact: wiki-pre-compact.mjs | hook | wiki 요약을 compact 후에도 남긴다. | ABSORBED | `lib/wiki.mjs` `wikiPreCompact` (M7) | M7 흡수 |
 | OMC | Stop: context-guard-stop.mjs | hook | 컨텍스트 사용률이 기준(기본 75%)을 넘으면 세션 갱신을 제안한다. | ABSORBED | `hooks.mjs` Stop (75% 이상 경고, `lib/context.mjs`, M6) | M6 흡수 |
-| OMC | Stop: workflow-drift-guard.mjs | hook | 결정적 신호로 워크플로 이탈을 감지해 Stop을 막는다. | MISSING | — | run 진행 중 이탈 감지 → M9-F |
+| OMC | Stop: workflow-drift-guard.mjs | hook | 결정적 신호로 워크플로 이탈을 감지해 Stop을 막는다. | ABSORBED | `hooks.mjs` Stop, `lib/tracking.mjs` `driftDecision` | M9-F 흡수(F5): run EXECUTING + 이 세션이 편집함 + 현재 트리에 증거 없음 → 이유와 함께 block, run당 2회 상한. 우선순위: loop > drift > simplifier > ctx 경고 |
 | OMC | Stop: persistent-mode.mjs | hook | ralph·autopilot·ultrawork·team 등 모드에서 작업이 끝나기 전 종료를 막는다 ("The boulder never stops"). | ABSORBED | `hooks.mjs` Stop + `lib/loop.mjs` (M6) | M6 흡수. 지속 대상은 loop 하나(autopilot·ultragoal은 loop로 감쌈, ultrawork·team은 자체 대기) |
-| OMC | Stop: code-simplifier.mjs | hook | (opt-in) 최근 수정 파일을 code-simplifier에 넘긴다. | MISSING | — | opt-in 단순화 Stop 훅 → M9-F |
-| OMC | SessionEnd: session-end.mjs (요약·정리) | hook | 세션 요약과 상태 정리를 비동기로 한다. | PARTIAL | `hooks.mjs` SessionEnd → `lib/wiki.mjs` `wikiSessionEnd` (세션 로그, M7) | M7: 세션 로그만. 남음: 세션 요약·상태 정리 → M9-F |
+| OMC | Stop: code-simplifier.mjs | hook | (opt-in) 최근 수정 파일을 code-simplifier에 넘긴다. | ABSORBED | `hooks.mjs` Stop, `lib/tracking.mjs` `simplifyDecision` | M9-F 흡수(F6): `simplifier.enabled: true`일 때만, 편집 파일 집합당 1회, 재진입 Stop에서는 안 함. loop·drift가 먼저 |
+| OMC | SessionEnd: session-end.mjs (요약·정리) | hook | 세션 요약과 상태 정리를 비동기로 한다. | ABSORBED | `hooks.mjs` SessionEnd (wiki 세션 로그 + 요약 + 정리) | M7+M9-F 흡수(F7): `.git/make-it-ship/session-summaries/<id>.md`(편집 파일·열린 todo·run·많이 읽은 파일), 에이전트 추적 정리, hotPaths 반영. 비동기는 아님(작은 동기 쓰기) |
 | OMC | SessionEnd: session-end.mjs (알림 전송) | hook | 세션 종료 알림 콜백(Telegram·Discord·Slack). | EXCLUDED-BY-USER | — | 없음 |
 | OMC | SessionEnd: wiki-session-end.mjs | hook | 세션 메타데이터를 wiki에 추가 기록한다. | ABSORBED | `lib/wiki.mjs` `wikiSessionEnd` (M7) | M7 흡수 |
 
@@ -270,7 +270,7 @@ MIS `hooks/hooks.json`은 PreToolUse(`scripts/guard.mjs`, fail-closed)와 상시
 
 | 원본 | 기능 | 종류 | 한 줄 설명 | MIS 상태 | MIS 대응 위치 | 남은 작업 |
 |---|---|---|---|---|---|---|
-| OMC | HUD 상태줄 (`~/.claude/hud/omc-hud.mjs`, `dist/hud`) | statusline | 요소: agents, autopilot, ralph, prd, todos, skills, background, call-counts, context·context-warning, token-usage, limits, model, git, cwd, session, last-tool, thinking, permission, mission-board 등. 현재 사용자 `statusLine`이 이것이다. | PARTIAL | `scripts/statusline.mjs` (run 진행 + 스타일·loop·freeze·브랜치·모델·ctx, 체이닝, M6) | M6: 상시 표시 흡수. 남음: 에이전트 수·todo·도구 호출 수 등 요소 → M9-F |
+| OMC | HUD 상태줄 (`~/.claude/hud/omc-hud.mjs`, `dist/hud`) | statusline | 요소: agents, autopilot, ralph, prd, todos, skills, background, call-counts, context·context-warning, token-usage, limits, model, git, cwd, session, last-tool, thinking, permission, mission-board 등. 현재 사용자 `statusLine`이 이것이다. | ABSORBED | `scripts/statusline.mjs` (run 진행 + 스타일·loop·freeze·에이전트·todo·브랜치·모델·ctx, 체이닝) | M6+M9-F 흡수: 핵심 요소(모델·git·ctx·에이전트·todo·모드) 표시. 호출 수·토큰·limits 등 나머지 요소는 만들지 않음(`statusLine.chain`으로 OMC HUD를 이어 붙일 수 있음) |
 | OMC | omc launch | bin | tmux 셸 통합으로 Claude Code 실행 | ABSORBED | `mis launch [claude args]` (tmux 세션에서 claude, attach 명령 출력, tmux 없으면 BLOCKED), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | OMC | omc interop | bin | Claude(OMC)와 Codex(OMX) 분할 tmux 세션 | PARTIAL | `mis team --worker codex\|gemini` (M8, guard ask) | M8: tmux 혼합 워커. 남음: Claude·Codex 분할 세션 명령 [정책] → M9-D |
 | OMC | omc ask | bin | 다른 모델 자문 실행·결과 파일 저장 | PARTIAL | `mis second-opinion detect` | 남음: 실행기와 결과 파일 [정책] → M9-D |
@@ -426,13 +426,13 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | careful: `careful/bin/check-careful.sh` (PreToolUse Bash) | hook | 파괴적 명령이면 경고. | ABSORBED | `scripts/guard.mjs` + `lib/policy.mjs` `careful` (M6) | M6 흡수 |
 | gstack | freeze: `freeze/bin/check-freeze.sh` (PreToolUse Edit·Write) | hook | freeze 경계 밖 편집 차단. | ABSORBED | `scripts/guard.mjs` freeze 경계 (M6) | M6 흡수 |
 | gstack | guard: careful + freeze 훅 | hook | 두 훅 동시 적용. | ABSORBED | `scripts/guard.mjs` (M6) | M6 흡수 |
-| gstack | investigate: 디버그 범위 제한 훅 (Edit·Write) | hook | 디버깅 중 편집 범위 제한. | MISSING | — | debug 중 편집 범위 제한 → M9-F |
+| gstack | investigate: 디버그 범위 제한 훅 (Edit·Write) | hook | 디버깅 중 편집 범위 제한. | ABSORBED | `mis debug scope <path…>` (`lib/commands-always.mjs`), guard `debugScope` (`lib/policy.mjs`), `phases/debug.md` | M9-F 흡수(F8): 가설 범위 밖 Write/Edit는 guard ask(freeze와 달리 deny 아님), 저장소별, `--clear`로 해제 |
 | gstack | preamble: `gstack-update-check` | hook | 스킬 실행마다 업그레이드 확인. | ABSORBED | SessionStart 업데이트 알림 (캐시, fail-open), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
-| gstack | preamble: proactive 제안 (`gstack-config get proactive`) | hook | 다음에 쓸 스킬을 선제 제안. | MISSING | — | 다음 스킬 선제 제안 → M9-F |
+| gstack | preamble: proactive 제안 (`gstack-config get proactive`) | hook | 다음에 쓸 스킬을 선제 제안. | ABSORBED | `lib/discipline.mjs` (SessionStart) | M9-F 흡수(F10): 작업이 끝나면 다음 스킬 한 줄 제안(실행은 안 함). `proactive: false`로 끔 |
 | gstack | preamble: 텔레메트리 (`gstack-telemetry-log`, `-sync`) | hook | 스킬 실행 이벤트 기록·Supabase 동기화. | MISSING | — | 로컬 기록 + 동기화, 기본 꺼짐, 동기화는 guard ask [정책] → M9-D |
-| gstack | preamble: CLAUDE.md `## Skill routing` 섹션 작성 | hook | 프로젝트 CLAUDE.md에 스킬 라우팅 규칙을 추가한다. | MISSING | — | 프로젝트 CLAUDE.md 라우팅 절 작성 (사용자 승인 후) → M9-F |
-| gstack | preamble: 세션 종류·타임라인·질문 로그 (`gstack-session-kind`, `gstack-timeline-log`, `gstack-question-log`) | hook | 세션 분류, 이벤트 타임라인, AskUserQuestion 기록. | PARTIAL | run `events.jsonl` | run 밖 타임라인·세션 종류 기록 → M9-F |
-| gstack | ETHOS·AskUserQuestion 형식 규율 | hook | 질문 형식·작업 원칙 공통 지시. | PARTIAL | `lib/discipline.mjs` (한 번에 하나씩 질문, M6), `phases/interview.md` | M6: 질문 규율 일부. 남음: 질문 형식(재정리·추천·선택지) 규율 → M9-F |
+| gstack | preamble: CLAUDE.md `## Skill routing` 섹션 작성 | hook | 프로젝트 CLAUDE.md에 스킬 라우팅 규칙을 추가한다. | ABSORBED | `mis setup routing [--write]` (`lib/routing.mjs`) | M9-F 흡수(F10): dry-run diff, 기존 `## Skill routing` 절(gstack 것 포함) 교체·멱등, `--write`는 guard ask |
+| gstack | preamble: 세션 종류·타임라인·질문 로그 (`gstack-session-kind`, `gstack-timeline-log`, `gstack-question-log`) | hook | 세션 분류, 이벤트 타임라인, AskUserQuestion 기록. | ABSORBED | `lib/timeline.mjs`, SessionStart/End·SubagentStart/Stop·Skill 기록, `trace_timeline` | M9-F 흡수(F9): 세션 종류(interactive·headless·team-worker)와 run 밖 이벤트를 프로젝트 타임라인에 기록. 질문 로그는 B3(`mis question log`) 행 |
+| gstack | ETHOS·AskUserQuestion 형식 규율 | hook | 질문 형식·작업 원칙 공통 지시. | ABSORBED | `lib/discipline.mjs` (한 번에 하나씩 질문, 재정리·추천·2-4 선택지), `phases/interview.md` | M6+M9-F 흡수(F10): 질문 형식(재정리·추천·선택지) 규율 추가 |
 
 ### 5.3 bin 도구 (`bin/`, 75개 파일, 74행)
 
@@ -498,7 +498,7 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-review-log | bin | 리뷰 결과 기록. | ABSORBED | `mis review add` | — |
 | gstack | gstack-review-read | bin | 리뷰 기록·설정 조회. | ABSORBED | `mis status` | — |
 | gstack | gstack-security-dashboard | bin | 커뮤니티 프롬프트 인젝션 공격 통계. | MISSING | — | 외부 집계 조회 [정책] → M9-D |
-| gstack | gstack-session-kind | bin | 세션 종류 분류. | MISSING | — | 세션 종류 분류 → M9-F |
+| gstack | gstack-session-kind | bin | 세션 종류 분류. | ABSORBED | `lib/timeline.mjs` `sessionKind` | M9-F 흡수(F9): `MIS_TEAM_ID`→team-worker, `MIS_HEADLESS`·CI(대화형 CLI 표시 없을 때)→headless, 그 외 interactive |
 | gstack | gstack-session-update | bin | 세션 시작 시 자동 업데이트 (팀 모드). | ABSORBED | SessionStart 업데이트 알림 + `mis upgrade --yes`(승인 후), `tests/integration/mis-lifecycle.test.mjs` | M9-A. 차이: 자동 설치는 하지 않는다(사용자 규칙: 승인 없이 적용 금지) |
 | gstack | gstack-settings-hook | bin | `~/.claude/settings.json` 훅 관리. | ABSORBED | `mis setup [--write]` (settings.json statusLine, 기존 상태줄은 `statusLine.chain`으로 보존; 훅은 플러그인 hooks.json), `tests/integration/mis-setup.test.mjs` | M9-A |
 | gstack | gstack-slug | bin | 프로젝트 slug·브랜치 이름 정리. | ABSORBED | `lib/state.mjs` run id, `mis session` slug (M8) | M8 흡수 |
@@ -507,8 +507,8 @@ Superpowers 스킬은 대부분 "어떤 작업에서든 쓰라"는 상시 규율
 | gstack | gstack-team-init | bin | 팀 모드 저장소 부트스트랩 파일 생성. | ABSORBED | `mis setup team [--write]` (`.make-it-ship.json`·`.gitignore` 초안), `tests/integration/mis-setup.test.mjs` | M9-A |
 | gstack | gstack-telemetry-log | bin | 텔레메트리 이벤트를 로컬 JSONL에 기록. | MISSING | — | 로컬 텔레메트리, 기본 꺼짐 → M9-D |
 | gstack | gstack-telemetry-sync | bin | 로컬 이벤트를 Supabase로 동기화. | MISSING | — | 동기화, 기본 꺼짐 + guard ask [정책] → M9-D |
-| gstack | gstack-timeline-log | bin | 프로젝트 타임라인 이벤트 기록. | PARTIAL | run `events.jsonl`, 훅 trace (M7) | M7: run·훅 기록. 남음: run 밖 타임라인 기록 → M9-F |
-| gstack | gstack-timeline-read | bin | 타임라인 조회. | PARTIAL | `trace_timeline`/`trace_summary` (M7), `mis status`, `mis retro` | M7: run 단위 조회. 남음: 프로젝트 타임라인 조회 → M9-F |
+| gstack | gstack-timeline-log | bin | 프로젝트 타임라인 이벤트 기록. | ABSORBED | `lib/timeline.mjs`, `mis timeline log <event> [k=v…]`, 훅 자동 기록 | M7+M9-F 흡수(F9): run 밖 이벤트를 `.git/make-it-ship/timeline.jsonl`(저장소 밖이면 홈)에 기록 |
+| gstack | gstack-timeline-read | bin | 타임라인 조회. | ABSORBED | `mis timeline [--last N]`, `trace_timeline` (filter `timeline`) | M7+M9-F 흡수(F9): 프로젝트 타임라인 조회, run 이벤트·훅 trace와 병합 |
 | gstack | gstack-uninstall | bin | 스킬·상태·browse 데몬 제거. | ABSORBED | `mis uninstall [--yes] [--purge-runs]` (목록 먼저, `~/.make-it-ship`·statusLine·MIS 블록·browse/team 프로세스; run 기록은 `--purge-runs`만), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | gstack | gstack-update-check | bin | 주기적 버전 확인. | ABSORBED | `mis update-check` (24h 캐시, 읽기 전용, 저장소 데이터 전송 없음), `tests/integration/mis-lifecycle.test.mjs` | M9-A |
 | gstack | gstack-version-bump | bin | ship용 버전 상태 분류·작성. | ABSORBED | `mis version-bump patch\|minor\|major` (VERSION·package.json·CHANGELOG) (M9-B) | M9-B 흡수 |
@@ -556,13 +556,13 @@ browse는 작업공간별 포트를 쓰는 Bun 기반 Chromium 데몬(`browse/di
 | 같은 파일의 에이전트 목록 | `deep-executor`, `quality-reviewer`, `build-fixer` | OMC 4.15.6 `agents/`에 **없다** (19개만 존재). Spec §14.2도 `deep-executor`를 인용 | 매트릭스는 실제 19개만 집계. 지시문 교체 시 함께 정리 |
 | `~/.claude/CLAUDE.md` CodeGraph 절 | `codegraph_*` MCP | 원본 4종과 무관, 그대로 유지 | 없음 |
 | `~/.claude/rules/mcp/00-map.md`, `rules/workflows/10-planner.md`·`20-executor.md`·`30-research.md` | shrimp-task-manager 도구(`init_project_rules`, `plan_task`, `split_tasks`, `list_tasks`, `execute_task`, `research_mode`), context7, browsermcp | 4종 원본 소속은 아니지만 MIS의 plan·run 흐름과 역할이 겹친다 | 사용자 결정 필요: 유지 또는 MIS 흐름으로 교체 |
-| 프로젝트 `CLAUDE.md`의 `## Skill routing` | gstack preamble이 추가한 스킬 라우팅 | gstack 스킬 이름을 가리킨다 | M9-F(F10)가 MIS 명령으로 교체 제안 (M6 검증 보고서 지적: 범위 이동 ADR 없음) |
+| 프로젝트 `CLAUDE.md`의 `## Skill routing` | gstack preamble이 추가한 스킬 라우팅 | gstack 스킬 이름을 가리킨다 | M9-F(F10) 완료: `mis setup routing`이 MIS 스킬로 교체하는 diff를 보여 주고 `--write`(guard ask) 때만 쓴다 (M6 검증 보고서 지적: 범위 이동 ADR 없음) |
 | `~/.claude/settings.json` `enabledPlugins` | `superpowers@claude-plugins-official`와 `superpowers@superpowers-marketplace`가 **둘 다** 켜져 있다 | 지금도 세션 시작 맥락이 두 번 주입된다 | 원본 제거 시 함께 정리 |
 
 ### 6.2 statusLine은 하나뿐이다
 
 - Claude Code의 `statusLine`은 한 슬롯이다. 지금은 OMC HUD(`~/.claude/hud/omc-hud-cache.sh … omc-hud.mjs`)가 차지하고 있고, Ponytail 상태줄은 등록되어 있지 않다.
-- (M6 반영) MIS `scripts/statusline.mjs`는 이제 run이 없어도 `MIS ▸ idle · style … · loop … · frozen … · 브랜치 · 모델 · ctx %`를 출력하고, 기존 statusLine을 `statusLine.chain`으로 이어 붙인다. 남은 요소는 에이전트 수·todo(M9-F, 서브에이전트 추적과 함께)다. 원래 요구는 다음과 같았다: 원본을 대체하려면 한 스크립트가 다음을 모두 그려야 한다: run 진행(현재 기능), 스타일 레벨(`[STYLE:ULTRA]` 등, Ponytail 대응), 활성 모드(ralph·ultrawork·team 등), 그리고 OMC HUD의 핵심 요소(모델, git 브랜치, context 사용률, 에이전트 수, todo).
+- (M6 반영) MIS `scripts/statusline.mjs`는 이제 run이 없어도 `MIS ▸ idle · style … · loop … · frozen … · 브랜치 · 모델 · ctx %`를 출력하고, 기존 statusLine을 `statusLine.chain`으로 이어 붙인다. 에이전트 수·todo는 M9-F에서 추가했다(`agents N (k stale) · todo a/b`). 원래 요구는 다음과 같았다: 원본을 대체하려면 한 스크립트가 다음을 모두 그려야 한다: run 진행(현재 기능), 스타일 레벨(`[STYLE:ULTRA]` 등, Ponytail 대응), 활성 모드(ralph·ultrawork·team 등), 그리고 OMC HUD의 핵심 요소(모델, git 브랜치, context 사용률, 에이전트 수, todo).
 - 플러그인은 statusLine을 직접 등록할 수 없다(ADR-0001 #8). `mis init`/`mis setup`이 기존 값을 보여 주고 교체를 제안한다. 기존 statusLine을 감싸서 이어 붙이는 방식(체이닝)을 선택지로 둔다.
 - 상태줄은 실패하면 아무것도 출력하지 않는다(현재 구현과 같은 fail-open).
 

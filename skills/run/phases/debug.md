@@ -19,6 +19,7 @@ EVIDENCE: <the experiment that confirmed it, file:line>
 MIS
 ```
 
+   Once the hypothesis names the files, lock the fix to them: `mis debug scope <file|dir…>` (the guard then asks before any edit outside them; `mis debug scope --clear` when done). Skip it when the bug genuinely spans the repository.
 7. If the task was marked failed: `mis task <id> retry`. Then fix test-first: a regression test that fails without the fix, the single root-cause fix (smallest diff, no "while I'm here"), then `mis check` again.
 8. **Three failed hypotheses → stop.** Question the approach and ask the user: new direction, escalate to a human, or instrument and wait. If `mis` blocks the run on the retry limit, explain it in one sentence; only the user can lift it (`mis approve continue`).
 

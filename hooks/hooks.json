@@ -10,6 +10,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" PreToolUse",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -59,7 +69,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task",
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|TodoWrite|Skill",
         "hooks": [
           {
             "type": "command",
@@ -98,6 +108,29 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" SessionEnd",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" SubagentStop",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs\" PermissionRequest",
+            "timeout": 5
           }
         ]
       }

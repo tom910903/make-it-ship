@@ -24,6 +24,7 @@ const BASH = {
     'git reset --hard', 'git reset --hard HEAD~1', 'git clean -fdx', 'git clean -xfd',
     'node "/p/scripts/mis.mjs" approve plan', 'node /p/scripts/mis.mjs init --write',
     'echo {} > .make-it-ship.json', "sed -i '' s/a/b/ .make-it-ship.json",
+    'node /p/scripts/mis.mjs setup routing --write',
   ],
   deny: [
     'git push --force origin main', 'git push -f origin master', 'git push origin +main', 'git push --force-with-lease origin main',
@@ -301,4 +302,24 @@ test('remote upload: mis browse upload --remote asks (a local file leaves the ma
     assert.match(r.reason, /upload|sends? (a )?(local )?files?/i, c);
   }
   for (const c of [`${MIS} browse goto https://example.com`, `${MIS} browse upload '#f' a.txt`]) assert.equal(d(bash(c), idle), 'allow', c);
+});
+
+test('M9-F8: debug scope asks (not denies) for edits outside it, with or without a run; files and dirs both count', () => {
+  const sc = { ...ctx, activeRun: false, debugScope: [`${REPO}/src/parser`, `${REPO}/lib/x.js`] };
+  const w = (p) => classify({ tool_name: 'Edit', tool_input: { file_path: p }, cwd: REPO }, sc);
+  assert.equal(w(`${REPO}/src/parser/a.js`).decision, 'allow');
+  assert.equal(w(`${REPO}/lib/x.js`).decision, 'allow');
+  assert.equal(w(`${REPO}/src/parser2/a.js`).decision, 'ask', 'prefix of a name is not inside');
+  const o = w(`${REPO}/src/other.js`);
+  assert.equal(o.decision, 'ask');
+  assert.match(o.reason, /outside the debug scope/);
+  assert.equal(classify({ tool_name: 'Write', tool_input: { file_path: `${REPO}/src/other.js` }, cwd: REPO }, { ...sc, activeRun: true }).decision, 'ask');
+  assert.equal(classify({ tool_name: 'Write', tool_input: { file_path: `${REPO}/.git/make-it-ship/current` }, cwd: REPO }, sc).decision, 'deny', 'state forgery still denied');
+  assert.equal(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/src/other.js` }, cwd: REPO }, { ...ctx, activeRun: false }).decision, 'allow', 'no scope → no ask');
+});
+
+test('M9-F10: mis setup --write asks even without a run; the dry run does not', () => {
+  const noRun = { ...ctx, activeRun: false };
+  assert.equal(d(bash('node /p/scripts/mis.mjs setup routing --write'), noRun), 'ask');
+  assert.equal(d(bash('node /p/scripts/mis.mjs setup routing'), noRun), 'allow');
 });

@@ -29,6 +29,8 @@ function realish(abs, depth = 0) {
   try { return rest ? join(realpathSync(base), rest) : realpathSync(base); } catch { return abs; }
 }
 const outsideFreeze = (abs, dir) => !(realish(abs) + sep).startsWith(dir + sep);
+// M9-F8 debug scope: entries are real paths of files or directories.
+const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.some((p) => r === p || (r + sep).startsWith(p + sep)); };
 
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
@@ -142,6 +144,7 @@ function careful(ws, ctx, dir, functions) {
       return ask(`mis browse ${sub} --remote reads or changes cookies/storage or runs JavaScript on a non-local site`);
     }
   }
+  if (browse?.[0] === 'setup' && browse.includes('--write')) return ask(`mis setup ${browse[1] ?? ''} --write changes your instruction or settings files; check the dry-run diff first`);
   const g = gitSub(ws);
   if (g?.sub === 'push') {
     const r = classifyPush(g.rest, ctx);
@@ -262,7 +265,7 @@ export function globToRegExp(glob) {
 
 /**
  * @param input PreToolUse hook input {tool_name, tool_input, cwd}
- * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null, freezeDir?: string|null}
+ * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null, freezeDir?: string|null, debugScope?: string[]|null}
  * @returns {{decision:'allow'|'ask'|'deny', reason?:string}}
  */
 export function classify(input, ctx) {
@@ -276,6 +279,7 @@ export function classify(input, ctx) {
     const abs = resolve(cwd, p);
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
     if (ctx.freezeDir && outsideFreeze(abs, ctx.freezeDir)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
+    if (ctx.debugScope?.length && outsideScope(abs, ctx.debugScope)) return ask(`${abs} is outside the debug scope (${ctx.debugScope.join(', ')}); a fix outside the hypothesis widens the change (mis debug scope --clear to lift)`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
     const inRepo = (abs + sep).startsWith(ctx.repoRoot + sep);
