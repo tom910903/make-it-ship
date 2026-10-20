@@ -102,3 +102,17 @@ test('M7 N8: a waiter does not spin while another process holds the reclaim mark
   assert.equal(reclaimLock(lock, JSON.stringify({ pid: 999999, at: 'x' })), false, 'busy: report it so the caller sleeps');
   assert.ok(_ex(lock));
 });
+
+const require_fs = await import('node:fs');
+
+test('M7 N9: reclaim never removes a lock that was replaced by a new file with the same (empty) content', () => {
+  const d = _mk(_join(_tmp(), 'mis-lock-'));
+  const lock = _join(d, 'lock');
+  _wf(lock, '');
+  const { statSync, unlinkSync } = require_fs;
+  const oldIno = statSync(lock).ino;
+  unlinkSync(lock); _wf(_join(d, 'pad'), 'x'); _wf(lock, '');
+  if (statSync(lock).ino === oldIno) return; // filesystem reused the inode: nothing to distinguish here
+  assert.equal(reclaimLock(lock, '', oldIno), true);
+  assert.ok(_ex(lock), 'the new owner\'s lock is kept');
+});

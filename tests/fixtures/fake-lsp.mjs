@@ -24,6 +24,8 @@ const wordAt = (uri, { line, character }) => {
 };
 const publish = (uri) => send({ method: 'textDocument/publishDiagnostics', params: { uri, diagnostics: docs.get(uri).split('\n').flatMap((l, i) => l.includes('ERR') ? [{ range: range(i, l.indexOf('ERR'), i, l.indexOf('ERR') + 3), severity: 1, source: 'fake', code: 'E1', message: 'bad 한글' }] : []) } });
 
+let configReady = Promise.resolve(); // a real server answers after its configuration round-trip; so does this one
+
 async function onRequest(m) {
   const p = m.params ?? {};
   const uri = p.textDocument?.uri;
@@ -31,7 +33,7 @@ async function onRequest(m) {
     case 'initialize':
       return { capabilities: { hoverProvider: true, definitionProvider: true, referencesProvider: true, documentSymbolProvider: true, workspaceSymbolProvider: true, renameProvider: { prepareProvider: true }, codeActionProvider: { resolveProvider: true }, executeCommandProvider: { commands: ['fake.footer'] } }, serverInfo: { name: 'fake', root: p.rootUri } };
     case 'shutdown': return null;
-    case 'textDocument/hover': return { contents: { kind: 'markdown', value: `hover 한글 ${p.position.line}:${p.position.character} cfg=${configResult}` } };
+    case 'textDocument/hover': await configReady; return { contents: { kind: 'markdown', value: `hover 한글 ${p.position.line}:${p.position.character} cfg=${configResult}` } };
     case 'textDocument/definition': return [{ uri, range: range(0, 9, 0, 12) }];
     case 'textDocument/references': return [{ uri, range: range(0, 9, 0, 12) }, { uri, range: range(2, 4, 2, 7) }];
     case 'textDocument/documentSymbol': return [{ name: 'foo', kind: 12, range: range(0, 0, 1, 1), selectionRange: range(0, 9, 0, 12), children: [{ name: 'x', kind: 13, range: range(1, 2, 1, 9), selectionRange: range(1, 6, 1, 7) }] }];
@@ -57,7 +59,7 @@ async function onRequest(m) {
 
 function onNotification(m) {
   const p = m.params;
-  if (m.method === 'initialized') ask('workspace/configuration', { items: [{ section: 'fake' }] }).then((r) => { configResult = JSON.stringify(r); });
+  if (m.method === 'initialized') configReady = ask('workspace/configuration', { items: [{ section: 'fake' }] }).then((r) => { configResult = JSON.stringify(r); });
   if (m.method === 'textDocument/didOpen') { docs.set(p.textDocument.uri, p.textDocument.text); publish(p.textDocument.uri); }
   if (m.method === 'textDocument/didChange') { docs.set(p.textDocument.uri, p.contentChanges.at(-1).text); publish(p.textDocument.uri); }
   if (m.method === 'textDocument/didClose') docs.delete(p.textDocument.uri);
