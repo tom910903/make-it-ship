@@ -6,7 +6,7 @@ import { join } from 'node:path';
 const K = (name, re, context) => ({ name, re, context });
 // Priority order: earlier wins in conflict resolution.
 const KEYWORDS = [
-  K('cancel', /\b(cancelomc|stopomc|cancel[\s-]?mis|stop[\s-]?mis)\b|\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b|^\s*ralph\s+(stop|off|cancel)\s*[.!]?\s*$|(ralph|랄프)\s?(멈춰|그만|취소|꺼줘|꺼(?:\s|$)|끄(?:기|자|고)|중지)|ラルフを?(止め|やめ)/i,
+  K('cancel', /\b(cancelomc|stopomc)\b|\b(?:cancel|stop)[\s-]?mis\b(?![\w-])|(?<!\b(?:don'?t|do\s+not|never|not)\s+)\b(stop|cancel|kill|halt|disable|end|turn\s+off|no\s+more)\s+(the\s+)?ralph\b|^\s*\/?ralph(?:\s+mode)?\s*[:：]?\s*(stop|off|cancel)\s*[.!]?\s*$|^\s*랄프[^:：\n]*[:：]\s*(그만|멈춰|취소|꺼)\s*$|(ralph|랄프)\s?(멈춰|그만|취소|꺼줘|꺼(?:\s|$)|끄(?:기|자|고)|중지)|ラルフを?(止め|やめ)/i,
     'Cancel active Make It Ship modes: run `mis loop cancel`. If the user also wants to drop the current run, run `mis cancel`.'),
   K('loop', /\bralph\b|랄프|ラルフ/i,
     "Invoke /make-it-ship:loop with the user's task. It keeps working (plan → implement → verify) until `mis verdict` is VERIFIED or the iteration limit is reached; do not stop early."),
@@ -47,11 +47,10 @@ const SLOP_ACTION = /\b(clean(?:\s*up)?|cleanup|refactor|simplify|dedupe|prune)\
 const SLOP_SMELL = /\b(slop|duplicat\w*|dead\s+code|unused\s+code|over[\s-]?abstract\w*|wrapper\s+layers?|needless\s+abstractions?|tech\s+debt)\b/i;
 // "ralph" starts a loop only in an unambiguous form (user decision after three rounds of heuristics); any other
 // mention becomes a hint the model judges, since names, complaints and "don't use ralph" read the same to a regex.
-const LOOP_EXPLICIT = [
-  /^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*:/i,
-  /(?<!\b(?:don'?t|do\s+not|never|not|no)\s+)\b(?:use|using|run|start|enable|activate)\s+(?:the\s+)?ralph\b/i,
-  /랄프\s?(?:로|모드로)(?!.{0,12}(?:하지\s?말|말고))/, /랄프\s?(?:켜|시작)/, /ラルフ\s?(?:で|モードで)(?!.{0,8}(?:ないで|ずに))/, /ラルフ\s?(?:起動|開始)/,
-];
+// Only prefix forms start the loop (user decision after five rounds of regex heuristics); every other mention of
+// ralph — "use ralph", "랄프로", names, questions, refusals — is a hint the model judges in context.
+const LOOP_PREFIX = [/^\s*\/?ralph\s*:/i, /^\s*\/ralph\b/i, /^\s*ralph\s+mode\s*:/i, /^\s*랄프\s?(?:모드로?\s*(?:진행|해)?)?\s*[:：]/, /^\s*ラルフ\s?(?:モード)?\s*[:：]/];
+const explicitLoop = (text) => LOOP_PREFIX.some((r) => r.test(text));
 const mentionsRalph = (t) => /\bralph\b|랄프(?!로렌)|ラルフ(?!・?ローレン)/i.test(t);
 
 const HELP_QUERY = /\b(what\s+is|what's|how\s+(do\s+i|to)\s+use|explain|describe|tell\s+me\s+about|why)\b|사용법|뭐야|뭐지|무엇|설명|왜/i;
@@ -73,10 +72,10 @@ export function sanitize(text) {
 
 export function detectKeywords(prompt, { disabled = [] } = {}) {
   const text = sanitize(prompt);
-  if (HELP_QUERY.test(text) && /[?？]/.test(text) && !DIRECTIVE.test(text)) return [];
+  if (HELP_QUERY.test(text) && /[?？]/.test(text) && !DIRECTIVE.test(text) && !explicitLoop(text)) return [];
   let hits = KEYWORDS.filter((k) => k.name === 'simplify'
     ? SLOP_EXPLICIT.test(text) || (SLOP_ACTION.test(text) && SLOP_SMELL.test(text))
-    : k.name === 'loop' ? LOOP_EXPLICIT.some((r) => r.test(text))
+    : k.name === 'loop' ? explicitLoop(text)
     : k.name === 'loop-hint' ? mentionsRalph(text)
     : k.re.test(text));
   hits = hits.filter((k) => !disabled.includes(k.name));
