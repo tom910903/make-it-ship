@@ -1,6 +1,8 @@
-STATUS: DONE
-CURRENT: FINAL
-VERIFY: PASSED
+STATUS: IN_PROGRESS
+CURRENT: M6
+VERIFY: PENDING
+
+> M1~M5 + FINAL은 완료(VERIFY PASSED, 태그 m1~m5-verified). 2026-10-20 사용자 결정으로 M6~M10 추가: `docs/adr/0003-single-plugin-full-absorption.md`, 범위 기준 `docs/research/gap-matrix.md`(392행: ABSORBED 20 · PARTIAL 113 · MISSING 239 · 제외 5 · N/A 15).
 
 > 다른 장비에서 이어서 작업할 때는 `docs/HANDOFF.md`(남은 일·시작 방법·규칙)부터 읽는다.
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -110,6 +112,24 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | DONE | VERIFIER_PROMPT | §11 M5 | (this) | M5-report.md 1~3차, ROUND3: PASS |
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
+## M6 — 갭 매트릭스 + 상시 계층
+VERIFY: PENDING — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아래 표에 추가한다.
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M6-00 | 갭 매트릭스 + ADR-0003 + plugin MCP strict 실측 | DONE | — | ADR-0003 | (이 커밋) | probe 실측 |
+
+## M7 — MCP 도구 서버
+VERIFY: PENDING — 범위: gap-matrix §7 M7 행.
+
+## M8 — 브라우저·팀·문서 변환
+VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
+
+## M9 — 나머지 이전 제외 기능
+VERIFY: PENDING — 범위: gap-matrix §7 M9 행. [정책] 항목(§6.4)은 사용자 결정 후에만.
+
+## M10 — 원본 대비 비교 + HTML 보고서
+VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
+
 ## NEEDS_HUMAN
 전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님).
 - **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 미확인
@@ -124,6 +144,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (사용자 결정, 2026-10-20, ADR-0003) 원본 4종 전체 대체: Spec §14.4 제외표 해제(알림·BSP 제외), PRD 11.2 "자동 프로세스 자가 수정" 대신 승인 게이트 있는 self-improve, ADR-003 무의존 원칙은 신규 범위에서 npm 허용(코어 `mis`·guard는 무의존 유지). 단독 설치 전제. Spec·기획서 본문은 수정하지 않는다.
 - (사용자 결정, 2026-10-20) Spec §11 M5의 "BSP QA 프로파일"을 제거했다. `scripts/lib/qa.mjs`의 Yocto/Buildroot/커널 탐지와 `build-bsp`/`qa-bsp` 제안, QA 스킬 문서, README 항목을 삭제했고 NH-9는 해당 없음이다. Spec 문서 본문은 수정하지 않았다. 일반 위험 플래그 `hardware`는 유지한다. 회귀 테스트: `mis-qa.test.mjs` "BSP QA profile was removed".
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
