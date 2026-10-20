@@ -95,3 +95,14 @@ test('M6 D4: style phrases only when the prompt is just the phrase', () => {
   assert.equal(styleSwitch('please stop ponytail'), 'off');
   assert.equal(styleSwitch('use ponytail ultra for the parser rewrite'), null);
 });
+
+test('M6 R2-2: turning ralph off cancels; names, thanks and complaints do nothing; real invocations still start the loop', () => {
+  for (const p of ['turn off ralph', 'disable ralph', 'ralph stop', 'ralph off', 'ralph cancel', 'end ralph', 'no more ralph', 'ralph 그만', 'ralph 멈춰', '랄프 꺼줘', '랄프 꺼', 'ラルフ止めて', 'ラルフを止めて'])
+    assert.deepEqual(names(p), ['cancel'], p);
+  for (const p of ['the ralph loop is stuck again', 'the ralph mode is annoying, disable it', 'Ralph Smith reported a bug in login, fix it',
+    'Ralph Lauren product page is broken, fix it', 'Ralph, Mike and Sue need a login page', 'Thanks Ralph', 'I talked with Ralph', '랄프 씨가 만든 모듈 고쳐줘'])
+    assert.ok(!names(p).includes('loop'), `${p}: ${names(p)}`);
+  for (const p of ['ralph: fix the importer', 'ralph fix the login bug', 'use ralph to finish the migration', '/ralph finish it', 'ralph mode: port the parser',
+    'fix the parser with ralph', '랄프로 끝까지 해줘', '랄프 모드로 해줘', '랄프 켜줘', 'ラルフで直して', 'please ralph this: add csv export'])
+    assert.deepEqual(names(p), ['loop'], p);
+});

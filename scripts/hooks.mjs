@@ -22,10 +22,12 @@ const handlers = {
       if (run && !TERMINAL.includes(run.state.state)) {
         parts.push(`There is an active Make It Ship run ${run.state.runId} (state ${run.state.state}). To continue it, invoke /make-it-ship:resume; to drop it, run mis cancel.`);
       }
-      const frozen = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir;
+      const f = (await import('./lib/home.mjs')).readHome('freeze.json');
+      const { realpathSync } = await import('node:fs');
+      const frozen = f?.dir && (f.root ?? null) === realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)) ? f.dir : null;
       if (frozen) parts.push(`Edits are frozen to ${frozen}: Write/Edit outside it are denied until the user runs mis unfreeze.`);
       const loop = (await import('./lib/loop.mjs')).readLoop(cwd);
-      if (loop.active) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
+      if (loop.active && (!loop.session || loop.session === input.session_id)) parts.push(`There is an active Make It Ship loop: "${loop.task}" (${loop.iteration}/${loop.max} continues used). Keep working toward a REPORTED, VERIFIED run, or ask the user and run mis loop cancel.`);
     } catch { /* not a git repo */ }
     try { (await import('./lib/posttool.mjs')).pruneSessions(); } catch { /* best effort */ }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
@@ -36,8 +38,8 @@ const handlers = {
     const { detectKeywords, styleSwitch, learnedSkills, promptContext } = await import('./lib/keywords.mjs');
     const { homeDir } = await import('./lib/home.mjs');
     const prompt = String(input.prompt ?? '');
-    const style = styleSwitch(prompt);
-    if (style) { try { (await import('./lib/style.mjs')).setStyle(style, input.session_id || 'default'); } catch { /* unwritable home: still inject the context */ } }
+    let style = styleSwitch(prompt);
+    if (style) { try { (await import('./lib/style.mjs')).setStyle(style, input.session_id || 'default'); } catch { style = null; /* unwritable home: no notice, keep the rest */ } }
     let root = null;
     try { const { repoRoot } = await import('./lib/tree-hash.mjs'); root = repoRoot(input.cwd || process.cwd()); } catch { /* not a repo */ }
     const text = promptContext(detectKeywords(prompt, { disabled: globalConfig().keywords.disabled }), style, learnedSkills(prompt, root, homeDir()));
@@ -45,7 +47,7 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
-    const { loopForSession, writeLoop, endLoop, loopDecision, lastReportAt } = await import('./lib/loop.mjs');
+    const { loopForSession, writeLoop, endLoop, loopDecision, freshEvidence } = await import('./lib/loop.mjs');
     const loop = loopForSession(cwd, input.session_id);
     if (loop.active) {
       let run = null, v = null;
@@ -58,7 +60,7 @@ const handlers = {
           v = verdict(run.state, verdictContext(run, cwd));
         }
       } catch { /* not a repo or no run */ }
-      const d = loopDecision(loop, run, v, input.stop_hook_active === true, run ? lastReportAt(run) : null);
+      const d = loopDecision(loop, run, v, input.stop_hook_active === true, run ? freshEvidence(run, loop.startedAt) : false);
       if (d.end) endLoop(cwd, d.end);
       else if (d.save || d.iterate) writeLoop(cwd, { ...loop, ...d.save, ...(d.iterate ? { iteration: d.iterate } : {}) });
       if (d.iterate) return { decision: 'block', reason: d.block };

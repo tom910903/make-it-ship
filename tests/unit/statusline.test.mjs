@@ -70,3 +70,17 @@ test('M6 D11: freeze shows in the line; statusLine.chain appends another status 
   const bad = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
   assert.match(bad.stdout, /^MIS ▸ idle/, 'a failing chained command is ignored');
 });
+
+test('M6 R2-4: a chain that points back at this status line does not recurse', () => {
+  const dir = makeRepo();
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const self = `MIS_STATE_HOME=${home} node ${join(ROOT, 'scripts', 'statusline.mjs')}`;
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: self } }));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env, timeout: 10000 });
+  assert.ok(Date.now() - t0 < 3000, 'returns quickly');
+  assert.match(r.stdout, /^MIS ▸ idle .* \| MIS ▸ idle[^|]*\n$/, 'chained once, not again');
+  const ps = spawnSync('pgrep', ['-f', home], { encoding: 'utf8' });
+  assert.equal(ps.stdout.trim(), '', 'no leftover processes');
+});

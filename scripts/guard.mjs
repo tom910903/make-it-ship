@@ -23,7 +23,7 @@ function context(cwd) {
     const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
     const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? [])
       : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
-    return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
+    return { repoRoot, inRepo: true, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
   } catch {
     return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo
   }
@@ -39,9 +39,16 @@ try {
   let at = file ? resolve(cwd, String(file)) : cwd;
   while (file && !existsSync(at) && dirname(at) !== at) at = dirname(at);
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
+  // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
+  const ctx = context(at);
   let freezeDir = null;
-  try { freezeDir = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir ?? null; } catch { /* no home */ }
-  const r = classify(input, { ...context(at), freezeDir });
+  try {
+    const f = (await import('./lib/home.mjs')).readHome('freeze.json');
+    const { realpathSync } = await import('node:fs');
+    const root = ctx.inRepo ? realpathSync(ctx.repoRoot) : null;
+    if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
+  } catch { /* no home */ }
+  const r = classify(input, { ...ctx, freezeDir });
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

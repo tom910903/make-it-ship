@@ -103,3 +103,10 @@ test('M6 D12: an unwritable home does not drop the keyword context', () => {
   const r = hook('UserPromptSubmit', { prompt: 'tdd this', cwd: dir, session_id: 'A' }, { MIS_STATE_HOME: f });
   assert.match(r.ctx, /TDD mode/);
 });
+
+test('M6 R2-8: the style notice is only given when the level was really saved', () => {
+  const dir = makeRepo(), f = join(home(), 'file');
+  writeFileSync(f, 'x');
+  const r = hook('UserPromptSubmit', { prompt: 'style lite', cwd: dir, session_id: 'A' }, { MIS_STATE_HOME: f });
+  assert.doesNotMatch(r.ctx, /Style level is now/);
+});
