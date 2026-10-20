@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { makeRepo, GUARD, ROOT } from '../helpers.mjs';
 import { createRun } from '../../scripts/lib/state.mjs';
 
@@ -108,4 +110,21 @@ test('guard: a file inside a task worktree is scoped by that worktree, whatever 
   assert.equal(w(wt, `${wt}/src/a.js`), 'allow');
   assert.equal(w(wt, `${dir}/other.js`), 'ask', 'worktree cwd, main-repo file outside the plan');
   assert.equal(w(dir, `${dir}/src/b.js`), 'allow', 'main repo keeps the whole plan scope');
+});
+
+test('guard: mis freeze limits edits to one directory without a run; mis unfreeze lifts it', () => {
+  const dir = makeRepo({ 'src/a.js': '', 'README.md': '' });
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  const m = (...args) => spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, ...args], { cwd: dir, encoding: 'utf8', env });
+  const w = (p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: p }, cwd: dir }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(m('freeze', 'nope').status, 1, 'missing directory is rejected');
+  assert.equal(JSON.parse(m('freeze', 'src').stdout).freezeDir, `${dir}/src`);
+  assert.equal(w(`${dir}/src/a.js`), 'allow');
+  assert.equal(w(`${dir}/README.md`), 'deny');
+  assert.equal(JSON.parse(m('unfreeze').stdout).freezeDir, null);
+  assert.equal(w(`${dir}/README.md`), 'allow');
 });

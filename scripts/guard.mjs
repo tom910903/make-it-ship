@@ -39,7 +39,9 @@ try {
   let at = file ? resolve(cwd, String(file)) : cwd;
   while (file && !existsSync(at) && dirname(at) !== at) at = dirname(at);
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
-  const r = classify(input, context(at));
+  let freezeDir = null;
+  try { freezeDir = (await import('./lib/home.mjs')).readHome('freeze.json')?.dir ?? null; } catch { /* no home */ }
+  const r = classify(input, { ...context(at), freezeDir });
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

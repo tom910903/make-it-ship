@@ -33,6 +33,7 @@ function classifyPush(rest, ctx) {
   const plusMain = refs.slice(1).some((r) => r.startsWith('+') && ['main', 'master'].includes(branchName(r)));
   const onMain = targets.some((t) => t === 'main' || t === 'master') || (!targets.length && ['main', 'master'].includes(ctx.currentBranch));
   if ((force && onMain) || plusMain) return deny('force push to the default branch is not allowed');
+  if (force) return ask('force push rewrites remote history; other people may lose work');
   return ask('remote write (git push) needs your approval');
 }
 
@@ -75,35 +76,62 @@ function classifyBash(cmd, ctx, cwd) {
       return deny('run state is written only by mis.mjs');
     }
   }
-  if (!ctx.activeRun) return allow;
-  if (commands.some((c) => c.redirects.some((t) => t.endsWith(CONFIG))) ||
-      (text.includes(CONFIG) && /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(text))) {
+  // Careful rules (M6-07, absorbs gstack careful) apply with or without a run; the rest only while a run is active.
+  if (ctx.activeRun && (commands.some((c) => c.redirects.some((t) => t.endsWith(CONFIG))) ||
+      (text.includes(CONFIG) && /\b(sed\s+-i|tee|mv|cp|rm)\b/.test(text)))) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
   }
   let verdict = allow;
   for (const { argv: ws } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
-    const g = gitSub(ws);
-    const mis = misSub(ws, functions);
-    let r = allow;
-    if (mis?.[0] === 'approve') r = ask('approval is recorded only when you confirm this command');
-    else if (mis?.[0] === 'init' && mis.includes('--write')) r = ask('writing .make-it-ship.json changes verification rules');
-    else if (g?.sub === 'push') r = classifyPush(g.rest, ctx);
-    else if (g?.sub === 'reset' && g.rest.includes('--hard')) r = ask('git reset --hard discards local changes');
-    else if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) r = ask('git clean -f deletes untracked files');
-    else if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) r = ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
-    else if (isInstall(ws)) r = ask('package install needs your approval (supply chain)');
-    else if (isOtherModel(ws)) r = ask('sends repository content to an external model service (second opinion) — needs your approval');
-    else if (ws[0] === 'rm') {
-      const flags = ws.slice(1).filter((w) => w.startsWith('-'));
-      const recursive = flags.some((f) => f === '--recursive' || /^-[a-zA-Z]*[rR]/.test(f));
-      const targets = ws.slice(1).filter((w) => !w.startsWith('-'));
-      if (recursive && targets.some((t) => dangerousRmTarget(t, dir, ctx.repoRoot))) r = ask('recursive delete outside the repository');
-    }
+    let r = careful(ws, ctx, dir);
+    if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
   }
   return verdict;
+}
+
+const SQL_CLIENTS = /^(psql|mysql|mariadb|sqlite3|sqlcmd|duckdb|clickhouse-client|cockroach|snowsql|bq|mongosh)$/;
+const DESTRUCTIVE = [
+  [/\bdrop\s+(table|database|schema)\b/i, 'SQL DROP permanently deletes database objects'],
+  [/\btruncate\s+(table\s+)?[a-z_]\w*/i, 'SQL TRUNCATE deletes all rows of a table'],
+];
+
+function careful(ws, ctx, dir) {
+  const g = gitSub(ws);
+  if (g?.sub === 'push') {
+    const r = classifyPush(g.rest, ctx);
+    return r.decision === 'deny' || /force/.test(r.reason) ? r : allow;
+  }
+  if (g?.sub === 'reset' && g.rest.includes('--hard')) return ask('git reset --hard discards local changes');
+  if (g?.sub === 'clean' && g.rest.some((w) => /^-[a-z]*f/.test(w) || w === '--force')) return ask('git clean -f deletes untracked files');
+  if ((g?.sub === 'checkout' || g?.sub === 'restore') && g.rest.filter((w) => w !== '--').some((w) => w === '.' || w === ':/')) return ask(`git ${g.sub} . discards all uncommitted changes`);
+  if (isOtherModel(ws)) return ask('sends repository content to an external model service (second opinion) — needs your approval');
+  if (ws[0] === 'kubectl' && ws[1] === 'delete') return ask('kubectl delete removes cluster resources');
+  if (ws[0] === 'docker' && ((ws[1] === 'rm' && ws.includes('-f')) || (ws[1] === 'system' && ws[2] === 'prune'))) return ask(`docker ${ws[1]} ${ws[2] ?? ''} removes containers or images`);
+  if (SQL_CLIENTS.test(ws[0] ?? '')) {
+    const sql = ws.slice(1).join(' ');
+    for (const [re, why] of DESTRUCTIVE) if (re.test(sql)) return ask(why);
+  }
+  if (ws[0] === 'rm') {
+    const flags = ws.slice(1).filter((w) => w.startsWith('-'));
+    const recursive = flags.some((f) => f === '--recursive' || /^-[a-zA-Z]*[rR]/.test(f));
+    const targets = ws.slice(1).filter((w) => !w.startsWith('-'));
+    if (recursive && targets.some((t) => dangerousRmTarget(t, dir, ctx.repoRoot))) return ask('recursive delete outside the repository');
+  }
+  return allow;
+}
+
+function runOnly(ws, ctx, functions) {
+  const g = gitSub(ws);
+  const mis = misSub(ws, functions);
+  if (mis?.[0] === 'approve') return ask('approval is recorded only when you confirm this command');
+  if (mis?.[0] === 'init' && mis.includes('--write')) return ask('writing .make-it-ship.json changes verification rules');
+  if (g?.sub === 'push') return classifyPush(g.rest, ctx);
+  if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) return ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
+  if (isInstall(ws)) return ask('package install needs your approval (supply chain)');
+  return allow;
 }
 
 function isOtherModel(ws) {
@@ -143,7 +171,7 @@ export function globToRegExp(glob) {
 
 /**
  * @param input PreToolUse hook input {tool_name, tool_input, cwd}
- * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null}
+ * @param ctx {repoRoot, activeRun, currentBranch, plannedFiles?: string[]|null, freezeDir?: string|null}
  * @returns {{decision:'allow'|'ask'|'deny', reason?:string}}
  */
 export function classify(input, ctx) {
@@ -156,6 +184,7 @@ export function classify(input, ctx) {
     if (!p) return allow;
     const abs = resolve(cwd, p);
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
+    if (ctx.freezeDir && !(abs + sep).startsWith(ctx.freezeDir + sep)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
     const inRepo = (abs + sep).startsWith(ctx.repoRoot + sep);

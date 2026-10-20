@@ -4,6 +4,9 @@ import { globalConfig, setGlobalConfig, homeDir } from './home.mjs';
 import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './keywords.mjs';
 import { repoRoot } from './tree-hash.mjs';
 import { readLoop, startLoop, endLoop } from './loop.mjs';
+import { readHome, writeHome } from './home.mjs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 function style([a, b]) {
   if (a === 'default') {
@@ -36,4 +39,19 @@ function loop([sub, ...rest], cwd) {
   throw new Error('usage: mis loop start [--max N] <task> | status | cancel');
 }
 
-export const alwaysCommands = { style, 'test-prompt': testPrompt, loop };
+/** Freeze edits to one directory (absorbs gstack freeze); enforced by guard.mjs for Write/Edit. */
+function freeze([d], cwd) {
+  if (!d) return { freezeDir: readHome('freeze.json')?.dir ?? null };
+  const abs = resolve(cwd, d);
+  if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`not a directory: ${d}`);
+  const dir = realpathSync(abs);
+  writeHome('freeze.json', { dir, at: new Date().toISOString() });
+  return { freezeDir: dir };
+}
+
+function unfreeze() {
+  writeHome('freeze.json', null);
+  return { freezeDir: null };
+}
+
+export const alwaysCommands = { freeze, unfreeze, style, 'test-prompt': testPrompt, loop };
