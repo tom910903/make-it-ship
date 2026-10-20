@@ -144,7 +144,8 @@ async function sessionDiag(cwd) {
     for (const f of readdirSync(join(sr, 'merge-readiness')).filter((n) => n.endsWith('.json'))) { const g = readJson(join(sr, 'merge-readiness', f)); if (g?.active) gates.push({ file: f, phase: g.phase }); }
   }
   const root = tryRoot(cwd);
-  const trace = readTrace();
+  // Entries written by older versions or hand edits may lack a string cwd or not be objects: skip and count them.
+  const all = readTrace(), trace = all.filter((e) => e && typeof e === 'object' && !Array.isArray(e) && (e.cwd === undefined || typeof e.cwd === 'string'));
   return {
     run: run ? { id: run.state.runId, state: run.state.state, active: !TERMINAL.includes(run.state.state) } : null,
     loop: readLoop(cwd),
@@ -153,6 +154,7 @@ async function sessionDiag(cwd) {
     mergeReadiness: gates,
     hookErrors: trace.filter((e) => e.error && (!root || !e.cwd || e.cwd.startsWith(root))).slice(-10),
     recentHooks: trace.slice(-5).map(({ at, hook, tool, decision }) => ({ at, hook, tool, decision })),
+    malformedTraceEntries: all.length - trace.length,
   };
 }
 
@@ -214,30 +216,38 @@ function mcpSetup([sub, name, ...rest], cwd) {
 // ---------------------------------------------------------------- config, version
 
 const validRegex = (v) => { try { new RegExp(v); return true; } catch { return false; } };
-/** Keys of ~/.make-it-ship/config.json and their validators. Groups adding a setting register it here. */
+const bool = (v) => typeof v === 'boolean';
+/**
+ * Keys of ~/.make-it-ship/config.json: validator, one-line doc, and `sensitive` when the value is a command Make It Ship
+ * runs or a URL it contacts (the guard asks before `mis config set` of those; policy.mjs NON_SENSITIVE_CONFIG lists the
+ * rest). Groups adding a setting, or a hook reading a new key, register it here.
+ */
 export const CONFIG_KEYS = {
-  'style.default': (v) => ['off', 'lite', 'full', 'ultra'].includes(v),
-  'keywords.disabled': (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
-  subagentMatcher: (v) => v === null || (typeof v === 'string' && validRegex(v)),
-  'statusLine.chain': (v) => v === null || typeof v === 'string',
-  'update.check': (v) => typeof v === 'boolean',
-  'update.source': (v) => v === null || typeof v === 'string',
-  'maintenance.retainDays': (v) => Number.isInteger(v) && v >= 0,
-  'telemetry.enabled': (v) => typeof v === 'boolean', // M9-D: off by default, local JSONL only
-  'telemetry.endpoint': (v) => v === null || (typeof v === 'string' && /^https?:\/\//.test(v)),
+  'style.default': { check: (v) => ['off', 'lite', 'full', 'ultra'].includes(v), doc: 'coding style level new sessions start with (off|lite|full|ultra; default full)' },
+  'keywords.disabled': { check: (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'), doc: 'prompt keywords that never trigger (names from mis help keywords)' },
+  subagentMatcher: { check: (v) => v === null || (typeof v === 'string' && validRegex(v)), doc: 'regex of subagent types that receive the style rules (null: all)' },
+  'statusLine.chain': { check: (v) => v === null || typeof v === 'string', sensitive: true, doc: 'shell command of your previous status line; the status line runs it on every refresh' },
+  'update.check': { check: bool, doc: 'daily update check at session start (default true)' },
+  'update.source': { check: (v) => v === null || typeof v === 'string', sensitive: true, doc: 'URL or file the update check reads the latest version from' },
+  'maintenance.retainDays': { check: (v) => Number.isInteger(v) && v >= 0, doc: 'days finished run state is kept before the daily cleanup deletes it' },
+  'telemetry.enabled': { check: bool, doc: 'record usage events to a local JSONL file (M9-D; default false, nothing is uploaded)' },
+  'telemetry.endpoint': { check: (v) => v === null || (typeof v === 'string' && /^https?:\/\//.test(v)), sensitive: true, doc: 'URL that mis telemetry sync uploads events to' },
+  'simplifier.enabled': { check: bool, doc: 'Stop hook asks for a code-simplifier pass once per set of edited source files (default false)' },
+  'simplifier.maxFiles': { check: (v) => Number.isInteger(v) && v >= 1, doc: 'most recent edited files handed to the simplifier (default 10)' },
+  proactive: { check: bool, doc: 'session start asks for a one-line next-skill suggestion when a piece of work ends (default true)' },
 };
 
 function config([sub, key, raw]) {
   if (sub === 'get' || sub === undefined) {
     const c = globalConfig();
-    if (!key) return { config: c, keys: Object.keys(CONFIG_KEYS) };
+    if (!key) return { config: c, keys: Object.keys(CONFIG_KEYS), docs: Object.fromEntries(Object.entries(CONFIG_KEYS).map(([k, s]) => [k, `${s.doc}${s.sensitive ? ' (setting it asks first)' : ''}`])) };
     if (!CONFIG_KEYS[key]) fail(`unknown key ${key} (known: ${Object.keys(CONFIG_KEYS).join(', ')})`);
     return { key, value: key.split('.').reduce((o, k) => o?.[k], c) ?? null };
   }
   if (sub !== 'set' || !key || raw === undefined) fail('usage: mis config get [key] | set <key> <value>');
   if (!CONFIG_KEYS[key]) fail(`unknown key ${key} (known: ${Object.keys(CONFIG_KEYS).join(', ')})`);
   let v; try { v = JSON.parse(raw); } catch { v = raw; }
-  if (!CONFIG_KEYS[key](v)) fail(`invalid value for ${key}: ${raw}`);
+  if (!CONFIG_KEYS[key].check(v)) fail(`invalid value for ${key}: ${raw}`);
   const c = readHome('config.json', {}) ?? {};
   const parts = key.split('.');
   let o = c;

@@ -19,7 +19,7 @@ const OWN_MCP = 'mcp__plugin_make-it-ship_mis__';
 const FILE_WRITERS = ['ast_grep_replace', 'lsp_rename', 'lsp_code_action_resolve'];
 
 /** Real path of a possibly not-yet-existing file: resolve symlinks of the nearest existing ancestor. */
-function realish(abs, depth = 0) {
+export function realish(abs, depth = 0) {
   let base = abs, rest = '';
   while (!existsSync(base) && dirname(base) !== base) {
     // a dangling symlink still decides where a write lands
@@ -35,6 +35,7 @@ const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.som
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
 import { BROWSE_ALWAYS_ASK, alwaysAskIn } from './browse/util.mjs';
+import { claudeDir, homeDir } from './home.mjs';
 
 const branchName = (ref) => ref.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
 
@@ -76,8 +77,8 @@ function dangerousRmTarget(t, cwd, repoRoot) {
 /** mis subcommand of a command, if it invokes mis.mjs (node <path>/mis.mjs, the script directly, or a shell function wrapping it). */
 const NODE_VALUE_FLAGS = ['-r', '--require', '--import', '--loader', '--experimental-loader', '-C', '--conditions', '--env-file', '--title'];
 function misSub(ws, functions) {
-  if (ws[0] === 'node') {
-    let k = 1;
+  if (['node', 'nodejs', 'bun', 'deno'].includes(ws[0])) {
+    let k = ws[0].startsWith('node') || ws[1] !== 'run' ? 1 : 2; // bun|deno run <file>
     while (ws[k]?.startsWith('-')) {
       if (['-e', '-p', '--eval', '--print'].includes(ws[k])) return null;
       k += NODE_VALUE_FLAGS.includes(ws[k]) || /^\d+$/.test(ws[k + 1] ?? '') ? 2 : 1;
@@ -112,13 +113,14 @@ function classifyBash(cmd, ctx, cwd) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
   }
   let verdict = allow;
-  for (const { argv: ws } of commands) {
+  for (const { argv: ws, redirects } of commands) {
     if (ws[0] === 'cd' && ws[1]) { dir = resolve(dir, ws[1].replace(/^~/, homedir())); continue; }
     let r = careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(misSub(ws, functions), text);
     if (r.decision === 'allow') r = misInner(misSub(ws, functions), text, ctx, dir);
     if (r.decision === 'allow') r = externalMis(misSub(ws, functions));
     if (r.decision === 'allow') r = outsideRepoMis(misSub(ws, functions));
+    if (r.decision === 'allow') r = lastingChange(ws, misSub(ws, functions), text, redirects, dir, ctx);
     if (r.decision === 'allow' && ctx.activeRun) r = runOnly(ws, ctx, functions);
     if (r.decision === 'deny') return r;
     if (r.decision === 'ask' && verdict.decision === 'allow') verdict = r;
@@ -243,7 +245,18 @@ function misInner(mis, text, ctx, dir) {
   if (mis?.[0] !== 'tty') return allow;
   if (mis[1] === 'start' && mis.includes('--')) return classifyBash(mis.slice(mis.indexOf('--') + 1).map(q).join(' '), ctx, dir);
   if (mis[1] === 'send') return classifyBash(mis.slice(3).filter((w) => w !== '--no-enter').join(' '), ctx, dir);
+  if (mis[1] === 'keys') return ttyKeys(mis.slice(3), ctx, dir);
   return allow;
+}
+
+// tmux send-keys types a word that is not a key name literally, so `keys` is classified as the text it types (M9 r1 D2).
+const TMUX_KEY = /^(?:(?:[CMS]-)+(?:.|[A-Z]\w*)|\^.|Enter|Escape|Tab|BTab|Space|BSpace|Up|Down|Left|Right|Home|End|PageUp|PgUp|PPage|PageDown|PgDn|NPage|Insert|IC|Delete|DC|F\d{1,2}|KP\w+)$/;
+const NEWLINE_KEY = /^(?:Enter|KPEnter|C-[mj]|\^[MJ])$/;
+function ttyKeys(ks, ctx, dir) {
+  if (ks.some((k) => k.startsWith('-'))) return ask('mis tty keys passes words starting with "-" to tmux as options (hex input, another pane) — needs your approval');
+  // Other key names (C-c, Up, ...) type nothing; text on both sides of them is joined, which can only make this stricter.
+  const typed = ks.map((k) => (k === 'Space' ? ' ' : NEWLINE_KEY.test(k) ? '\n' : TMUX_KEY.test(k) ? '' : k)).join('');
+  return classifyBash(typed, ctx, dir);
 }
 
 // M9-A: mis subcommands that change files outside this repository (~/.claude settings and CLAUDE.md, MCP config,
@@ -258,6 +271,68 @@ function outsideRepoMis(m) {
     : (sub === 'uninstall' && has('--yes')) ? 'mis uninstall --yes deletes Make It Ship state and settings entries (see `mis uninstall` for the list)'
     : null;
   return why ? ask(`${why} — changes files outside this repository; needs your approval`) : allow;
+}
+
+// M9 r1 D1/D8/D9/D10/D13: lasting changes outside this repository that a wrapper's ask alone would not catch.
+// Keys of `mis config` that neither run a command nor contact a URL (commands-setup.mjs CONFIG_KEYS without `sensitive`;
+// a test keeps the two equal). Any other key, including an unknown or variable one, asks.
+export const NON_SENSITIVE_CONFIG = ['style.default', 'keywords.disabled', 'subagentMatcher', 'update.check', 'maintenance.retainDays',
+  'telemetry.enabled', 'simplifier.enabled', 'simplifier.maxFiles', 'proactive'];
+const CLAUDE_CHANGES = { mcp: ['add', 'add-json', 'add-from-claude-desktop', 'remove', 'reset-project-choices'], plugin: ['install', 'i', 'uninstall', 'remove', 'update', 'enable', 'disable'],
+  'plugin marketplace': ['add', 'remove', 'rm', 'update'], config: ['set', 'add', 'remove'] };
+const BYPASS = (m) => m.some((w, i) => ['--dangerously-skip-permissions', '--allow-dangerously-skip-permissions', '--permission-mode=bypassPermissions'].includes(w)
+  || (w === '--permission-mode' && m[i + 1] === 'bypassPermissions'));
+const expandHome = (p) => p.replace(/^~(?=\/|$)/, homedir()).replace(/^\$\{?HOME\}?(?=\/|$)/, homedir());
+const under = (p, d) => (p + sep).startsWith(d + sep);
+
+/** Why writing `abs` is a lasting change to Claude Code or Make It Ship configuration, or null. */
+function protectedFile(abs, repoRoot) {
+  const home = homedir(), mh = homeDir(), cds = [claudeDir(), join(home, '.claude')];
+  for (const p of new Set([abs, realish(abs)])) {
+    const name = basename(p), d = dirname(p);
+    if (cds.some((c) => d === c || d === realish(c)) && (/^settings.*\.json$/.test(name) || name === 'CLAUDE.md')) return `${p} is your Claude Code configuration (used by every session)`;
+    if (p === join(home, '.claude.json')) return `${p} holds your Claude Code MCP servers and project settings`;
+    if (basename(d) === '.claude' && /^settings.*\.json$/.test(name)) return `${p} is Claude Code settings (permissions and hooks that run commands)`;
+    if (name === 'CLAUDE.md' && !under(p, realish(repoRoot))) return `${p} is a CLAUDE.md outside this repository (instructions for other sessions)`;
+    if (p === join(mh, 'config.json') || under(p, join(mh, 'skills')) || p === join(mh, 'trusted-repos.json')) return `${p} is Make It Ship user configuration (applies to every repository)`;
+  }
+  return null;
+}
+
+/** Files a shell command writes, moves or deletes (redirects, tee, cp/mv/ln/install/rsync destinations, sed/perl -i, dd of=, rm). */
+function shellTargets(ws, redirects) {
+  const [n, ...rest] = ws, args = rest.filter((w) => !w.startsWith('-'));
+  const t = [...redirects];
+  const ti = rest.findIndex((w) => w === '-t' || w.startsWith('--target-directory'));
+  if (n === 'tee' || n === 'mv' || n === 'rm' || n === 'truncate') t.push(...args);
+  else if (['cp', 'install', 'ln', 'rsync', 'scp'].includes(n)) {
+    if (ti >= 0) { const dirArg = rest[ti].includes('=') ? rest[ti].split('=')[1] : rest[ti + 1]; t.push(dirArg, ...args.filter((a) => a !== dirArg).map((a) => join(dirArg, basename(a)))); }
+    else if (args.length) t.push(args.at(-1));
+  } else if ((n === 'sed' || n === 'perl') && rest.some((w) => /^-[a-zA-Z]*i|^--in-place/.test(w))) t.push(...args);
+  else if (n === 'dd') t.push(...rest.filter((w) => w.startsWith('of=')).map((w) => w.slice(3)));
+  return t.filter(Boolean);
+}
+
+function lastingChange(ws, m, text, redirects, dir, ctx) {
+  const why = (() => {
+    if (m) {
+      const [sub, a] = m, has = (f) => m.includes(f);
+      if (/\bxargs\b/.test(text)) return 'mis.mjs run through xargs takes its subcommand from input the guard cannot see';
+      if (sub === 'config' && a === 'set' && !NON_SENSITIVE_CONFIG.includes(m[2])) return `mis config set ${m[2] ?? ''} stores a command or URL that Make It Ship runs or contacts later (or a key the guard cannot check)`;
+      if (sub === 'telemetry' && a === 'endpoint' && m[2] !== undefined) return 'mis telemetry endpoint sets the URL that usage events are uploaded to';
+      if (sub === 'skill' && ['add', 'edit'].includes(a) && (has('--scope=user') || m.some((w, i) => w === '--scope' && m[i + 1] === 'user'))) return 'a user-scope skill is offered in every repository\'s prompts as an instruction to follow';
+      if (sub === 'skill' && a === 'trust' && !has('--remove')) return 'mis skill trust lets this repository\'s .make-it-ship/skills be followed as instructions';
+      if (sub === 'launch' && BYPASS(m)) return 'mis launch starts Claude Code without permission prompts in a detached tmux session nobody watches';
+    }
+    if (ws[0] === 'claude') {
+      const key = ws[1] === 'plugin' && ws[2] === 'marketplace' ? 'plugin marketplace' : ws[1];
+      const verb = key === 'plugin marketplace' ? ws[3] : ws[2];
+      if (CLAUDE_CHANGES[key]?.includes(verb)) return `claude ${key} ${verb} changes your Claude Code configuration for every session`;
+    }
+    for (const p of shellTargets(ws, redirects ?? [])) { const w = protectedFile(resolve(dir, expandHome(p)), ctx.repoRoot); if (w) return w; }
+    return null;
+  })();
+  return why ? ask(`${why} — a lasting change outside this repository; needs your approval`) : allow;
 }
 
 function otherModelTeam(mis, text) {
@@ -321,6 +396,8 @@ export function classify(input, ctx) {
     if (STATE_PATH.test(abs)) return deny('run state is written only by mis.mjs');
     if (ctx.freezeDir && outsideFreeze(abs, ctx.freezeDir)) return deny(`edits are frozen to ${ctx.freezeDir} (run mis unfreeze to lift)`);
     if (ctx.debugScope?.length && outsideScope(abs, ctx.debugScope)) return ask(`${abs} is outside the debug scope (${ctx.debugScope.join(', ')}); a fix outside the hypothesis widens the change (mis debug scope --clear to lift)`);
+    const pf = protectedFile(abs, ctx.repoRoot);
+    if (pf) return ask(`${pf} — a lasting configuration change; needs your approval`);
     if (!ctx.activeRun) return allow;
     if (abs.endsWith(sep + CONFIG)) return ask('changing .make-it-ship.json invalidates existing evidence');
     const inRepo = (abs + sep).startsWith(ctx.repoRoot + sep);
@@ -329,6 +406,10 @@ export function classify(input, ctx) {
       if (!ctx.plannedFiles.some((g) => globToRegExp(g).test(rel))) return ask(`${rel} is outside the approved plan's files; editing it widens the scope`);
     }
     return allow;
+  }
+  if (tool.startsWith('mcp__') && /write|edit|create|update|move|copy|rename|replace|delete|append|save|put/i.test(tool.split('__').slice(2).join('__'))) {
+    const paths = Object.entries(ti).filter(([k]) => /path|file|dest|target/i.test(k)).flatMap(([, v]) => [].concat(v)).filter((v) => typeof v === 'string');
+    for (const p of paths) { const pf = protectedFile(resolve(cwd, expandHome(p)), ctx.repoRoot); if (pf) return ask(`${pf} — a lasting configuration change (${tool}); needs your approval`); }
   }
   if (tool.startsWith(OWN_MCP)) {
     const name = tool.slice(OWN_MCP.length);

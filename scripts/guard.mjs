@@ -22,8 +22,9 @@ function context(cwd) {
     const inScope = ['PLANNING', 'AWAITING_APPROVAL', 'EXECUTING', 'VERIFYING', 'BLOCKED'].includes(run?.state.state);
     const wt = currentBranch?.match(/^mis\/([^/]+)\/(.+)$/);
     const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
-    const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? [])
-      : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
+    // Plan scope = top-level plannedFiles plus every task's files (a plan with only task files is scoped too).
+    const planFiles = [...(plan?.plannedFiles ?? []), ...(plan?.tasks ?? []).flatMap((t) => t.files ?? [])];
+    const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? []) : planFiles.length ? planFiles : null;
     // A team worker (MIS_TEAM_ID, set by `mis team` for its worker processes) gets run-level rules: push/PR/install ask.
     return { repoRoot, inRepo: true, activeRun: (!!run && run.state.state !== 'CANCELLED') || TEAM_WORKER, currentBranch, plannedFiles };
   } catch {
@@ -35,7 +36,7 @@ try {
   let raw = '';
   for await (const chunk of process.stdin) raw += chunk;
   const input = JSON.parse(raw);
-  const cwd = input.cwd || process.cwd();
+  const cwd = (typeof input.cwd === 'string' && input.cwd) || process.cwd();
   // A file edit is scoped by the worktree that holds the file, not by the session cwd (main session editing a task worktree)
   const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
   let at = file ? resolve(cwd, String(file)) : cwd;

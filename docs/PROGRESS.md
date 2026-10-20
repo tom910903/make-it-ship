@@ -206,3 +206,5 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (M2 2차 R2-R2) 모델이 `M="node …"; $M` 형태를 습관적으로 쓰면 zsh에서 실패한다. 스킬이 지시한 형태는 아니다.
 - (M5 2차) SwiftPM 저장소에 `/.build`가 `.gitignore`에 없으면 `swift test` check가 통과 직후 STALE이 된다(안전한 쪽 오류). `.gitignore`에 빌드 산출물을 넣어야 한다.
 - (M5 2차) `mis ios bridge-scan`은 Markdown 파일을 제외한다(DocC 안 코드는 놓침, Swift 주석 속 이름은 보수적으로 잡음).
+- (M9 r1 D3 수정 후) PermissionRequest 자동 허용은 인자로 적힌 경로만 검사한다. 저장소 안 디렉터리를 `grep -r`로 읽으면 그 안의 `.env` 같은 비밀 파일 내용이 확인 없이 나올 수 있다(`rg`는 숨김·gitignore 파일을 기본으로 건너뜀). 디렉터리 아래 파일을 전부 검사해야 막을 수 있어 수용한다. 저장소가 아닌 cwd에서는 cwd를 경계로 쓴다.
+- (M9 r1 D8 수정 후) 설정 파일 보호는 Write/Edit/MCP 쓰기와 셸의 리다이렉트·tee·cp/mv/ln/install/rsync 대상·`sed -i`·`dd of=`·rm만 본다. `node -e`·`python -c` 같은 스크립트 안의 쓰기는 위협 모델(난독화) 밖이다. `~/.claude/agents`·`rules`·`hooks` 디렉터리 쓰기는 대상이 아니다.

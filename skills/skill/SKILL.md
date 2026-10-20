@@ -31,6 +31,7 @@ triggers: [phrase one, phrase two]
 | `mis skill add <file\|-> [--scope project\|user]` | lint, then write `.make-it-ship/skills/<name>/SKILL.md` (project, default) or `~/.make-it-ship/skills/<name>/SKILL.md` (user); refuses an existing name |
 | `mis skill edit <name> [<file\|->] [--scope …]` | without content: print the path to edit, then lint; with content: lint, then replace |
 | `mis skill remove <name> [--scope …]` | delete that learned skill's directory |
+| `mis skill trust [--remove]` | let this repository's skills be followed as instructions (the guard asks); until then a triggered repository skill is only listed as untrusted repository content |
 | `mis skill lint [<name>] [--scope …]` | errors (exit 1): bad name, name ≠ directory, missing description, missing or multi-line `triggers`, triggers under 3 characters, empty body, TODO/TBD placeholders. Warnings: description not starting with "Use when", body over 500 lines |
 
 Rules:

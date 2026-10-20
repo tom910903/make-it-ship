@@ -1,14 +1,15 @@
 // mis skill (M9-C): manage and author learned skills in .make-it-ship/skills (project) or ~/.make-it-ship/skills (user).
 // Never writes the plugin's own skills/. `mis skill test` runs a scenario through a subagent with and without the skill.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { readHome, writeHome } from './home.mjs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { repoRoot } from './tree-hash.mjs';
 import { NAME_RE, PLUGIN_SKILLS, skillBase, scanSkills, lintSkill, parseSkill, skillTestArgv, dotBlocks } from './skills.mjs';
 
 const fail = (msg) => { throw new Error(msg); };
-const USAGE = 'usage: mis skill list | search <text> | add <file|-> [--scope project|user] | edit <name> [<file|->] | remove <name> | lint [<name>] | test <name> <scenario.json> | graphs <name>  (edit/remove/lint/test/graphs take --scope too)';
+const USAGE = 'usage: mis skill list | search <text> | add <file|-> [--scope project|user] | edit <name> [<file|->] | remove <name> | lint [<name>] | test <name> <scenario.json> | graphs <name> | trust [--remove]  (edit/remove/lint/test/graphs take --scope too)';
 // The lead's Claude Code session vars must not leak into the test subagent (same rule as team workers).
 const SESSION_VARS = /^(CLAUDECODE|CLAUDE_CODE_(SESSION_ID|ENTRYPOINT|CHILD_SESSION|SESSION_ATTENDED|MESSAGING_\w+|EXECPATH)|CLAUDE_PID|CMUX_CLAUDE_PID)$/;
 
@@ -141,8 +142,17 @@ function graphs(args, cwd) {
   return { files };
 }
 
+/** mis skill trust [--remove]: follow this repository's .make-it-ship/skills as instructions (the guard asks first). */
+function trust(args, cwd) {
+  const root = realpathSync(repoRoot(cwd)), t = readHome('trusted-repos.json', { repos: [] }) ?? { repos: [] };
+  const repos = (t.repos ?? []).filter((r) => r !== root);
+  const trusted = !args.includes('--remove');
+  writeHome('trusted-repos.json', { repos: trusted ? [...repos, root] : repos });
+  return { repo: root, trusted };
+}
+
 function skill([sub, ...args], cwd) {
-  const fn = { list: () => ({ skills: all(cwd) }), search, add, edit, remove, lint, test: testSkill, graphs }[sub];
+  const fn = { list: () => ({ skills: all(cwd) }), search, add, edit, remove, lint, test: testSkill, graphs, trust }[sub];
   if (!fn) fail(USAGE);
   return fn(args, cwd);
 }

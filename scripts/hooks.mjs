@@ -267,6 +267,8 @@ try {
   let raw = '';
   for await (const c of process.stdin) raw += c;
   try { input = raw.trim() ? JSON.parse(raw.replace(/^﻿/, '')) : {}; } catch { input = {}; }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
+  if (typeof input.cwd !== 'string') delete input.cwd; // a malformed cwd must not reach the trace or a git probe
   try { (await import('./lib/trace.mjs')).appendTrace({ cwd: input.cwd, hook: process.argv[2], tool: input.tool_name }); } catch { /* tracing is optional */ }
   const out = await handlers[process.argv[2]]?.(input);
   if (out) process.stdout.write(JSON.stringify(out) + '\n');
