@@ -567,7 +567,8 @@ export async function runCommand(b, cmd, args, ctx) {
   const blocked = [...new Set(b.blocked.slice(seen))]; // a popup's request is seen by both of its sessions
   if (blocked.length) {
     throw new Error(`${cmd} ran, but a page that holds a file attached without --remote made requests to non-local hosts, and the browser blocked them: ${blocked.join('; ')}. `
-      + 'Such a file may only go to local hosts; to send it on purpose, attach it again with `upload ... --remote` (the guard asks the user first)');
+      + 'Such a file may only go to local hosts, and the page stays held (non-local requests of every tab are blocked) until its tab is closed. '
+      + 'To send a file on purpose: `newtab <url>`, `closetab <id of the holding tab>`, then `upload ... --remote` in the new tab (the guard asks the user first)');
   }
   return result;
 }

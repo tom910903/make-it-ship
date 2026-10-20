@@ -20,7 +20,7 @@ const ENV = { MIS_STATE_HOME: HOME, MIS_BROWSE_IDLE_MS: '180000', MIS_BROWSE_HEA
 let dir, server, base, out;
 const b = (...args) => mis(dir, ['browse', ...args], { env: ENV });
 const ok = (r) => { assert.equal(r.code, 0, `exit ${r.code}\n${r.err}${r.out}`); return r.json !== null && typeof r.json === 'object' ? r.json : r.out; };
-const failed = (r, re) => { assert.notEqual(r.code, 0, r.out); assert.match(r.err, re); };
+const failed = (r, re) => { assert.notEqual(r.code, 0, r.out); assert.match(r.err, re); return r; };
 const blocked = (r) => failed(r, /BLOCKED: no Chrome, Chromium or Edge/);
 
 before(async () => {
@@ -286,6 +286,24 @@ test('M8 R2-1: a file attached without --remote never leaves the machine, whatev
   assert.match(ok(b('click', '#send')), /→ http:\/\/shop\.test:\d+\/up/);
   assert.equal(remoteHits().length, 1);
   ok(b('goto', `${site}/next`));
+  // a page that holds a file stays held until its tab closes; the recovery the error names: reopen, close the holder, attach with --remote
+  ok(b('goto', `${base}/jsupload.html`));
+  failed(b('upload', '#f', f), /closetab[\s\S]*--remote/);
+  const holder = ok(b('tabs')).find((t) => t.active).id;
+  ok(b('newtab', `${base}/jsupload.html`));
+  assert.equal(ok(b('js', '1 + 1')).trim(), '2', 'a tab opened while a hold is armed starts normally');
+  ok(b('closetab', String(holder)));
+  ok(b('upload', '#f', f, '--remote'));
+  ok(b('click', '#send'));
+  until(() => hits().some((h) => h.url === '/up?click'), 'the deliberate upload');
+  assert.ok(hits().some((h) => h.url === '/up?onchange' && h.bytes > 0));
+  // passive loads of a held page (a remote image) are blocked and logged, but do not fail unrelated commands
+  ok(b('goto', `${base}/img.html`));
+  const logos = () => hits().filter((h) => h.url === '/logo.png').length, before = logos(); // loaded once before the hold
+  ok(b('upload', '#f', f));
+  ok(b('goto', `${base}/img.html`));
+  assert.match(ok(b('console')), /blocked GET http:\/\/shop\.test:\d+\/logo\.png/);
+  assert.equal(logos(), before);
 });
 
 test('M8 D1: in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {
@@ -409,4 +427,10 @@ test('M8 R2-2: real screenshots: the same page moved 2px scores high (pass), a d
   assert.ok(moved.score >= 95 && moved.verdict === 'pass', JSON.stringify(moved));
   const other = mis(dir, ['visual-verdict', join(out, 'vv-other.png'), join(out, 'vv-a.png')]).json;
   assert.ok(other.score < 50 && other.verdict === 'fail', JSON.stringify(other));
+  // full-page shots of a tall page: the margin change also makes the page taller
+  const tall = (margin) => body(margin, 'Demo', 'Welcome to the demo page.<div style="height:1500px"></div>', 'Start');
+  writeFileSync(join(dir, 'vv-tall.html'), tall('20px')); writeFileSync(join(dir, 'vv-tall2.html'), tall('22px 20px'));
+  for (const f of ['vv-tall', 'vv-tall2']) { ok(b('goto', `${f}.html`)); ok(b('screenshot', join(out, `${f}.png`))); }
+  const full = mis(dir, ['visual-verdict', join(out, 'vv-tall2.png'), join(out, 'vv-tall.png')]).json;
+  assert.ok(full.sizeMatch === false && full.score >= 95 && full.verdict === 'pass', JSON.stringify(full));
 });

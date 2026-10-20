@@ -107,12 +107,17 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } =
   const bg = [((bgKey >> 10) << 3) + 4, (((bgKey >> 5) & 31) << 3) + 4, ((bgKey & 31) << 3) + 4], bgTol = Math.max(tolerance, 4);
   const isBg = (f, o) => Math.abs(f[o] - bg[0]) <= bgTol && Math.abs(f[o + 1] - bg[1]) <= bgTol && Math.abs(f[o + 2] - bg[2]) <= bgTol;
   const floor = 100;
+  // sizes within 2*maxShift (a full-page shot a few px taller after a margin change): edge pixels fill the missing strip
+  // instead of it counting as different; larger size differences count the area only one image covers as different
+  const sizeMatch = a.width === b.width && a.height === b.height;
+  const loose = !sizeMatch && Math.abs(a.width - b.width) <= 2 * maxShift && Math.abs(a.height - b.height) <= 2 * maxShift;
+  const clamp = (v, n) => Math.min(n - 1, Math.max(0, v));
   // one pass with b moved by (dx, dy); b's own edge pixels fill in what the move uncovers
   const pass = (dx, dy, mark) => {
     let n = 0, shared = 0;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const inA = x < a.width && y < a.height, inB = x < b.width && y < b.height;
-      const oa = (y * a.width + x) * 3;
+      const inA = loose || (x < a.width && y < a.height), inB = loose || (x < b.width + Math.max(0, dx) && y < b.height + Math.max(0, dy));
+      const oa = (clamp(y, a.height) * a.width + clamp(x, a.width)) * 3;
       const ob = (Math.min(b.height - 1, Math.max(0, y - dy)) * b.width + Math.min(b.width - 1, Math.max(0, x - dx))) * 3;
       let differs = !inA || !inB;
       if (!differs) differs = Math.abs(fa[oa] - fb[ob]) > tolerance || Math.abs(fa[oa + 1] - fb[ob + 1]) > tolerance || Math.abs(fa[oa + 2] - fb[ob + 2]) > tolerance;
@@ -121,16 +126,16 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } =
       if (mark) mark(x, y, differs, ob);
     }
     const content = total - shared, d = Math.max(content, floor);
-    let score = content ? Math.floor(((d - n) * 100) / d) : 100;
-    if (n && score === 100) score = 99;
-    return { n, content, score: Math.max(0, score - Math.abs(dx) - Math.abs(dy)), dx, dy };
+    let score = Math.max(0, (content ? Math.floor(((d - n) * 100) / d) : 100) - Math.abs(dx) - Math.abs(dy));
+    if ((n || !sizeMatch) && score === 100) score = 99;
+    return { n, content, score, dx, dy };
   };
   let pick = pass(0, 0);
-  if (pick.n && maxShift && a.width === b.width && a.height === b.height) {
+  if (pick.n && maxShift && (sizeMatch || loose)) {
     // candidate shift from row/column profiles of content pixels (cheap), then full passes for at most three candidates
-    const profile = (f, rows) => {
+    const profile = (f, img, rows) => {
       const p = new Float64Array(rows ? H : W);
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isBg(f, (y * W + x) * 3)) p[rows ? y : x]++;
+      for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) if (!isBg(f, (y * img.width + x) * 3)) p[rows ? y : x]++;
       return p;
     };
     const bestOffset = (pa, pb) => {
@@ -142,7 +147,7 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } =
       }
       return off;
     };
-    const dy = bestOffset(profile(fa, true), profile(fb, true)), dx = bestOffset(profile(fa, false), profile(fb, false));
+    const dy = bestOffset(profile(fa, a, true), profile(fb, b, true)), dx = bestOffset(profile(fa, a, false), profile(fb, b, false));
     for (const [x, y] of [[dx, dy], [0, dy], [dx, 0]]) {
       if (!x && !y) continue;
       const r = pass(x, y);
@@ -160,6 +165,6 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } =
     const x = (i % grid) * cw, y = Math.floor(i / grid) * ch, w = Math.min(cw, W - x), h = Math.min(ch, H - y);
     return { x, y, width: w, height: h, diffPixels: c, percent: Math.round((c * 1000) / Math.max(1, w * h)) / 10 };
   }).filter((c) => c.diffPixels > 0).sort((p, q) => q.diffPixels - p.diffPixels).slice(0, 5);
-  return { score: pick.score, diffPixels: pick.n, contentPixels: pick.content, totalPixels: total, sizeMatch: a.width === b.width && a.height === b.height,
+  return { score: pick.score, diffPixels: pick.n, contentPixels: pick.content, totalPixels: total, sizeMatch,
     hotspots, diff, ...(pick.dx || pick.dy ? { shift: { dx: -pick.dx || 0, dy: -pick.dy || 0 } } : {}) }; // shift: where the second image's content sits
 }

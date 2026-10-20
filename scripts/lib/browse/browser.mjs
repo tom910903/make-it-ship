@@ -186,7 +186,7 @@ export class Browser {
    * remembered by its document (loaderId) and its URLs: back/forward restores a form's chosen files into a new document
    * at the same URL, so that URL stays held for the tab's lifetime (over-blocking a later fresh visit is the safe side).
    * While any tab shows a held page, every tab's requests to non-local hosts fail (form posts, fetch/XHR, beacons,
-   * redirects, popups, workers). Interception is armed before the file is attached, so an onchange upload cannot slip out.
+   * redirects, popups, workers), until the holding tab is closed. Interception is armed before the file is attached, so an onchange upload cannot slip out.
    * shortcut: WebSocket handshakes are not visible to the Fetch domain and are not blocked; see PROGRESS RISKS.
    */
   async holdLocalOnly(tab) {
@@ -200,7 +200,8 @@ export class Browser {
 
   async popupAttached({ sessionId, waitingForDebugger }) {
     const s = (m, p = {}) => this.cdp.send(m, p, sessionId);
-    if (!waitingForDebugger) return s('Target.detachFromTarget', {}).catch(() => {}); // an existing tab: it has its own session
+    // not waiting: a session this daemon opened itself (attachToTarget also reports here) or an existing tab: leave it alone
+    if (!waitingForDebugger) return;
     await s('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }).catch(() => {});
     await s('Runtime.runIfWaitingForDebugger').catch(() => {});
   }
@@ -224,7 +225,8 @@ export class Browser {
     } catch { /* block */ }
     if (block) {
       const what = `${p.request.method} ${p.request.url}`;
-      this.blocked.push(what);
+      // requests that carry data fail the command that caused them; passive loads (GET/HEAD) are blocked and only logged
+      if (!['GET', 'HEAD'].includes(p.request.method)) this.blocked.push(what);
       const tab = this.bySession.get(sessionId);
       if (tab) push(tab.console, { type: 'error', text: `mis browse blocked ${what}: a file attached without --remote may not leave this machine` });
     }

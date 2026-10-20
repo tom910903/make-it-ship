@@ -117,3 +117,15 @@ test('M8 R2-2: the score is proportional: one pixel on a white page is 99, a 2px
   assert.equal(compareImages(page([]), page([10, 30, 50])).score, 0, 'missing content is still caught');
   assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).shift, undefined);
 });
+
+test('M8 R2-2: a full-page screenshot 2px taller because the content moved down 2px is aligned too', () => {
+  const r = compareImages(page([12, 32, 52], 400, 302), page([10, 30, 50]));
+  assert.equal(r.score, 98);
+  assert.deepEqual(r.shift, { dx: 0, dy: -2 });
+});
+
+test('M8 R2-2: a margin change that moves content 2px and makes the page 4px taller is aligned; a size-only difference is never perfect', () => {
+  assert.equal(compareImages(page([12, 32, 52], 400, 304), page([10, 30, 50])).score, 98);
+  const taller = compareImages(page([10, 30, 50], 400, 304), page([10, 30, 50]));
+  assert.equal(taller.score, 99); assert.equal(taller.sizeMatch, false);
+});

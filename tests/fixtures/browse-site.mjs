@@ -41,6 +41,7 @@ const UPLOADS = {
 <script>const send = (u) => { const f = document.getElementById('f').files[0]; if (f) fetch(u, { method: 'POST', body: f }).catch(() => {}); };
 function popup() { const f = document.getElementById('f').files[0]; if (!f) return; const w = window.open('/recv.html'); addEventListener('message', () => w.postMessage(f, '*')); }</script>
 <button id="send" onclick="send('${R}/up?click')">Send</button><button id="redir" onclick="send('/redir-up')">Redirect</button><button id="popup" onclick="popup()">Popup</button>`,
+  '/img.html': (R) => `<title>Remote image</title><img src="${R}/logo.png"><input type="file" id="f">`,
   '/recv.html': (R) => `<title>Receiver</title><script>addEventListener('message', (e) => fetch('${R}/up?popup', { method: 'POST', body: e.data })
   .then(() => { document.title = 'sent'; }, () => { document.title = 'blocked'; })); opener.postMessage('ready', '*');</script>`,
 };
@@ -56,6 +57,7 @@ const server = createServer((req, res) => {
   const R = `http://shop.test:${server.address().port}`;
   if (UPLOADS[u.pathname]) { res.writeHead(200, { 'content-type': 'text/html' }); res.end(UPLOADS[u.pathname](R)); return; }
   if (u.pathname === '/redir-up') { res.writeHead(307, { location: `${R}/up?redirect` }); res.end(); return; }
+  if (u.pathname === '/logo.png') { hits.push({ host: req.headers.host, url: req.url, bytes: 0 }); res.writeHead(404); res.end(); return; }
   if (u.pathname === '/hits') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(hits)); return; }
   if (u.pathname === '/up') {
     let bytes = 0;
