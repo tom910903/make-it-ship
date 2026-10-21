@@ -72,6 +72,9 @@ const server = createServer((req, res) => {
     } catch (e) { json(e.status ?? 500, { ok: false, error: e.message }); }
   });
 });
+// An agent may pause between commands (a test or script blocked for seconds): keep idle sockets open well past that, so a
+// reused connection is never closed by the server just as a request goes out ("fetch failed").
+server.keepAliveTimeout = 65000; server.headersTimeout = 70000;
 server.listen(cfg.port, '127.0.0.1', () => {
   writeFileSync(cfg.stateFile, JSON.stringify({ pid: process.pid, port: server.address().port, expiresAt: cfg.expiresAt, startedAt: new Date().toISOString() }));
 });

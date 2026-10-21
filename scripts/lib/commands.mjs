@@ -264,8 +264,8 @@ const pastDeadline = (s) => s.deadlineAt && Date.now() > Date.parse(s.deadlineAt
 const deadlineBlock = (s) => limitBlock(s, `runtime limit exceeded (deadline ${s.deadlineAt}); ask the user: mis approve continue`);
 const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttemptsPerTask: 2, maxRuntimeMinutes: 120 };
 
-function approve([what, id], cwd) {
-  if (what === 'proposal') return approveProposal(id, cwd); // self-improve: no run needed; the guard always asks
+function approve([what, id, ...rest], cwd) {
+  if (what === 'proposal') return approveProposal(id, cwd, rest); // self-improve: no run needed; the guard always asks
   if (what === 'continue') return approveContinue(cwd);
   if (what === 'config') return approveConfig(cwd);
   if (what !== 'plan') fail('usage: mis approve <plan|continue|config|proposal <id>>');

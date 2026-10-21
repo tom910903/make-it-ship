@@ -3,14 +3,16 @@
 // autoresearch evaluator has a strict JSON contract, and self-improve only proposes: a change is applied by
 // `mis approve proposal <id>`, which the guard always asks the user about.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, appendFileSync, copyFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fail, flag, projectDir, rootOf, readJson, writeJson, slug, stamp, duration, textArg } from './cli-util.mjs';
+import { fail, flag, projectDir, rootOf, readJson, writeJson, slug, stamp, duration, textArg, MIS_CLI_ENV } from './cli-util.mjs';
 
 const now = () => new Date().toISOString();
 // shortcut: a timeout kills the `sh` only; grandchildren it started may keep running. Upgrade: spawn detached and kill the group.
-const sh = (cmd, cwd, timeout) => spawnSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', timeout, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 });
+// M9 r2 N2: MIS_CLI, as for check scripts: a mis command the evaluator or benchmark calls that the guard would ask about is refused.
+const sh = (cmd, cwd, timeout) => spawnSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', timeout, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, env: MIS_CLI_ENV() });
 const lastJson = (out) => { const line = String(out ?? '').trim().split('\n').filter(Boolean).at(-1); try { return JSON.parse(line); } catch { return undefined; } };
 
 // ---------------------------------------------------------------- sciomc: research sessions
@@ -212,28 +214,45 @@ const PROCESS_PATHS = /^(\.make-it-ship\/|\.make-it-ship\.json$|\.claude\/|skill
 const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
 const proposalsDir = (cwd) => projectDir(cwd, 'self-improve', 'proposals');
 
-function patchPaths(root, patch) {
-  const r = git(root, 'apply', '--numstat', patch);
-  if (r.status !== 0) fail(`not a valid patch: ${r.stderr.trim()}`);
-  return r.stdout.trim().split('\n').filter(Boolean).map((l) => l.split('\t')[2]);
+/** M9 r2 N3: every path a patch touches, by git apply's own parser (numstat targets plus rename/copy sources), its
+ *  sha256 and a short preview of the changed lines. Shared by the guard's ask and by apply. */
+export function proposalPatch(root, bytes) {
+  const r = spawnSync('git', ['apply', '--numstat', '--summary', '-z', '-'], { cwd: root, input: bytes, encoding: 'utf8' });
+  if (r.status !== 0) return { error: (r.stderr || 'not a valid patch').trim() };
+  const paths = new Set();
+  for (const t of r.stdout.split('\0')) {
+    const n = /^[\d-]+\t[\d-]+\t([^]*)$/.exec(t);
+    if (n) { paths.add(n[1]); continue; }
+    for (const l of t.split('\n')) {
+      const m = /^ (?:rename|copy) (.*) \(\d+%\)$/.exec(l);
+      if (!m) continue;
+      const b = /^(.*)\{(.*) => (.*)\}(.*)$/.exec(m[1]); // a/{x => y}/z
+      paths.add(b ? `${b[1]}${b[2]}${b[4]}`.replace(/\/\/+/g, '/') : m[1].split(' => ')[0]);
+    }
+  }
+  const text = Buffer.from(bytes).toString('utf8');
+  const preview = text.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).slice(0, 8).join(' | ');
+  return { paths: [...paths], sha: createHash('sha256').update(bytes).digest('hex'), preview };
 }
 function checkPatch(root, patch) {
-  const paths = patchPaths(root, patch);
-  const outside = paths.filter((p) => !PROCESS_PATHS.test(p));
+  const bytes = Buffer.isBuffer(patch) ? patch : readFileSync(patch);
+  const x = proposalPatch(root, bytes);
+  if (x.error) fail(`not a valid patch: ${x.error}`);
+  const outside = x.paths.filter((p) => !PROCESS_PATHS.test(p));
   if (outside.length) fail(`self-improve changes only process and skill files (.make-it-ship/, .claude/, skills/, agents/, hooks/, CLAUDE.md, AGENTS.md); not: ${outside.join(', ')}`);
-  const c = git(root, 'apply', '--check', patch);
+  const c = spawnSync('git', ['apply', '--check', '-'], { cwd: root, input: bytes, encoding: 'utf8' });
   if (c.status !== 0) fail(`patch does not apply to the current tree: ${c.stderr.trim()}`);
-  return paths;
+  return { ...x, bytes };
 }
 
 function saveProposal(cwd, title, patchFile, extra) {
-  const root = rootOf(cwd), paths = checkPatch(root, patchFile);
+  const root = rootOf(cwd), { paths, sha, bytes } = checkPatch(root, patchFile);
   const id = `p-${stamp()}-${slug(title).slice(0, 20)}`, d = join(proposalsDir(cwd), id);
   mkdirSync(d, { recursive: true });
-  copyFileSync(patchFile, join(d, 'change.patch'));
-  const p = { id, title, status: 'proposed', paths, createdAt: now(), ...extra };
+  writeFileSync(join(d, 'change.patch'), bytes);
+  const p = { id, title, status: 'proposed', paths, patchSha: sha, createdAt: now(), ...extra };
   writeJson(join(d, 'proposal.json'), p);
-  return { ...p, next: `Show the user the patch (${join(d, 'change.patch')}). Only they approve it: mis approve proposal ${id} (the guard asks).` };
+  return { ...p, next: `Show the user the patch (${join(d, 'change.patch')}). Only they approve it: mis approve proposal ${id} --sha ${sha.slice(0, 12)} (the guard asks and shows the files the patch touches).` };
 }
 const loadProposal = (cwd, id) => {
   const d = join(proposalsDir(cwd), id ?? '');
@@ -277,7 +296,10 @@ function selfImprove([sub, ...argv], cwd) {
     const base = proposalsDir(cwd);
     return { proposals: readdirSync(base).map((id) => readJson(join(base, id, 'proposal.json'))).filter(Boolean).map(({ id, title, status, paths }) => ({ id, title, status, paths })) };
   }
-  if (sub === 'show') { const { d, p } = loadProposal(cwd, args[0]); return { ...p, patch: readFileSync(join(d, 'change.patch'), 'utf8') }; }
+  if (sub === 'show') {
+    const { d, p } = loadProposal(cwd, args[0]), bytes = readFileSync(join(d, 'change.patch')), x = proposalPatch(rootOf(cwd), bytes);
+    return { ...p, touches: x.paths ?? null, sha: x.sha ?? null, ...(x.error ? { patchError: x.error } : {}), patch: bytes.toString('utf8') };
+  }
   if (sub === 'reject') {
     const { d, p } = loadProposal(cwd, args[0]);
     if (p.status !== 'proposed') fail(`proposal is ${p.status}`);
@@ -289,16 +311,21 @@ function selfImprove([sub, ...argv], cwd) {
 }
 
 /** `mis approve proposal <id>`: the user's approval (the guard always asks) applies the change. */
-export function approveProposal(id, cwd) {
+export function approveProposal(id, cwd, argv = []) {
+  const args = [...argv], pin = flag(args, '--sha');
   const { d, p } = loadProposal(cwd, id);
   if (p.status !== 'proposed') fail(`proposal is ${p.status}`);
-  const root = rootOf(cwd), patch = join(d, 'change.patch');
-  checkPatch(root, patch);
-  const r = git(root, 'apply', patch);
+  if (pin !== undefined && !/^[0-9a-f]{12,64}$/.test(pin)) fail('--sha takes 12 to 64 hex digits of the patch sha256 (shown in the ask)');
+  // M9 r2 N3: read the patch once; check, hash and apply these same bytes (a later rewrite of the file cannot slip in)
+  const root = rootOf(cwd), x = checkPatch(root, readFileSync(join(d, 'change.patch')));
+  if (pin !== undefined && !x.sha.startsWith(pin)) fail(`change.patch (sha256 ${x.sha.slice(0, 12)}) does not match --sha ${pin}; show it again (mis self-improve show ${id})`);
+  if (pin === undefined && !p.patchSha) fail(`no recorded patch hash; approve with --sha <sha256 shown in the ask> (mis self-improve show ${id})`);
+  if (p.patchSha && p.patchSha !== x.sha) fail(`change.patch changed since it was proposed (sha256 ${p.patchSha.slice(0, 12)} → ${x.sha.slice(0, 12)}); not applied. Propose it again`);
+  const r = spawnSync('git', ['apply', '-'], { cwd: root, input: x.bytes, encoding: 'utf8' });
   if (r.status !== 0) fail(`git apply failed: ${r.stderr.trim()}`);
-  Object.assign(p, { status: 'applied', approvedAt: now() });
+  Object.assign(p, { status: 'applied', approvedAt: now(), appliedSha: x.sha });
   writeJson(join(d, 'proposal.json'), p);
-  return { id, status: 'applied', paths: p.paths, note: 'Changes are in the working tree, uncommitted; review with git diff.' };
+  return { id, status: 'applied', paths: x.paths, sha: x.sha, note: 'Changes are in the working tree, uncommitted; review with git diff.' };
 }
 
 // ---------------------------------------------------------------- writer-memory

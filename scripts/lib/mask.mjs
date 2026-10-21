@@ -9,6 +9,8 @@ const PATTERNS = [
 ];
 const KV = /((?:password|passwd|secret|token|api[_-]?key|authorization)["']?\s*[=:]\s*(?:Bearer\s+)?)["']?[^\s"',;]+/gi;
 const BEARER = /(Bearer\s+)[A-Za-z0-9._~+/-]{16,}=*/g;
+// scheme://user:password@host (M9 r2 N5): the password goes, the user and host stay
+const URL_USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]*:)[^\s/@]+@/gi;
 
 export function maskSecrets(text, env = process.env) {
   let out = text;
@@ -16,5 +18,5 @@ export function maskSecrets(text, env = process.env) {
     if (v && v.length >= 8 && SECRET_NAME.test(k)) out = out.split(v).join('***');
   }
   for (const re of PATTERNS) out = out.replace(re, '***');
-  return out.replace(BEARER, '$1***').replace(KV, '$1***');
+  return out.replace(URL_USERINFO, '$1***@').replace(BEARER, '$1***').replace(KV, '$1***');
 }

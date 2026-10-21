@@ -4,7 +4,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { fail, flag, bool, projectDir, rootOf, readJson, writeJson, stamp, slug, duration } from './cli-util.mjs';
+import { fail, flag, bool, projectDir, rootOf, readJson, writeJson, stamp, slug, duration, MIS_CLI_ENV } from './cli-util.mjs';
 import { browseDir, send } from './browse/client.mjs';
 import { stateRoot, loadRun } from './state.mjs';
 import { loadRuns } from './retro.mjs';
@@ -157,7 +157,8 @@ function deploy([sub, ...argv], cwd) {
   return fail('usage: mis deploy setup [--platform p] [--url u] [--merge-cmd c] [--deploy-cmd c] [--status-cmd c] [--health url] [--ci-cmd c] [--rollback-cmd c] [--base branch] [--write] | run [--dry-run] [--auto-revert] [--health-tries N] [--ci-tries N] [--ci-interval 30s] | status');
 }
 
-const sh = (cmd, cwd) => { const t0 = Date.now(), r = spawnSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', timeout: 30 * 60000 }); return { exit: r.status, ms: Date.now() - t0, output: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(-2000) }; };
+// MIS_CLI (M9 r2 N2): a mis command a deploy/CI/rollback step calls that the guard would ask about is refused there
+const sh = (cmd, cwd) => { const t0 = Date.now(), r = spawnSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', timeout: 30 * 60000, env: MIS_CLI_ENV() }); return { exit: r.status, ms: Date.now() - t0, output: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(-2000) }; };
 const onPath = (bin) => spawnSync('sh', ['-c', `command -v ${bin}`], { encoding: 'utf8' }).status === 0;
 const cmpV = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 
