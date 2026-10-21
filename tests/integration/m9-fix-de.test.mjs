@@ -14,10 +14,11 @@ const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json ?? r.o
 const envOf = (h) => { const e = { ...process.env, ...h.env }; for (const k of ['CLAUDE_CODE_SESSION_ID', 'MIS_TEAM_ID', 'NODE_TEST_CONTEXT', 'MIS_CLI']) delete e[k]; return e; };
 const stubCodex = (h) => { const log = join(h.home, 'codex.log'); writeFileSync(join(h.bin, 'codex'), `#!/bin/sh\necho "CODEX CALLED: $*" >> "${log}"\necho answer\n`); chmodSync(join(h.bin, 'codex'), 0o755); return log; };
 
-test('N2: the autoresearch evaluator, the tournament bench and deploy steps run with MIS_CLI: a nested `mis ask codex` in their scripts is refused', () => {
+test('N2: the autoresearch evaluator, the tournament bench, deploy steps, mis health and the session create baseline run with MIS_CLI: a nested `mis ask codex` in their scripts is refused', () => {
   const h = fakeHome(), log = stubCodex(h);
   const nested = `"${process.execPath}" "${MIS}" ask codex leak-from-script`;
-  const dir = makeRepo({ 'ev.sh': `${nested} >/dev/null 2>err.txt; echo '{"pass":true}'\n`, 'dep.sh': `${nested}\n`, '.make-it-ship/score': '1\n' });
+  const dir = makeRepo({ 'ev.sh': `${nested} >/dev/null 2>err.txt; echo '{"pass":true}'\n`, 'dep.sh': `${nested}\n`, '.make-it-ship/score': '1\n',
+    'chk.sh': `${nested}\n`, '.make-it-ship.json': JSON.stringify({ version: 1, checks: { test: { argv: ['sh', 'chk.sh'] } } }) });
   const run = (args) => mis(dir, args, { env: h.env });
   ok(run(['autoresearch', 'init', 'm1', '--mission', 'x', '--eval', 'sh ev.sh']));
   ok(run(['autoresearch', 'start', 'm1']));
@@ -30,6 +31,9 @@ test('N2: the autoresearch evaluator, the tournament bench and deploy steps run 
   writeFileSync(join(dir, 'a.diff'), '--- a/.make-it-ship/score\n+++ b/.make-it-ship/score\n@@ -1 +1 @@\n-1\n+4\n');
   const t = ok(run(['self-improve', 'tournament', '--bench', `${nested} && echo '{"score":9}'`, 'a.diff']));
   assert.equal(t.winner, null, JSON.stringify(t));
+  // R3-DE-1: mis health and the session create baseline run the stored check (`sh chk.sh`) the same way
+  assert.equal(ok(run(['health', '--no-record'])).checks.test.status, 'FAIL');
+  assert.equal(ok(run(['session', 'create', 'feature', 'x'])).baseline.checks[0].status, 'FAIL');
   assert.equal(existsSync(log), false, 'codex was never called');
 });
 
