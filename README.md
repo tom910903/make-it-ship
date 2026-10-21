@@ -36,7 +36,7 @@ Optional single-phase commands: `/make-it-ship:interview`, `/make-it-ship:plan-r
 What happens:
 1. **Setup.** `mis doctor` checks the environment. `mis init` proposes `.make-it-ship.json`, which holds the check commands (detected from `package.json`, Python tests, a `Makefile`, Cargo, Go, or SwiftPM). You confirm it before it is written.
 2. **Discover and interview.** The plugin reads the repo first and asks only the high-impact questions, one at a time.
-3. **Plan and choose a mode.** The mode is Quick, Standard, or Full, and the plugin gives a reason for its choice. Risk flags (auth, payment, PII, migration, hardware, security) force Standard or higher.
+3. **Plan and choose a mode.** The mode is Quick, Standard, or Full, and the plugin gives a reason for its choice. Risk flags (auth, payment, PII, migration, security) force Standard or higher.
 4. **Plan critique and your approval.** These happen in Standard and Full. A Quick change with no risk flags skips approval.
 5. **Implement.** Work is test-first and uses the smallest complete change.
 6. **Verify and QA.** `mis check` runs the checks, including real-use QA checks (`qa-*`) for a CLI, API, web UI, or iOS simulator surface that `mis qa detect` finds. Read-only reviewer agents (spec and quality, plus security for risky changes) review the change.

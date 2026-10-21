@@ -9,7 +9,7 @@ Goal: understand the repository well enough to plan, without asking the user for
    - verification commands that exist (compare with `.make-it-ship.json`; if a needed check is missing, propose adding it to the user — never add it silently);
    - code the change touches (`path:line`);
    - conventions to follow (test style, module system, error handling);
-   - **risk signals**: auth, payment, personal data (pii), migration, hardware, security. These become `riskFlags` in the plan.
+   - **risk signals**: auth, payment, personal data (pii), migration, security. These become `riskFlags` in the plan.
 3. If external library docs matter and a docs tool (e.g. context7) is available, use it; otherwise rely on the code and say so.
 4. Discovery is read-only: no edits in this phase.
 

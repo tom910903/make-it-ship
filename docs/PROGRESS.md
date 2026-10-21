@@ -125,6 +125,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 
 ## SPEC_CHANGES
 - (사용자 결정, 2026-10-20) Spec §11 M5의 "BSP QA 프로파일"을 제거했다. `scripts/lib/qa.mjs`의 Yocto/Buildroot/커널 탐지와 `build-bsp`/`qa-bsp` 제안, QA 스킬 문서, README 항목을 삭제했고 NH-9는 해당 없음이다. Spec 문서 본문은 수정하지 않았다. 일반 위험 플래그 `hardware`는 유지한다. 회귀 테스트: `mis-qa.test.mjs` "BSP QA profile was removed".
+- (사용자 결정, 2026-10-21) Spec §418(ADR-009)의 위험 신호 중 '하드웨어'를 제거했다. `RISK_FLAGS`에서 `hardware`를 빼고 run 스킬·discover/plan 단계·security-reviewer·explorer·README 목록에서 지웠다. BLOCKED 사유로서의 하드웨어(§190)는 그대로 둔다. 회귀 테스트: `mis-plan.test.mjs`에서 `riskFlags: ['hardware']`가 거부된다.
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
 - (해석, 파일럿 4) §7 "설정 변경 → ask"를 도구와 무관하게 강제하려고 `mis approve config`를 추가했다. 이것이 없으면 run 시작 후 configHash가 바뀐 상태에서 판정은 PARTIAL에 머문다(§6 PARTIAL 조건의 연장: 승인되지 않은 검증 규칙 변경).
 - (해석) §7 "진행 중인 실행이 있을 때만 적용": 취소되지 않은 현재 run이 있으면 원격 쓰기·설치 등은 계속 ask다(REPORTED 이후의 ship 단계 push도 승인 대상이어야 하므로). 계획 범위(plannedFiles) 검사는 보고 전 상태(PLANNING~VERIFYING, BLOCKED 포함)에서만 적용한다.

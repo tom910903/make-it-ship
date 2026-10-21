@@ -28,6 +28,6 @@ mis plan set - <<'MIS'
 MIS
 ```
 
-   `riskFlags` ⊆ `auth, payment, pii, migration, hardware, security`. `ui: true` when the work builds Web or iOS screens (Full mode then requires design-explore). Tasks may add `"dependsOn": ["T1"]`; `files` is the task's ownership for parallel work. `mis` rejects unknown keys and prints every schema error; fix and resend.
+   `riskFlags` ⊆ `auth, payment, pii, migration, security`. `ui: true` when the work builds Web or iOS screens (Full mode then requires design-explore). Tasks may add `"dependsOn": ["T1"]`; `files` is the task's ownership for parallel work. `mis` rejects unknown keys and prints every schema error; fix and resend.
 6. Choose the mode and say why: `mis mode set <quick|standard|full> --reason "<why>"`. Risk flags force Standard or higher.
 7. Until the plan is approved (or Quick without risk flags starts), make **no** code changes.

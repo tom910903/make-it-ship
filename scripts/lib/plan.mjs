@@ -1,7 +1,7 @@
 // plan.json schema (Spec §8 `plan set`), hand-rolled.
 import { createHash } from 'node:crypto';
 
-export const RISK_FLAGS = ['auth', 'payment', 'pii', 'migration', 'hardware', 'security'];
+export const RISK_FLAGS = ['auth', 'payment', 'pii', 'migration', 'security'];
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const strArr = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && s.trim());
 

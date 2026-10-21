@@ -53,7 +53,7 @@ Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never 
 | ship | on request | on request | yes |
 | retro / learn | — | — | yes |
 
-Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, hardware, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
+Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
 
 ## Flow
 

@@ -49,6 +49,7 @@ test('plan set: schema errors are reported, valid plan stored', () => {
     [{ ...PLAN, tasks: [{ id: 'T1', title: 't', acceptance: [] }] }, /acceptance/],
     [{ ...PLAN, tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }, { id: 'T1', title: 'u', acceptance: ['b'] }] }, /duplicate task id T1/],
     [{ ...PLAN, riskFlags: ['weather'] }, /riskFlags/],
+    [{ ...PLAN, riskFlags: ['hardware'] }, /riskFlags/], // removed by user decision 2026-10-21
   ];
   for (const [p, re] of bad) {
     write(dir, { 'p.json': p });
