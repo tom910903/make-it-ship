@@ -256,11 +256,40 @@ claude --plugin-dir ~/make-it-ship
 | `mis browse <command>` | 내장 브라우저(`mis browse start --local-only`) |
 | `mis config get\|set` | 사용자 설정(`~/.make-it-ship/config.json`) |
 | `mis setup` | 상태 표시줄·CLAUDE.md 설정 diff(`--write`로 적용) |
+| `mis layout [--json]` / `mis layout write` | 프로젝트 구조 규칙 확인 / `.ai/` 문서와 CLAUDE.md·AGENTS.md 안내 작성 |
 | `mis help [topic]` | 전체 목록(코드에서 생성) |
 | `mis info` / `mis version` | 버전과 개수 |
 | `mis uninstall` | 플러그인이 만든 파일 정리(`--yes`로 실행) |
 
 전체 목록은 `mis help commands`로 봅니다.
+
+## 프로젝트 구조와 문서 (.ai/는 AI용, docs/는 사람용)
+
+선택 기능입니다. `.make-it-ship.json`에 `layout`이 있으면 코드와 문서가 정해진 폴더로 갑니다. AI용 문서는 `.ai/`(영어, 경로·명령·규칙·불변 조건 같은 짧은 사실), 사람용 문서는 `docs/`에 언어마다 한 파일씩(`docs/guide/x.md` + `docs/guide/x.ko.md`, `README.md` / `README.ko.md`와 같은 방식) 둡니다.
+
+```json
+"layout": {
+  "paths": ["src/**", "tests/**", "docs/**", ".ai/**", "*.md", "package.json", ".make-it-ship.json"],
+  "purposes": { "src/**": "application code" },
+  "docs": { "human": "docs", "ai": ".ai", "languages": ["en", "ko"] }
+}
+```
+
+```
+.ai/              AI용 문서(영어)
+  index.md        시작점, CLAUDE.md에서 가져옴(@.ai/index.md)
+  layout.md       위 규칙(자동 생성)
+  modules/        디렉터리별 문서(deepinit)
+docs/             사람용 문서(언어별)
+  guide/x.md
+  guide/x.ko.md
+src/  tests/
+```
+
+- `mis init`이 저장소의 최상위 폴더를 보고 `layout`을 제안합니다. `mis init --write`로만 기록됩니다.
+- `/make-it-ship:run` 안에서 `mis plan set`은 `paths` 밖의 파일이나 번역이 빠진 사람용 문서가 있는 계획을 거부하고, 위반마다 고치는 방법을 보여 줍니다. 구조를 바꾸는 것은 설정 변경입니다(run 중에는 `mis approve config`). run 밖에서는 강제하지 않습니다.
+- `mis layout`은 규칙과 규칙 밖 파일을 보여 줍니다(`--json`). `mis layout write`는 `.ai/layout.md`, `.ai/index.md` 뼈대(있으면 덮어쓰지 않음), CLAUDE.md와 AGENTS.md의 표시된 안내 절을 씁니다(먼저 묻습니다).
+- `layout`이 없으면 이 기능은 꺼져 있습니다.
 
 ## 설정: `.make-it-ship.json`
 

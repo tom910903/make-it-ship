@@ -252,8 +252,32 @@ Commands that send data off this machine always ask you first (with or without a
 - **Design images (asks):** `/make-it-ship:design-images` — `mis design generate|variants|iterate|evolve` with your OpenAI key (BLOCKED without it), `compare` (static board) and `gallery`; output in `design/variants/`.
 - **Pair agent (asks):** `/make-it-ship:pair-agent` — `mis pair-agent start [--local]` gives another agent token access to the built-in browser (tunnel via ngrok unless `--local`); `stop` closes it.
 
+## Project layout and docs (.ai/ for AI, docs/ for people)
+Optional. With a `layout` in `.make-it-ship.json`, code and docs go to fixed folders: AI-facing docs in `.ai/` (English, terse facts: paths, commands, rules, invariants), human-facing docs in `docs/`, one file per language (`docs/guide/x.md` + `docs/guide/x.ko.md`, like `README.md` / `README.ko.md`).
+```json
+"layout": {
+  "paths": ["src/**", "tests/**", "docs/**", ".ai/**", "*.md", "package.json", ".make-it-ship.json"],
+  "purposes": { "src/**": "application code" },
+  "docs": { "human": "docs", "ai": ".ai", "languages": ["en", "ko"] }
+}
+```
+```
+.ai/              AI docs (English)
+  index.md        entry point, imported from CLAUDE.md (@.ai/index.md)
+  layout.md       the rules above, generated
+  modules/        one doc per directory (deepinit)
+docs/             human docs, every language
+  guide/x.md
+  guide/x.ko.md
+src/  tests/
+```
+- `mis init` proposes a `layout` from the repository's top-level folders; it is written only with `mis init --write`.
+- Inside `/make-it-ship:run`, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and lists each violation with the fix. Changing the layout is a config change (`mis approve config` during a run). Outside a run nothing is enforced.
+- `mis layout` prints the rules and the files outside them (`--json` for JSON). `mis layout write` writes `.ai/layout.md`, an `.ai/index.md` skeleton (never overwritten) and a marked pointer section in CLAUDE.md and AGENTS.md (asks first).
+- Without `layout` the feature is off.
+
 ## `mis` CLI
-You run it as `node ~/make-it-ship/scripts/mis.mjs <command>`; the skills call it for you. Commands: `doctor`, `init [--write]`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`, `team start|status|wait|shutdown`, `session create|list|remove`, `companion start|status|stop`, `tty start|send|keys|expect|capture|save|stop`, `skill list|search|add|edit|remove|lint|test|graphs`, `plan check <plan.md>`, `start --plan <plan.md>`, `goal add|list|done|handoff`, `question log|pref|list`, `profile`, `decision add|supersede|search`, `learn add|list|search|distill`, `retro [--git --since 7d]`, `diagram <x.mmd>`, `design-board <dir>`, `taste approve|reject|show`, `health`, `debt`, `redact scan [--history] [--pii] [--legal] | file <path> [--apply]`, `diff-scope`, `repo-mode`, `next-version <level>`, `version-bump <level>`, `jsonl-merge install`, `context save|restore|list|sessions`, `doctor [--json|--fix|session]`, `setup [--write] | setup team [--write]`, `mcp-setup list|add`, `config get|set`, `version`, `update-check`, `upgrade [--yes]`, `uninstall [--yes] [--purge-runs]`, `launch`, `cancel [--all [--run]]`, `open-url <url>`, `research`, `autoresearch`, `self-improve`, `approve proposal <id>`, `writer-memory`, `ask`, `ccg`, `benchmark-models`, `interop`, `second-opinion detect|probe`, `deploy setup|run|status`, `canary`, `landing-report`, `mission-board`, `wait`, `detach`, `ios sync|daemon|mint|tokens`, `telemetry`, `analytics`, `gbrain`, `design`, `pair-agent`, `help [topic]`, `info`, `capabilities [--write|--check]`, `gain [--json]`, `bench <check> [--runs N]`, `ios devices|bridge-scan`. `mis help commands` prints the full list from the code.
+You run it as `node ~/make-it-ship/scripts/mis.mjs <command>`; the skills call it for you. Commands: `doctor`, `init [--write]`, `layout [--json] | write`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`, `team start|status|wait|shutdown`, `session create|list|remove`, `companion start|status|stop`, `tty start|send|keys|expect|capture|save|stop`, `skill list|search|add|edit|remove|lint|test|graphs`, `plan check <plan.md>`, `start --plan <plan.md>`, `goal add|list|done|handoff`, `question log|pref|list`, `profile`, `decision add|supersede|search`, `learn add|list|search|distill`, `retro [--git --since 7d]`, `diagram <x.mmd>`, `design-board <dir>`, `taste approve|reject|show`, `health`, `debt`, `redact scan [--history] [--pii] [--legal] | file <path> [--apply]`, `diff-scope`, `repo-mode`, `next-version <level>`, `version-bump <level>`, `jsonl-merge install`, `context save|restore|list|sessions`, `doctor [--json|--fix|session]`, `setup [--write] | setup team [--write]`, `mcp-setup list|add`, `config get|set`, `version`, `update-check`, `upgrade [--yes]`, `uninstall [--yes] [--purge-runs]`, `launch`, `cancel [--all [--run]]`, `open-url <url>`, `research`, `autoresearch`, `self-improve`, `approve proposal <id>`, `writer-memory`, `ask`, `ccg`, `benchmark-models`, `interop`, `second-opinion detect|probe`, `deploy setup|run|status`, `canary`, `landing-report`, `mission-board`, `wait`, `detach`, `ios sync|daemon|mint|tokens`, `telemetry`, `analytics`, `gbrain`, `design`, `pair-agent`, `help [topic]`, `info`, `capabilities [--write|--check]`, `gain [--json]`, `bench <check> [--runs N]`, `ios devices|bridge-scan`. `mis help commands` prints the full list from the code.
 
 ## Configuration: `.make-it-ship.json`
 ```json
