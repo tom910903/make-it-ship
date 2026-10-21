@@ -47,6 +47,15 @@ test('planLayoutErrors: every violation with where it is and how to fix it', () 
   assert.deepEqual(planLayoutErrors(plan, undefined), [], 'no layout: nothing checked');
 });
 
+test('planLayoutErrors: "narrow the glob" only for a glob broader than an allowed path; otherwise move or change the layout', () => {
+  const hint = (f) => planLayoutErrors({ plannedFiles: [f], tasks: [] }, { ...LAYOUT, paths: ['src/lib/**', 'docs/**'] })[0];
+  for (const f of ['src/**', '**']) assert.match(hint(f), /; narrow the glob to an allowed path$/, f);
+  for (const f of ['lib/**', 'lib/a.js', '**/*.ts']) {
+    assert.match(hint(f), /; move it under an allowed path or change the layout$/, f);
+    assert.doesNotMatch(hint(f), /narrow/, f);
+  }
+});
+
 test('renderStructure: rules, purposes and doc rules, deterministic (the generated part of .ai/structure.md)', () => {
   const md = renderStructure(LAYOUT);
   assert.match(md, /^## Allowed paths/m);

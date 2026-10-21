@@ -43,6 +43,10 @@ export function layoutViolations(files, layout) {
   return { outside, missingTranslation };
 }
 
+/** A planned glob is broader than an allowed path when it matches a sample file under that path (`src/**` vs `src/lib/**`).
+ * shortcut: one sample per allowed glob, not real glob overlap; enough for the hint, upgrade if hints mislead. */
+const broader = (f, layout) => isGlob(f) && layout.paths.some((g) => globToRegExp(f).test(g.replace(/\*\*|[*?]/g, 'a')));
+
 /** Plan-stage check: every plannedFiles and tasks[].files entry; [] when the layout is off. */
 export function planLayoutErrors(plan, layout) {
   if (!layout) return [];
@@ -51,7 +55,7 @@ export function planLayoutErrors(plan, layout) {
   const errs = [];
   const { missingTranslation } = layoutViolations(all, layout);
   for (const [f, at] of where) {
-    if (!inside(f, layout)) errs.push(`${at}: ${f} is outside the layout (allowed: ${layout.paths.join(', ')})${isGlob(f) ? '; narrow the glob' : ''}`);
+    if (!inside(f, layout)) errs.push(`${at}: ${f} is outside the layout (allowed: ${layout.paths.join(', ')}); ${broader(f, layout) ? 'narrow the glob to an allowed path' : 'move it under an allowed path or change the layout'}`);
     for (const m of missingTranslation.filter((x) => x.file === f)) errs.push(`${at}: ${f} needs its translation ${m.missing} in the plan (human docs are written in ${layout.docs.languages.join(', ')})`);
   }
   return errs;
