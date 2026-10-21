@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stateRoot } from '../../scripts/lib/state.mjs';
 import { makeRepo, write, mis } from '../helpers.mjs';
 
 const CFG = { version: 1, checks: {
@@ -10,6 +11,14 @@ const CFG = { version: 1, checks: {
   broken: { argv: ['node', '-e', 'process.exit(1)'] },
 } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
+// pins the baseline (first perf note) to an extreme value, so OK/REGRESSION do not depend on wall-clock jitter under load
+const setBaseline = (dir, ms) => {
+  const root = stateRoot(dir);
+  const f = join(root, 'runs', readFileSync(join(root, 'current'), 'utf8').trim(), 'state.json');
+  const s = JSON.parse(readFileSync(f, 'utf8'));
+  s.notes.find((n) => n.kind === 'bench' && n.check === 'perf').medianMs = ms;
+  writeFileSync(f, JSON.stringify(s));
+};
 
 test('bench: median of N runs, compared with the first measurement in the run; regression shows in the report', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
@@ -18,8 +27,11 @@ test('bench: median of N runs, compared with the first measurement in the run; r
   assert.equal(base.runs, 3);
   assert.ok(base.medianMs >= 30, JSON.stringify(base));
   assert.equal(base.status, 'BASELINE');
+  setBaseline(dir, 1e6);
   const same = ok(mis(dir, ['bench', 'perf', '--runs', '5']));
   assert.equal(same.status, 'OK', JSON.stringify(same));
+  assert.equal(same.baselineMs, 1e6);
+  setBaseline(dir, 1);
   write(dir, { slow: '1' });
   const slow = ok(mis(dir, ['bench', 'perf', '--runs', '3']));
   assert.equal(slow.status, 'REGRESSION');
