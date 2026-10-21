@@ -1,4 +1,4 @@
-# 작업 인계 (HANDOFF) — 2026-10-21
+# 작업 인계 (HANDOFF) — 2026-10-22
 
 새 세션은 이 문서부터 읽는다. 원본 기록은 `docs/PROGRESS.md`, `git log`, `docs/milestones/*-report*.md`다.
 
@@ -11,7 +11,7 @@
   - 원격: `github.com/tom910903/make-it-ship` (비공개). 이 브랜치가 원격 기본 브랜치이고, 마켓플레이스 설치도 이 브랜치에서 받는다.
 - 2026-10-21에 모든 작업 브랜치를 이 라인으로 병합하고 정리했다.
   - 병합 순서: `develop`(M6·M7 검증 PASS, 병합 검증 PASS) → `m9-fix4` → `m9-fix3` → `m8-wip`.
-  - **M8·M9 코드는 검증을 통과하지 못한 상태로 들어왔다.** M8은 3차 FAIL, M9는 2차 FAIL 뒤 수정 중이었다. 태그는 달지 않았다.
+  - 병합 당시 M8·M9는 검증 FAIL 상태였다. 이후 이 라인에서 고쳐 둘 다 4차 검증 PASS(2026-10-21)를 받았다.
   - 병합할 때마다 전체 `npm test`를 돌려 통과했다(최종 737/737). 병합한 브랜치의 테스트 제목이 하나도 빠지지 않은 것도 확인했다.
   - 병합된 브랜치(`develop` 포함)와 worktree는 모두 지웠다. 이 상태는 원격에 push했다(`8765793`).
 - 의미 충돌을 고친 곳:
@@ -38,61 +38,41 @@ Make It Ship 하나만 설치하면 OMC·Superpowers·Ponytail·gstack의 기능
 - `hardware` 위험 플래그 제거, 문서 업로드는 그대로 둔다(2026-10-21)
 - 항상 한국어로 보고
 
-## 2. 마일스톤 상태
+## 2. 마일스톤 상태 (2026-10-22)
 
-| M | 내용 | 상태 | 위치 |
+| M | 내용 | 상태 | 근거 |
 |---|---|---|---|
-| M1~M5 | 핵심 | 검증 PASS(`FINAL-report.md`). 사후 변경도 재검증 PASS(`POST-FINAL-report.md`) | 이 라인 |
-| M6 | 상시 동작 계층(훅, style, loop, freeze 등) | 검증 PASS, `m6-verified` | 이 라인(develop 병합) |
-| M7 | MCP 도구 서버(memory, wiki, LSP/REPL, trace, run lock) | 검증 PASS(6차), `m7-verified` | 이 라인(develop 병합) |
-| M8 | 내장 브라우저(CDP pipe), pdf, visual-verdict, team, companion | 3차 검증 FAIL. **수정 착수 전.** 코드는 이 라인에 병합됨 | 이 라인 |
-| M9 | 나머지 기능 전부(A 설치·수명주기, B 흐름 통합, C 에이전트·스킬, D 연구·운영·배포, E 브라우저 고급, F 훅) | 구현 완료, 2차 검증 FAIL. 2차 수정(A/F D1~D7, D/E N1~N8)까지 이 라인에 병합됨. **3차 검증 전** | 이 라인 |
-| M10 | 원본 4종 vs MIS 실측 비교 + 로컬 HTML | 미착수 | — |
+| M1~M5 | 핵심 | 검증 PASS, 태그 `m1`~`m5-verified` | `FINAL-report.md`, `POST-FINAL-report.md` |
+| M6 | 상시 동작 계층(훅, style, loop, freeze 등) | 검증 PASS, `m6-verified` | develop 병합 검증 `MERGE-develop-report.md` |
+| M7 | MCP 도구 서버 | 검증 PASS, `m7-verified` | 같음 |
+| M8 | 내장 브라우저(CDP pipe), pdf, visual-verdict, team, companion | **4차 검증 PASS**, `m8-verified`(`0c5b755`) | `M8-report-r4.md`: 로컬 전용 모드에서 유출 경로 24개 모두 0 B |
+| M9 | 나머지 기능 전부(A~F) | **4차 검증 PASS**, `m9-verified`(`0c5b755`) | `M9-report-r4.md` |
+| M10 | 원본 4종 + control vs MIS 실측 비교, 로컬 HTML | 실험 54회, 1차 검증 FAIL(집계 오류) → 원시 로그로 재계산 → **2차 검증 PASS**, `m10-verified`(`215ffca`) | `docs/m10/report.html`, `M10-report.md`, `M10-report-r2.md` |
 
-gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EXCLUDED 5 / N/A 15.
+M8·M9 검증 태그 이후의 수정(`b9b2c2c` 이후): browse 실행 설정 변수 검사를 모든 `mis` 명령으로 넓힘(pdf·canary·pair-agent), `sudo --chdir`·`env -vC` 처리, 브라우저 시작 대기 60초, README 한국어판과 사용법, `mis help` 문구. 모두 테스트를 붙였다(전체 768/768).
 
-M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
-- **guard D-1 수정**(`9aaf3b1`): run 중 `.git/` 내부와 중첩 저장소의 편집이 다시 ask가 된다.
-- **`hardware` 플래그 제거**(`8052bd1`). Spec과 달라진 점은 SPEC_CHANGES에 기록했다.
-- **테스트 결정화**: `mis-bench`, `mis-resume`, `mis-concurrency`. 고부하(load 170~280)에서 실패하던 테스트다.
-- **저장소 자체 마켓플레이스**: `.claude-plugin/marketplace.json`, `source: "."`. 설치, `marketplace update`, `plugin update` 경로를 AUTO로 확인했다(`NH-auto-check.md`).
-- **NH-5**: AUTO 통과. NH-6·7·8은 "추후 확인 필요"(사용자 결정).
+M10 결과 요약(중앙값, control 대비): MIS는 비용 4.1~6.1배, 턴 2.2~2.6배, 시간 3.1~5.0배. gstack은 비용 7.5~8.2배. 54회 모두 실제 통과·정직한 보고라서 이 데모로는 통과율·정직성 차이를 말할 수 없고 오버헤드만 비교된다. OMC 워크플로는 9회 중 1회, superpowers는 6회만 실제로 실행됐다. 자세한 주의 사항은 보고서 "Read this first"에 있다.
 
-## 3. 다음에 할 일 (순서대로)
+gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EXCLUDED 5 / N/A 15. PARTIAL·MISSING은 대부분 정책(외부 서비스·외부 모델 전송 금지)이나 장비(iOS 실기기) 때문이다.
 
-1. **M8 3차 결함 수정** (보고서 `docs/milestones/M8-report.md` "3차 검증")
-   - R3-1/R3-2: 업로드 파일 유출 경로(Service/Shared Worker, 다른 로컬 문서로 이동, closetab의 pagehide beacon, WebRTC). **사용자 결정: 로컬 전용 모드**로 막는다.
-     - `mis browse start --local-only`: Chrome을 다음 옵션으로 띄운다.
-       - `--proxy-server=http://127.0.0.1:<닫힌 포트>`: loopback 외 전부 차단
-       - `--host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1, EXCLUDE [::1]"`
-       - `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` 등
-     - 확인 없는 `upload`는 이 모드에서만 허용한다. 다른 모드에서는 `--remote` 여부와 상관없이 upload가 항상 guard ask다. 문구: 페이지 스크립트가 파일을 어디로든 보낼 수 있음.
-     - 모드는 데몬 상태 파일에 기록하고 guard가 읽는다. 모드를 바꾸려면 데몬을 재시작한다.
-     - 유출 경로마다 로컬 전용 모드에서 실제로 다시 시도해, 유출이 0건인지 측정한다(가정 금지). 기존 목적지 검사와 Fetch 차단은 보조 방어로 남긴다.
-     - M9-E가 추가한 `connect`(지속 프로필 + 확장)와 쿠키 정책도 이 모드 규칙과 맞춰야 한다. 둘은 병합 후 처음으로 함께 놓였다.
-   - R3-3: guard가 `MIS_BROWSE_CHROME_ARGS`/`MIS_BROWSER`/`MIS_BROWSER_EXE`를 원문 정규식이 아니라 파서가 풀어낸 env 할당으로 판정하게 한다. M9 r2에서 셸 파서가 env 할당을 넘겨주게 됐으므로 그것을 쓴다. Chrome 플래그는 거부 목록에서 **허용 목록(fail closed)**으로 바꾼다.
-   - R3-4: visual-verdict 정렬 탐색 범위를 ±8px 정도로 넓히고, 정확한 값을 단언한다.
-   - (병합 검증에서 나옴) daemon의 `_render-pdf`는 `runCommand`를 거치지 않는다. 그래서 파일을 붙인 페이지의 요청 차단 검사(`b.blocked`)도 받지 않는다. m8-wip에서도 같았다. 로컬 전용 모드 작업 때 함께 본다.
-   - 그다음 M8 4차 독립 검증을 한다. 병합본 기준이다. PASS면 `m8-verified` 태그를 단다.
-2. **M9 3차 검증**: 2차 수정까지 병합됐다. 검증은 두 갈래로 한다(A/B/C/F, D/E). 보고서 `M9-report-r2-*.md`의 결함이 실제로 고쳐졌는지 병합본에서 확인한다. FAIL이면 고치고 다시 검증한다. PASS면 `m9-verified` 태그를 단다.
-3. (M8과 M9 검증은 같은 guard, policy, shell 파일을 공유한다. 한쪽을 고치면 다른 쪽 테스트도 함께 돌린다.)
-4. **M10**: 원본 4종을 각각 `--plugin-dir`와 프로젝트 전용 설정으로 격리해, 같은 합성 데모(`evals/demos`)에서 실제로 실행한다.
-   - 셀마다 N≥3번 돌리고, 원시 로그를 보관한다. 추정치는 쓰지 않는다.
-   - 지표: 판정 정직성·통과율, 턴, 토큰/비용, 시간, diff 크기, 리뷰 지적 수.
-   - 결과는 **로컬 HTML**로 만든다(외부 업로드 금지).
-   - 독립 검증 후 `m10-verified` 태그를 단다.
-5. **사람 확인**(사용자가 나중에 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기, NH-7·8 외부 모델은 "추후 확인 필요"다. 절차는 `docs/milestones/NEEDS_HUMAN.md`.
-6. **master 전환**(개발 완료 후)
-   - master를 만든다. PR은 선택이다.
-   - **GitHub 기본 브랜치를 master로 바꾼다.**
-   - `plugin.json` version을 올린다(지금 0.1.0). version을 올리지 않으면 이미 설치한 사용자가 `plugin update`로 새 커밋을 받지 못한다(실측).
-   - HANDOFF와 FINAL 보고서를 갱신한다.
+## 3. 다음에 할 일
+
+Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람 확인과 결정이다.
+
+1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기, NH-7·8 외부 모델은 "추후 확인 필요". 절차는 `docs/milestones/NEEDS_HUMAN.md`.
+2. **master 전환**(사용자 결정 후)
+   - master를 만들고 **GitHub 기본 브랜치를 master로 바꾼다**(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
+   - `plugin.json` version을 올린다(지금 0.1.0). 올리지 않으면 이미 설치한 사용자가 `plugin update`로 새 커밋을 받지 못한다(실측).
+   - MCP 서버가 보고하는 버전(`scripts/mcp/server.mjs`의 `0.2.0`)을 `plugin.json`과 맞춘다.
+3. **선택 개선(PROGRESS PROPOSALS)**: 모델이 review 전에 `mis report`를 실행하면 리뷰를 다시 기록할 수 없다. (a) 안내 문구 추가 또는 (b) Spec 상태 전이 변경(사용자 결정).
 
 ## 4. 열린 결정
 
-- version을 언제, 몇으로 올릴지(3장 6번)
-- (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에 검증 안 된 M8·M9 코드가 들어 있다. 여기에는 M8 업로드 유출 결함(R3-1, MEDIUM)도 있다. 마켓플레이스로 새로 설치하는 사람도 이 코드를 받는다. M8 수정과 M9 재검증을 우선한다.
-- NH-6~8: 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지
+- version 번호와 master 전환 시점
+- MCP 서버 버전 표기(0.2.0)와 plugin.json(0.1.0) 중 어느 쪽에 맞출지
+- PROPOSALS의 (a)/(b)
+- NH-6~8: 실기기와 사내 정책이 준비되면 유지·닫기·제거 결정
+- (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에는 M8·M9·M10 결과까지 들어 있다.
 
 ## 4-1. 남은 위험 (LOW)
 
@@ -104,7 +84,8 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
   - Spec §435 qa 행에 BSP가 남아 있다. Spec은 수정하지 않고 SPEC_CHANGES에 기록했다.
 - 설치 확인 범위:
   - GitHub 마켓플레이스 설치는 user 범위로만 확인했다. `--scope project`는 확인하지 않았다.
-  - develop 병합본(`8353e07`)은 로컬 마켓플레이스로 설치해 MCP 서버 연결, 도구 호출, 스킬 동작을 확인했다(AUTO). M8·M9 병합본으로는 다시 확인하지 않았다.
+  - develop 병합본(`8353e07`)은 로컬 마켓플레이스로 설치해 MCP 서버 연결, 도구 호출, 스킬 동작을 확인했다(AUTO). 최종본은 M10 실험에서 `--plugin-dir`로 54회 중 MIS 9회를 돌렸다(MCP 서버 연결 포함).
+- 브라우저 통합 테스트는 CPU 여유가 필요하다. CPU를 포화시키면(코어 수 2배의 `yes`, 또는 Defender 검사와 겹칠 때) Chrome 렌더러가 굶어 간헐적으로 실패한다(PROGRESS RISKS). 실패해도 유출 바이트는 0이었다.
 
 ## 5. 운영 메모
 

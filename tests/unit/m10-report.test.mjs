@@ -26,6 +26,7 @@ test('renderHtml: every arm and demo, method/limitations/raw-log sections', () =
   for (const d of demos) assert.ok(html.includes(`demo ${d}`), `demo ${d}`);
   for (const h of ['Method', 'Isolation probe', 'Limitations', 'Raw logs']) assert.ok(html.includes(h), h);
   assert.ok(html.includes('evals/m10/runs/mis/b/1'));
+  assert.match(html, /the authoritative numbers/, 'says summary.json, not run.json, is authoritative (M10 r2 D7)');
   assert.match(html, /<svg/);
   assert.match(html, /prefers-color-scheme: dark/);
 });

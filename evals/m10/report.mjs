@@ -178,7 +178,7 @@ ${charts}
 <li>Runs are sequential on one machine; wall time depends on API latency at that moment (load average recorded).</li>
 </ul>
 <h2>Raw logs</h2>
-<p>Per run: <code>evals/m10/runs/&lt;arm&gt;/&lt;demo&gt;/&lt;n&gt;/</code> (stream.jsonl, stderr.txt, prompt.txt, args.json, checks.json, diff.numstat). Logs over 1MB are gitignored there. Summary: <code>${esc(m.summaryPath)}</code>.</p>
+<p>Per run: <code>evals/m10/runs/&lt;arm&gt;/&lt;demo&gt;/&lt;n&gt;/</code> (stream.jsonl, stderr.txt, prompt.txt, args.json, checks.json, diff.numstat). Logs over 1MB are gitignored there. Summary: <code>${esc(m.summaryPath)}</code> — <strong>the authoritative numbers</strong>; each run's <code>run.json</code> keeps the values as recorded at run time, which may predate later metric fixes (re-derive with <code>node evals/m10/rebuild.mjs</code>).</p>
 <ul>${runs.map((r) => `<li><code>${esc(r.logDir)}</code></li>`).join('')}</ul>
 </body></html>
 `;
