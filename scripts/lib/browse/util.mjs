@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url';
 /**
  * Local = a file: or loopback origin (or URL). Decides when storage/JS/upload need --remote. Opaque or unknown origins
  * (about:blank and data: documents report "://", sandboxed ones "null") and blob:/about: URLs are not local: fail closed.
+ * file: stays local for js/storage/eval (those gates protect a site's cookies; a file page has none worth protecting);
+ * upload is judged by where the file goes, not by the page (M8 R2-1, actions.mjs upload and Browser.holdLocalOnly).
  */
 export function isLocalOrigin(o) {
   let url;

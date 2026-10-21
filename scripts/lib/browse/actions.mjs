@@ -578,7 +578,19 @@ const HANDLERS = {
     if (!sel || !files.length) throw USAGE_ERR('upload <selector|@ref> <file> [file...]');
     const abs = files.map((f) => resolve(ctx.cwd, f));
     for (const f of abs) if (!existsSync(f)) throw new Error(`no such file: ${f}`);
-    await b.send(tab, 'DOM.setFileInputFiles', { files: abs, objectId: await b.element(tab, sel) });
+    const objectId = await b.element(tab, sel);
+    if (!ctx.remote) {
+      // M8 R2-1: judge where the file goes, not only the page: the form's action and any submit button's formaction
+      const dests = await b.callOn(tab, objectId, function () {
+        const f = this.form;
+        return f ? [f.action, ...[...f.elements].filter((e) => e.hasAttribute?.('formaction')).map((e) => e.formAction)] : [];
+      });
+      const away = dests.filter((d) => !isLocalOrigin(d));
+      if (away.length) throw new Error(`upload: the form sends the file to ${away.join(', ')}, which is not local: data would leave this machine; rerun with --remote (the guard asks the user first)`);
+      await b.holdLocalOnly(tab); // script-driven uploads: the browser refuses non-local requests while this page holds the file
+    }
+    await b.send(tab, 'DOM.setFileInputFiles', { files: abs, objectId });
+    await b.settle(tab);
     return `Uploaded ${abs.length} file(s) to ${sel}`;
   },
   async 'dialog-accept'(b, tab, args) { tab.dialogPolicy = { accept: true, text: args.join(' ') }; return 'Dialogs will be accepted'; },
@@ -1042,7 +1054,14 @@ export async function runCommand(b, cmd, args, ctx) {
   if (cmd === 'cdp' && ctx.inChain) throw new Error('cdp is not allowed inside chain; run `mis browse cdp ...` on its own so the guard can ask');
   // M9-E: the guard asks for these every time, and it cannot see inside chain files, tab-each or browser skills
   if (BROWSE_ALWAYS_ASK.has(cmd) && ctx.inChain) throw new Error(`${cmd} is not allowed inside chain, tab-each or a browser skill; run \`mis browse ${cmd} ...\` on its own so the guard can ask`);
+  const seen = b.blocked.length;
   const result = await gated(b, h, cmd, args, ctx);
+  const blocked = [...new Set(b.blocked.slice(seen))]; // a popup's request is seen by both of its sessions
+  if (blocked.length) {
+    throw new Error(`${cmd} ran, but a page that holds a file attached without --remote made requests to non-local hosts, and the browser blocked them: ${blocked.join('; ')}. `
+      + 'Such a file may only go to local hosts, and the page stays held (non-local requests of every tab are blocked) until its tab is closed. '
+      + 'To send a file on purpose: `newtab <url>`, `closetab <id of the holding tab>`, then `upload ... --remote` in the new tab (the guard asks the user first)');
+  }
   record(b, cmd, args); // only commands that succeeded
   return result;
 }
@@ -1075,8 +1094,10 @@ async function gated(b, h, cmd, args, ctx) {
   // command pinned to that same document: if it navigates in between, the command fails instead of running elsewhere.
   const c = await b.pageContext(tab);
   if (!c.local) {
-    const what = cmd === 'upload' ? 'sends a local file to it' : 'can read or change its cookies and storage';
-    throw new Error(`${cmd} on a non-local page (${/^[a-z][\w+.-]*:\/\/[^/]/i.test(c.origin) ? c.origin : 'opaque origin'}) ${what}; rerun with --remote (the guard asks the user first)`);
+    const real = /^[a-z][\w+.-]*:\/\/[^/]/i.test(c.origin);
+    const what = !real ? 'cannot be shown to be local (about:, data: and sandboxed documents have no origin of their own)'
+      : cmd === 'upload' ? 'sends a local file to it' : 'can read or change its cookies and storage';
+    throw new Error(`${cmd} on a non-local page (${real ? c.origin : 'opaque origin'}) ${what}; rerun with --remote (the guard asks the user first)`);
   }
   tab.pinned = c.uniqueId;
   try { return await h(b, tab, args.map(String), ctx); } finally { tab.pinned = null; }

@@ -5,7 +5,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homeDir } from '../home.mjs';
-import { findChrome, NO_CHROME, OWNER_MARK } from './chrome.mjs';
+import { findChrome, chromeArgs, NO_CHROME, OWNER_MARK } from './chrome.mjs';
 
 const DAEMON = fileURLToPath(new URL('./daemon.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -60,6 +60,7 @@ export async function ensureDaemon(dir) {
   if (await live(s)) return s;
   const exe = findChrome();
   if (!exe) throw new Error(NO_CHROME);
+  chromeArgs(process.env.MIS_BROWSE_CHROME_ARGS); // refuse risky flags here, with a clear message, before starting the daemon
   mkdirSync(dir, { recursive: true });
   const lock = join(dir, 'start.lock');
   let fd;

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isLocalOrigin, lineDiff, toInches, toUrl } from '../../scripts/lib/browse/util.mjs';
-import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
+import { findChrome, chromeArgs } from '../../scripts/lib/browse/chrome.mjs';
 import { markdownToHtml } from '../../scripts/lib/markdown.mjs';
 
 test('M8 D0: local origins are file and loopback only; opaque/unknown origins (about:, data:, blob:, "://", "null") and real sites are not local', () => {
@@ -52,4 +52,15 @@ test('markdown → print HTML: title from first H1, smart quotes outside code, r
   assert.match(html, /<img src="img\/a\.png"/);
   const net = markdownToHtml('![pic](https://x.test/a.png)', { baseDir: '/d', allowNetwork: true }).html;
   assert.match(net, /<img src="https:\/\/x\.test\/a\.png"/);
+});
+
+test('M8 R2-3: extra Chrome flags cannot reopen a DevTools port, drop web security, swap the profile or load extensions', () => {
+  assert.deepEqual(chromeArgs('--host-resolver-rules=MAP *.test 127.0.0.1 --lang=ko'), ['--host-resolver-rules=MAP *.test 127.0.0.1', '--lang=ko']);
+  assert.deepEqual(chromeArgs(''), []);
+  for (const bad of ['--remote-debugging-port=0', '-remote-debugging-port=9222', '--remote-debugging-address=0.0.0.0', '--remote-allow-origins=*',
+    '--disable-web-security', '--user-data-dir=/Users/me/Library/Chrome', '--profile-directory=Default', '--load-extension=/x',
+    '--disable-extensions-except=/x', '--allow-file-access-from-files', '--proxy-server=http://p:1', '--lang=ko --REMOTE-DEBUGGING-PIPE']) {
+    assert.throws(() => chromeArgs(bad), /MIS_BROWSE_CHROME_ARGS[\s\S]*not allowed/, bad);
+  }
+  assert.throws(() => chromeArgs('http://evil.test/'), /MIS_BROWSE_CHROME_ARGS[\s\S]*flag/, 'a bare URL would open at startup, before any gate');
 });

@@ -43,6 +43,22 @@ location = URL.createObjectURL(new Blob(['<p id="b">blob page</p>'], { type: 'te
 <div class="card" id="card" onclick="this.dataset.hit = 'yes'"><span>Open card</span></div><div id="plain">Just text</div><button id="real">Real button</button>
 <p id="k" style="margin-top: 7px">styled</p>`],
 };
+// M8 R2-1: pages that send an uploaded file somewhere; R = the remote site (shop.test), recorded by /up and listed by /hits
+const UPLOADS = {
+  '/remoteform.html': (R) => `<form method="post" action="${R}/up" enctype="multipart/form-data"><input type="file" id="f" name="f"><button id="send">Send</button></form>`,
+  '/formaction.html': () => `<form method="post" action="/up" enctype="multipart/form-data"><input type="file" id="f" name="f">
+<button id="send" formaction="http://shop.test:${server.address().port}/up">Send</button></form>`,
+  '/localform.html': () => '<form method="post" action="/up" enctype="multipart/form-data"><input type="file" id="f" name="f"><button id="send">Send</button></form>',
+  // page script sends the file: on change, on click, through a local URL that redirects out, and from a popup it hands the file to
+  '/jsupload.html': (R) => `<title>JS upload</title><input type="file" id="f" onchange="fetch('${R}/up?onchange', { method: 'POST', body: this.files[0] }).catch(() => {})">
+<script>const send = (u) => { const f = document.getElementById('f').files[0]; if (f) fetch(u, { method: 'POST', body: f }).catch(() => {}); };
+function popup() { const f = document.getElementById('f').files[0]; if (!f) return; const w = window.open('/recv.html'); addEventListener('message', () => w.postMessage(f, '*')); }</script>
+<button id="send" onclick="send('${R}/up?click')">Send</button><button id="redir" onclick="send('/redir-up')">Redirect</button><button id="popup" onclick="popup()">Popup</button>`,
+  '/img.html': (R) => `<title>Remote image</title><img src="${R}/logo.png"><input type="file" id="f">`,
+  '/recv.html': (R) => `<title>Receiver</title><script>addEventListener('message', (e) => fetch('${R}/up?popup', { method: 'POST', body: e.data })
+  .then(() => { document.title = 'sent'; }, () => { document.title = 'blocked'; })); opener.postMessage('ready', '*');</script>`,
+};
+const hits = [];
 const SLOW_MS = 800; // /slow answers late, so a previous page's late load events race with the new navigation
 
 const server = createServer((req, res) => {
@@ -50,6 +66,17 @@ const server = createServer((req, res) => {
   if (u.pathname === '/xframe') { // a local page embedding a real site
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(`<title>X</title><iframe id="x" src="http://shop.test:${server.address().port}/next"></iframe>`); return;
+  }
+  const R = `http://shop.test:${server.address().port}`;
+  if (UPLOADS[u.pathname]) { res.writeHead(200, { 'content-type': 'text/html' }); res.end(UPLOADS[u.pathname](R)); return; }
+  if (u.pathname === '/redir-up') { res.writeHead(307, { location: `${R}/up?redirect` }); res.end(); return; }
+  if (u.pathname === '/logo.png') { hits.push({ host: req.headers.host, url: req.url, bytes: 0 }); res.writeHead(404); res.end(); return; }
+  if (u.pathname === '/hits') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(hits)); return; }
+  if (u.pathname === '/up') {
+    let bytes = 0;
+    req.on('data', (c) => { bytes += c.length; });
+    req.on('end', () => { hits.push({ host: req.headers.host, url: req.url, bytes }); res.writeHead(200, { 'content-type': 'text/html', 'access-control-allow-origin': '*' }); res.end('<title>Got it</title>'); });
+    return;
   }
   if (u.pathname === '/nocontent') { res.writeHead(204); res.end(); return; }
   if (u.pathname === '/echo') { // what the browser sent: cookies, user agent and x-mis-* headers

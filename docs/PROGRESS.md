@@ -140,13 +140,14 @@ VERIFY: PASSED (6차, `docs/milestones/M7-report.md` ROUND6: PASS) — 태그 `m
 
 ## M8 — 브라우저·팀·문서 변환
 VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
+참고: 아래 "M9 E1~E4/C2/A8" 항목 ID는 m9 브랜치(`m9-wip`)의 `docs/research/m9-plan.md`에 정의돼 있다 (이 브랜치에는 그 파일이 없다).
 | ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
 |---|---|---|---|---|---|---|
 | M8-01 | 내장 브라우저(CDP pipe 데몬, `mis browse`: 수명주기·goto/back/forward/reload/url/wait/load-html·text/html/links/forms/accessibility/data·js/eval/css/attrs/is/console/network/dialog/storage/perf/cdp·click/fill/select/hover/type/press/scroll/viewport/upload/dialog-accept/dismiss·screenshot/responsive/pdf/diff·snapshot -i -c -d -s -D -a -o와 @e 참조·tabs/tab/newtab/closetab/frame·chain·handoff/resume), guard(cdp ask, 비로컬 출처의 storage/js/eval/upload는 --remote + ask). **M9로 이동**: `media`·`style`/`style --undo`/`cleanup`/`prettyscreenshot`·`tab-each`·`snapshot -C`/`@c`(M9 E4), `inspect`·`ux-audit`·쿠키·헤더(E1), `focus`·`state save\|load`·`memory`·connect(E2), 다운로드·스크랩(E3) | DONE (M8 범위) | `tests/integration/mis-browse*.test.mjs` | gap §5.4 | f3a03c4 | npm test |
 | M8-02 | `mis pdf`(marked 벤더), `mis visual-verdict`(PNG 디코더, 콘텐츠 기준 점수 — 판정은 모델이 두 이미지를 보고 함), Playwright 없는 웹 QA·qa-only·디자인 리뷰·페이지 성능. **M9로 이동**: qa-tester의 tmux 대화형 CLI 조작(M9 C2) | DONE (M8 범위) | 같은 묶음 | gap §5.1, §2.1 | f3a03c4 | npm test |
 | M8-03 | 팀 런타임(`mis team`, tmux 워커, 공유 task 목록·원자적 claim), team 스킬(plan→exec→verify→fix), codex/gemini 워커 ask. **M9로 이동**: `mis launch`(OMC `omc launch`, M9 A8) | DONE (M8 범위) | `tests/integration/mis-team.test.mjs` | gap §2.1·§2.4·§2.6 | c5c04fe | npm test |
 | M8-04 | 프로젝트 세션 관리(`mis session`, psm), visual companion(`mis companion`) | DONE | 같은 묶음 | gap §2.1, §3 | c5c04fe | npm test |
-| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS — 1차 검증 DEFECTS(D0~D12, 원격 upload) 수정 후 2차 | — | `docs/milestones/M8-report.md` | | |
+| M8-05 | 독립 검증 → `m8-verified` | IN_PROGRESS — 2차 검증 DEFECTS(R2-1~R2-6) 수정 후 3차 | — | `docs/milestones/M8-report.md` | | |
 
 ## M9 — 나머지 이전 제외 기능
 VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
@@ -222,3 +223,6 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (M9 r1 D8 수정 후) 설정 파일 보호는 Write/Edit/MCP 쓰기와 셸의 리다이렉트·tee·cp/mv/ln/install/rsync 대상·`sed -i`·`dd of=`·rm만 본다. `node -e`·`python -c` 같은 스크립트 안의 쓰기는 위협 모델(난독화) 밖이다. (r2 D2 수정 후) `~/.claude/skills`·`agents`·`commands`·`rules`·`hooks`, 저장소 밖 `CLAUDE.local.md`, 디렉터리로의 cp/mv, `&>`·`>|`·`exec N>`, `curl -o`·`wget -O`·`patch`도 대상이다.
 - (M9 r2 수정) 보호 경로 비교는 볼륨과 상관없이 대소문자를 무시한다(APFS 기본값 기준). 대소문자를 구분하는 볼륨에서는 `~/.claude/Settings.json` 같은 이름도 ask가 된다(과차단 쪽). 세션 cwd가 저장소가 아닐 때 cwd 하위 전체를 "자기 저장소"로 보는 문제(r2 D2 마지막 항목)는 저장소 루트 판별 수정(D/E 담당) 범위로 남긴다.
 - (M9 r2 D3·D6 수정 후) `claude …` 설정 변경은 인자 어디에서든 `mcp add` 같은 하위 명령 쌍이 보이면 ask다(전역 플래그가 값을 받는지 몰라도 되게). 그래서 `claude -p mcp add` 같은 따옴표 없는 프롬프트도 ask가 된다(과차단 쪽). `mis tty keys`는 tmux가 옵션 순서를 바꿔 읽을 수 있어 `--` 앞의 send-keys 옵션 모양 단어(`-l`, `-t x` 등)는 위치와 상관없이 ask다. 맨 앞의 `--`는 항상 빠진다. 그 뒤에 오는 `--`는 tmux 버전에 따라 입력되기도 하고 빠지기도 해서, 두 경우를 모두 분류하고 더 엄격한 판정을 쓴다.
+- (M8 2차 R2-4) 정적 guard는 위치 인자를 다시 짜거나 실행 시점에 만들어지는 명령을 풀지 못한다: `f() { local s=$1; shift; mis $s "$@"; }`, `f() { mis "$1" "${@:2}"; }`, `set -- browse cdp X.y; mis "$@"`, 배열 `a=(browse cdp X.y); mis "${a[@]}"`, `mis browse $(echo cdp) X.y`, `echo cdp | xargs -I{} mis browse {} X.y`, `| sh`, `sh 파일`, `source 파일` → allow. 같은 형태의 `git push --force`도 마찬가지다 (M8 이전부터 있던 정적 guard의 공통 한계). 데몬 쪽 검사(비로컬 페이지의 storage/js/eval/upload 거부, chain 안 cdp 거부, upload 목적지 차단)는 guard와 무관하게 동작한다.
+- (M8 2차 R2-1) upload 목적지 차단은 Chrome의 Fetch 가로채기로 한다. WebSocket 핸드셰이크는 Fetch에도 `Network.setBlockedURLs`에도 보이지 않아 막지 못한다(실측). 즉 로컬 페이지의 스크립트가 `--remote` 없이 붙인 파일을 WebSocket으로 원격에 보내는 경로는 남는다. 붙였던 페이지 URL은 그 탭이 닫힐 때까지 계속 "보유 중"으로 본다(뒤로 가기가 파일 선택을 되살리므로). 그 URL을 새로 열어도 원격 요청이 막히는 것은 안전한 쪽 과차단이다.
+- (M8 2차 R2-5) 교차 사이트 iframe을 `frame`으로 고를 수 있도록 내장 브라우저는 `--disable-site-isolation-trials`로 뜬다(일회용 프로필, 에이전트 전용). 사이트 격리가 막는 렌더러 간 공격(Spectre류) 방어는 이 브라우저에서 약해진다.

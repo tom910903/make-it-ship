@@ -7,13 +7,13 @@ import { writeFileSync, renameSync, rmSync, readFileSync, mkdirSync } from 'node
 import { join } from 'node:path';
 import { Browser } from './browser.mjs';
 import { runCommand, printPdf } from './actions.mjs';
-import { findChrome } from './chrome.mjs';
+import { findChrome, chromeArgs } from './chrome.mjs';
 import { homeDir } from '../home.mjs';
 
 const dir = process.argv[2];
 const stateFile = join(dir, 'state.json');
 const IDLE_MS = Number(process.env.MIS_BROWSE_IDLE_MS) || 30 * 60 * 1000;
-const extraArgs = (process.env.MIS_BROWSE_CHROME_ARGS ?? '').split(/\s+(?=--)/).filter(Boolean);
+const extraArgs = chromeArgs(process.env.MIS_BROWSE_CHROME_ARGS);
 const exe = process.env.MIS_BROWSER_EXE || findChrome();
 const token = randomBytes(24).toString('hex');
 const browser = new Browser({ exe, extraArgs, headlessOnly: process.env.MIS_BROWSE_HEADLESS_ONLY === '1' });
