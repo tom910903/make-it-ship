@@ -8,6 +8,7 @@ import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { repoRoot } from './tree-hash.mjs';
 import { stateRoot, newRunId, pidAlive } from './state.mjs';
+import { MIS_CLI_ENV } from './cli-util.mjs';
 import { loadConfig, requiredChecks } from './config.mjs';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
@@ -325,7 +326,7 @@ function baseline(path, root) {
   if (!cfg) return { status: 'BLOCKED', reason: 'no valid .make-it-ship.json (mis init) — baseline not run' };
   const checks = requiredChecks(cfg.config, 'quick').map((name) => {
     const def = cfg.config.checks[name];
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: path, encoding: 'utf8', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, env: { CI: '1', ...process.env } });
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: path, encoding: 'utf8', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, env: { CI: '1', ...MIS_CLI_ENV() } });
     const status = r.error ? 'BLOCKED' : r.status === 0 ? 'PASS' : 'FAIL';
     return { name, argv: def.argv, status, exitCode: r.status, tail: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n') };
   });

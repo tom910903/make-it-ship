@@ -10,8 +10,8 @@ import { claudeDir, homeDir, readHome, writeHome } from './home.mjs';
 
 export const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
 export const statusLineCommand = () => `node "${join(PLUGIN_ROOT, 'scripts', 'statusline.mjs')}"`;
-/** A statusLine command that runs some Make It Ship install's statusline.mjs (possibly an old version's path). */
-export const isOurStatusLine = (cmd) => typeof cmd === 'string' && /make-it-ship[^"]*\/scripts\/statusline\.mjs/.test(cmd);
+/** A statusLine command that runs this install's statusline.mjs (any checkout name) or some Make It Ship install's (possibly an old version's path). */
+export const isOurStatusLine = (cmd) => typeof cmd === 'string' && (cmd === statusLineCommand() || /make-it-ship[^"]*\/scripts\/statusline\.mjs/.test(cmd));
 
 const START = '<!-- MIS:START -->', END = '<!-- MIS:END -->';
 // The CLI path is absolute: Claude Code substitutes CLAUDE_PLUGIN_ROOT only in plugin content (skills, hooks, MCP config),

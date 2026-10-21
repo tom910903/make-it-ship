@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
 import { stateRoot, loadRun } from './state.mjs';
+import { MIS_CLI_ENV } from './cli-util.mjs';
 import { loadConfig } from './config.mjs';
 import { shortcutDebt, renderDebt } from './debt.mjs';
 import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
@@ -89,7 +90,7 @@ function health(args, cwd) {
   for (const [name, def] of Object.entries(cfg.config.checks)) {
     if (name.startsWith('qa-')) continue; // real-use QA needs a running app; health is the static dashboard
     const t0 = Date.now();
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, stdio: 'ignore', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', env: { CI: '1', ...process.env } });
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, stdio: 'ignore', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', env: { CI: '1', ...MIS_CLI_ENV() } });
     const status = r.error ? 'BLOCKED' : r.status === 0 ? 'PASS' : 'FAIL';
     const weight = weightOf(name);
     checks[name] = { status, weight, ms: Date.now() - t0 };

@@ -68,6 +68,24 @@ test('N1: guard reads the stored command from the same repository root mis uses 
   for (const d of [r, fine]) rmSync(d, { recursive: true, force: true });
 });
 
+test('M9 r3: env -C / --chdir (and sudo -D) move where a stored-command mis runs, like cd: the guard cannot follow it and asks', () => {
+  // repro from the r3 D/E report: the root evaluator is harmless, the nested repository's evaluator calls codex
+  const ev = (command) => ({ command, timeoutSec: 5, output: 'json' });
+  const r = repo({ '.make-it-ship/autoresearch/m1/evaluator.json': ev(`echo '{"pass":true}'`) });
+  const other = join(r, 'other'); mkdirSync(other); spawnSync('git', ['init', '-q'], { cwd: other });
+  mkdirSync(join(other, '.make-it-ship/autoresearch/m1'), { recursive: true });
+  writeFileSync(join(other, '.make-it-ship/autoresearch/m1/evaluator.json'), JSON.stringify(ev(`codex exec leakO; echo '{"pass":true}'`)));
+  assert.equal(v(r, `${M} autoresearch eval m1`).decision, 'allow');
+  assert.equal(v(r, `cd other && ${M} autoresearch eval m1`).decision, 'ask');
+  for (const cmd of [`env -C other ${M} autoresearch eval m1`, `env --chdir other ${M} autoresearch eval m1`, `env --chdir=other ${M} autoresearch eval m1`,
+    `env -Cother ${M} autoresearch eval m1`, `env -u X -C other FOO=1 ${M} autoresearch eval m1`, `sudo -D other ${M} autoresearch eval m1`,
+    `env -C other sh -c '${M} autoresearch eval m1'`]) {
+    const x = v(r, cmd); assert.equal(x.decision, 'ask', cmd); assert.match(x.reason, /cannot tell which repository/, cmd);
+  }
+  assert.equal(v(r, `env -C other true && ${M} autoresearch eval m1`).decision, 'allow', 'env -C moves only its own command');
+  rmSync(r, { recursive: true, force: true });
+});
+
 test('N3/N4: mis options that write to a chosen path, letter-case variants and symlinked redirects reach the stored-file check', () => {
   const r = repo({ '.make-it-ship/self-improve/proposals/p1/change.patch': '', '.make-it-ship/deploy.json': '{}' });
   const patch = '.make-it-ship/self-improve/proposals/p1/change.patch';
