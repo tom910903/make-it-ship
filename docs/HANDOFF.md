@@ -4,12 +4,15 @@
 
 ## 1. 현재 상태
 
+- **이 문서는 M1~M5 라인(`feature/make-it-ship-m1-m5`)의 인계 문서다.** 기능 전부 흡수(M6~M10) 라인은 로컬 `develop` 브랜치와 그 브랜치의 `docs/HANDOFF.md`에 따로 있다. 2026-10-21 기준 상태: M7까지 PASS, M8·M9는 검증 FAIL 후 수정이 중단됨, M10은 착수 전. 아래 3장 9번 참고.
 - **M1~M5 구현 완료.** 마일스톤마다 독립 검증을 PASS했고, 최종 검증도 PASS다(`docs/milestones/FINAL-report.md`).
 - **브랜치:** `feature/make-it-ship-m1-m5`
   - 원격: `github.com/tom910903/make-it-ship` (비공개)
   - 로컬 `develop`이 이 원격 브랜치를 추적한다.
 - **태그:** `m1-verified` ~ `m5-verified`. 검증 당시의 커밋을 가리킨다.
-- **테스트:** `npm test` 320/320, `claude plugin validate .` 통과.
+- **테스트:** `npm test` 321/321 통과.
+  - `claude plugin validate .claude-plugin/plugin.json` 통과. 이것이 플러그인 검사다.
+  - `claude plugin validate .` 통과. 루트에 마켓플레이스 파일이 생겨서, 이 명령은 이제 마켓플레이스 매니페스트를 검사한다.
 - **2026-10-21 작업은 원격 `feature/make-it-ship-m1-m5`에 push했다**(fast-forward). 커밋: `27f86f3`, `8052bd1`, `c0c11c2`, `9aaf3b1`, 그리고 문서 갱신.
 - **최종 검증 이후 바뀐 것**(`FINAL-report.md`에는 없고, `POST-FINAL-report.md`가 7개 모두 검증함):
   1. `73e9260` — NH-1~4를 tmux 대화형 세션으로 자동 확인하고 기록했다(`docs/milestones/NH-auto-check.md`).
@@ -22,6 +25,9 @@
   7. `9aaf3b1` — guard 수정. 사후 재검증 D-1(MEDIUM)을 고쳤다.
      - 문제: 2번 수정 이후 `.git/` 내부와 중첩 저장소의 파일 편집이 run 중에도 allow됐다.
      - 결과는 `docs/milestones/POST-FINAL-report.md`에 있다.
+  8. `49fd0e5`~`ea36af4` — README 설치 절차를 복사해서 바로 실행할 수 있게 바꿨다.
+     - **저장소 자체를 마켓플레이스로 만들었다**(`.claude-plugin/marketplace.json`, `source: "."`).
+     - GitHub에서 설치하는 경로와 업데이트 경로를 AUTO로 확인했다(`NH-auto-check.md`). 이 변경들은 POST-FINAL 검증 이후의 것이다.
 
 ## 2. 다른 장비에서 시작하기
 
@@ -29,10 +35,11 @@
 git clone git@github.com:tom910903/make-it-ship.git && cd make-it-ship
 git checkout feature/make-it-ship-m1-m5
 node --version              # 22 이상
-npm test                    # 320/320 기대
-claude plugin validate .    # 통과 기대
+npm test                    # 321/321 기대
+claude plugin validate .claude-plugin/plugin.json   # 통과 기대
 claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으로 사용
 ```
+설치해서 쓰려면 `claude plugin marketplace add tom910903/make-it-ship` 다음에 `claude plugin install make-it-ship@make-it-ship`를 실행한다. 자세한 내용은 README Install에 있다.
 
 외부 패키지 의존성은 없다. Node 내장 기능과 `node:test`만 쓴다.
 
@@ -48,10 +55,15 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
 | 6 | ~~사후 변경 재검증~~ | **완료.** 처음에는 DEFECTS FOUND(D-1 MEDIUM)였고, `9aaf3b1`에서 수정한 뒤 재검증했다. | `POST-FINAL-report.md` |
 | 7 | **main 브랜치 / PR** | 원격에는 feature 브랜치만 있다. 2026-10-21 커밋까지 push했다. main 생성과 PR은 사용자가 요청하면 진행한다. | — |
 | 8 | ~~문서 업로드 정책 확인~~ | **결정됨**(2026-10-21, 사용자): 그대로 둔다. | — |
+| 9 | **develop 라인과 합치기** | 오늘 이 브랜치에만 들어간 변경이 develop에는 없다: D-1 guard 수정, `hardware` 제거, bench 결정화, 마켓플레이스·README. develop에서 이어서 개발하기 전에 병합하거나 cherry-pick한다. `scripts/guard.mjs`·`policy.mjs`·README에서 충돌이 예상된다. | develop의 `docs/HANDOFF.md` |
+| 10 | **버전 올리기** | `plugin.json` version은 아직 0.1.0이다. 이미 설치한 사용자에게 업데이트를 전달하려면 version을 올려 push해야 한다. version을 올리지 않으면 `plugin update`가 새 커밋을 받지 않는다(실측). | README Install, `NH-auto-check.md` |
+| 11 | **간헐 실패 테스트 찾기** | 2026-10-21 고부하(load ~29) 상태에서 `npm test`가 1건 실패했다. 다시 돌린 9회(부하 포함)에서는 재현되지 않았고, 어느 테스트인지 모른다. 다시 실패하면 로그(`not ok` 줄)를 남긴다. | — |
 
 ## 4. 열린 결정 (사용자에게 물어볼 것)
 
 - NH-6~8: 지금은 "추후 확인 필요"(2026-10-21 결정)다. 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지 결정한다.
+- 10번: 언제, 어떤 번호(예: 0.1.1)로 version을 올릴지
+- 9번: M1~M5 라인을 develop에 합칠지, 이 라인을 그대로 배포본으로 유지할지
 - (2026-10-21 결정됨) NH-5는 Claude가 진행했다. `hardware` 플래그는 제거했다. 문서 업로드는 그대로 둔다.
 
 ## 4-1. 남은 위험·정리 거리 (사후 재검증에서 나옴, LOW)
@@ -64,6 +76,7 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
   - `docs/milestones/M5-e2e.md`에 BSP 절차가 남아 있다. 역사 기록이라 수정하지 않았다.
   - Spec §435 qa 행에 BSP가 남아 있다. Spec은 수정하지 않는다는 규칙에 따라 그대로 두고, 대신 SPEC_CHANGES에 기록했다.
 - bench: WARN 구간(20~50%)을 다루는 테스트가 없다.
+- 설치 확인은 user 범위로만 했다. `--scope project` 설치는 GitHub 마켓플레이스에서 다시 확인하지 않았다.
 
 ## 5. 작업 규칙 (원래 /goal 지시에서)
 
