@@ -12,7 +12,8 @@ const CFG = { version: 1, checks: {
   slow: { argv: ['node', '-e', 'const fs=require("fs"); const t=setInterval(()=>{ if (fs.existsSync("release")) { clearInterval(t); } }, 20)'], timeoutSec: 120 },
 } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
-const env = () => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; return e; };
+// the lock wait is raised so that "waits instead of failing" holds under heavy load (8 writers exceeded the 30 s default at load avg ~170)
+const env = () => { const e = { ...process.env, MIS_LOCK_WAIT_MS: '600000' }; delete e.NODE_TEST_CONTEXT; return e; };
 const runAsync = (cwd, args) => new Promise((res) => {
   const c = spawn(process.execPath, [MIS, ...args], { cwd, env: env() });
   let out = '', err = '';

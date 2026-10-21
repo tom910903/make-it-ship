@@ -24,7 +24,8 @@ test('resume after a session is killed mid-check: stale lock reclaimed, changes 
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const child = spawn(process.execPath, [MIS, 'check', 'slow'], { cwd: dir, env, stdio: 'ignore' });
   const marker = join(stateRoot(dir), 'runs', runId, 'running', `${child.pid}.json`);
-  for (let i = 0; i < 100 && !existsSync(marker); i++) await sleep(50);
+  // wait for the marker or the child's exit, not a fixed time: under heavy load (load avg ~270) 5 s was not enough
+  while (!existsSync(marker) && child.exitCode === null) await sleep(50);
   assert.ok(existsSync(marker), 'running check leaves a marker');
   child.kill('SIGKILL');
   await new Promise((r) => child.on('exit', r));

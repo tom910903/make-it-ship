@@ -53,17 +53,17 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
 | 4 | **NH-6 iOS 실기기 브리지** | **추후 확인 필요**(사용자 결정). 기능은 유지한다. iPhone(개발자 모드, USB)을 연결하면 진행할 수 있다. | `NEEDS_HUMAN.md` NH-6 |
 | 5 | **NH-7 second opinion / NH-8 Codex 어댑터** | **추후 확인 필요**(사용자 결정). 사내 정책이 정해진 뒤 결정한다. | `NEEDS_HUMAN.md` NH-7·8 |
 | 6 | ~~사후 변경 재검증~~ | **완료.** 처음에는 DEFECTS FOUND(D-1 MEDIUM)였고, `9aaf3b1`에서 수정한 뒤 재검증했다. | `POST-FINAL-report.md` |
-| 7 | **main 브랜치 / PR** | 원격에는 feature 브랜치만 있다. 2026-10-21 커밋까지 push했다. main 생성과 PR은 사용자가 요청하면 진행한다. | — |
+| 7 | **master 전환** (계획: feature 브랜치에서 개발을 마친 뒤) | master를 만든다. PR은 선택이다(1인 비공개 저장소). **GitHub 기본 브랜치를 master로 바꾼다.** `marketplace add tom910903/make-it-ship`가 기본 브랜치에서 설치하기 때문이다. 이 시점에 10번(version 올리기)도 함께 한다. | — |
 | 8 | ~~문서 업로드 정책 확인~~ | **결정됨**(2026-10-21, 사용자): 그대로 둔다. | — |
 | 9 | **develop 라인과 합치기** | 오늘 이 브랜치에만 들어간 변경이 develop에는 없다: D-1 guard 수정, `hardware` 제거, bench 결정화, 마켓플레이스·README. develop에서 이어서 개발하기 전에 병합하거나 cherry-pick한다. `scripts/guard.mjs`·`policy.mjs`·README에서 충돌이 예상된다. | develop의 `docs/HANDOFF.md` |
 | 10 | **버전 올리기** | `plugin.json` version은 아직 0.1.0이다. 이미 설치한 사용자에게 업데이트를 전달하려면 version을 올려 push해야 한다. version을 올리지 않으면 `plugin update`가 새 커밋을 받지 않는다(실측). | README Install, `NH-auto-check.md` |
-| 11 | **간헐 실패 테스트 찾기** | 2026-10-21 고부하(load ~29) 상태에서 `npm test`가 1건 실패했다. 다시 돌린 9회(부하 포함)에서는 재현되지 않았고, 어느 테스트인지 모른다. 다시 실패하면 로그(`not ok` 줄)를 남긴다. | — |
+| 11 | ~~간헐 실패 테스트 찾기~~ | **완료.** load 170~280에서 재현해 원인 두 개를 찾았다. 두 원인 모두 고정 시간 상한에 걸리는 문제였다. 수정한 뒤 load 100~150에서 3회 연속 통과했다. ① `mis-resume`: 마커를 5초만 기다림 → 마커가 생기거나 자식 프로세스가 끝날 때까지 기다리게 바꿈. ② `mis-concurrency`: 8개 동시 쓰기에서 lock 대기 기본값 30초를 넘김 → 이 테스트만 `MIS_LOCK_WAIT_MS`를 600초로 올림(제품 기본값은 그대로). | — |
 
 ## 4. 열린 결정 (사용자에게 물어볼 것)
 
 - NH-6~8: 지금은 "추후 확인 필요"(2026-10-21 결정)다. 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지 결정한다.
 - 10번: 언제, 어떤 번호(예: 0.1.1)로 version을 올릴지
-- 9번: M1~M5 라인을 develop에 합칠지, 이 라인을 그대로 배포본으로 유지할지
+- 9번: develop 라인을 어떻게 할지. (2026-10-21 사용자: 먼저 이 feature 브랜치에서 개발을 마친 뒤 master로 만든다)
 - (2026-10-21 결정됨) NH-5는 Claude가 진행했다. `hardware` 플래그는 제거했다. 문서 업로드는 그대로 둔다.
 
 ## 4-1. 남은 위험·정리 거리 (사후 재검증에서 나옴, LOW)
