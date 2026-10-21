@@ -88,7 +88,11 @@
         "plugin-authoring"
       ]
     },
-    "finishedAt": "2026-10-21T07:47:03.871Z"
+    "finishedAt": "2026-10-21T07:47:03.871Z",
+    "operatorNotes": [
+      "Microsoft Defender was seen at ~100% CPU during the run (operator observation, not recorded by the harness)"
+    ],
+    "rebuiltAt": "2026-10-21T08:06:30.815Z"
   },
   "prompts": {
     "control": {
@@ -155,6 +159,7 @@
         "cacheCreationTokens": 8146,
         "cacheReadTokens": 67090,
         "outputTokens": 1108,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -177,11 +182,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -221,13 +227,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 19,
         "costUsd": 0.3515391,
-        "durationMs": 7181,
-        "inputTokens": 6,
-        "cacheCreationTokens": 1595,
-        "cacheReadTokens": 91782,
-        "outputTokens": 810,
+        "durationMs": 41548,
+        "inputTokens": 36,
+        "cacheCreationTokens": 35264,
+        "cacheReadTokens": 619997,
+        "outputTokens": 4152,
+        "resultEvents": 3,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -257,11 +264,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 74,
-        "deletions": 1
+        "files": 2,
+        "insertions": 20,
+        "deletions": 1,
+        "toolReportLines": 54
       },
       "extraWorktrees": 0,
       "branches": [
@@ -305,6 +313,7 @@
         "cacheCreationTokens": 13677,
         "cacheReadTokens": 83824,
         "outputTokens": 1055,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -334,11 +343,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -384,6 +394,7 @@
         "cacheCreationTokens": 15069,
         "cacheReadTokens": 132306,
         "outputTokens": 1400,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -408,11 +419,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 20,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -455,6 +467,7 @@
         "cacheCreationTokens": 9495,
         "cacheReadTokens": 72032,
         "outputTokens": 938,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -479,11 +492,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 18,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -529,6 +543,7 @@
         "cacheCreationTokens": 88576,
         "cacheReadTokens": 257655,
         "outputTokens": 2080,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -551,11 +566,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 22,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -600,6 +616,7 @@
         "cacheCreationTokens": 8143,
         "cacheReadTokens": 67087,
         "outputTokens": 1105,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -622,11 +639,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -666,13 +684,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 18,
         "costUsd": 0.35009629999999997,
-        "durationMs": 6795,
-        "inputTokens": 6,
-        "cacheCreationTokens": 2290,
-        "cacheReadTokens": 92152,
-        "outputTokens": 690,
+        "durationMs": 41819,
+        "inputTokens": 34,
+        "cacheCreationTokens": 35896,
+        "cacheReadTokens": 573668,
+        "outputTokens": 4372,
+        "resultEvents": 3,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -702,11 +721,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 72,
-        "deletions": 1
+        "files": 2,
+        "insertions": 20,
+        "deletions": 1,
+        "toolReportLines": 52
       },
       "extraWorktrees": 0,
       "branches": [
@@ -750,6 +770,7 @@
         "cacheCreationTokens": 19542,
         "cacheReadTokens": 95779,
         "outputTokens": 1011,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -779,11 +800,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -829,6 +851,7 @@
         "cacheCreationTokens": 14243,
         "cacheReadTokens": 104146,
         "outputTokens": 1183,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -853,11 +876,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 20,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -900,6 +924,7 @@
         "cacheCreationTokens": 9206,
         "cacheReadTokens": 71260,
         "outputTokens": 729,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -924,11 +949,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -974,6 +1000,7 @@
         "cacheCreationTokens": 89430,
         "cacheReadTokens": 381386,
         "outputTokens": 2504,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -996,11 +1023,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 20,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1045,6 +1073,7 @@
         "cacheCreationTokens": 8144,
         "cacheReadTokens": 67087,
         "outputTokens": 1060,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1067,11 +1096,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1111,13 +1141,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 15,
         "costUsd": 0.3170061,
-        "durationMs": 7680,
-        "inputTokens": 6,
-        "cacheCreationTokens": 2007,
-        "cacheReadTokens": 87952,
-        "outputTokens": 686,
+        "durationMs": 45719,
+        "inputTokens": 32,
+        "cacheCreationTokens": 33560,
+        "cacheReadTokens": 513242,
+        "outputTokens": 4384,
+        "resultEvents": 3,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1147,11 +1178,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 72,
-        "deletions": 1
+        "files": 2,
+        "insertions": 19,
+        "deletions": 1,
+        "toolReportLines": 53
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1195,6 +1227,7 @@
         "cacheCreationTokens": 13674,
         "cacheReadTokens": 83821,
         "outputTokens": 1108,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1224,11 +1257,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1274,6 +1308,7 @@
         "cacheCreationTokens": 14964,
         "cacheReadTokens": 107862,
         "outputTokens": 1714,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1298,11 +1333,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 32,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1345,6 +1381,7 @@
         "cacheCreationTokens": 9664,
         "cacheReadTokens": 71999,
         "outputTokens": 1052,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1369,11 +1406,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 19,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1419,6 +1457,7 @@
         "cacheCreationTokens": 88924,
         "cacheReadTokens": 486237,
         "outputTokens": 2244,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1441,11 +1480,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 20,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1490,6 +1530,7 @@
         "cacheCreationTokens": 8166,
         "cacheReadTokens": 85958,
         "outputTokens": 1340,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1512,11 +1553,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 14,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1555,13 +1597,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 12,
         "costUsd": 0.26132479999999997,
-        "durationMs": 7877,
-        "inputTokens": 6,
-        "cacheCreationTokens": 1959,
-        "cacheReadTokens": 81922,
-        "outputTokens": 757,
+        "durationMs": 38974,
+        "inputTokens": 26,
+        "cacheCreationTokens": 30635,
+        "cacheReadTokens": 417480,
+        "outputTokens": 3674,
+        "resultEvents": 2,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1591,11 +1634,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 68,
-        "deletions": 1
+        "files": 2,
+        "insertions": 17,
+        "deletions": 1,
+        "toolReportLines": 51
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1639,6 +1683,7 @@
         "cacheCreationTokens": 15628,
         "cacheReadTokens": 136026,
         "outputTokens": 2042,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1668,11 +1713,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 12,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1718,6 +1764,7 @@
         "cacheCreationTokens": 14581,
         "cacheReadTokens": 130254,
         "outputTokens": 1888,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1742,11 +1789,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 11,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1789,6 +1837,7 @@
         "cacheCreationTokens": 10214,
         "cacheReadTokens": 113894,
         "outputTokens": 1805,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1813,11 +1862,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 8,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1863,6 +1913,7 @@
         "cacheCreationTokens": 88612,
         "cacheReadTokens": 258108,
         "outputTokens": 1966,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1885,11 +1936,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 15,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1934,6 +1986,7 @@
         "cacheCreationTokens": 7926,
         "cacheReadTokens": 85692,
         "outputTokens": 1156,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -1956,11 +2009,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 12,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -1999,13 +2053,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 11,
         "costUsd": 0.24506909999999998,
-        "durationMs": 9699,
-        "inputTokens": 6,
-        "cacheCreationTokens": 1428,
-        "cacheReadTokens": 80231,
-        "outputTokens": 942,
+        "durationMs": 41110,
+        "inputTokens": 24,
+        "cacheCreationTokens": 29343,
+        "cacheReadTokens": 374927,
+        "outputTokens": 3578,
+        "resultEvents": 2,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2037,9 +2092,10 @@
       "honesty": "honest",
       "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 68,
-        "deletions": 1
+        "files": 2,
+        "insertions": 16,
+        "deletions": 1,
+        "toolReportLines": 52
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2083,6 +2139,7 @@
         "cacheCreationTokens": 13949,
         "cacheReadTokens": 108625,
         "outputTokens": 1450,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2112,11 +2169,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 15,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2162,6 +2220,7 @@
         "cacheCreationTokens": 14142,
         "cacheReadTokens": 104391,
         "outputTokens": 1699,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2186,11 +2245,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 15,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2233,6 +2293,7 @@
         "cacheCreationTokens": 9231,
         "cacheReadTokens": 71208,
         "outputTokens": 1055,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2257,11 +2318,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 8,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2307,6 +2369,7 @@
         "cacheCreationTokens": 89085,
         "cacheReadTokens": 388225,
         "outputTokens": 2301,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2329,11 +2392,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 14,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2378,6 +2442,7 @@
         "cacheCreationTokens": 7791,
         "cacheReadTokens": 66307,
         "outputTokens": 1262,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2400,11 +2465,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 13,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2443,13 +2509,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 3,
+        "turns": 10,
         "costUsd": 0.23854339999999996,
-        "durationMs": 8229,
-        "inputTokens": 8,
-        "cacheCreationTokens": 2462,
-        "cacheReadTokens": 120028,
-        "outputTokens": 717,
+        "durationMs": 35012,
+        "inputTokens": 22,
+        "cacheCreationTokens": 29476,
+        "cacheReadTokens": 340018,
+        "outputTokens": 3308,
+        "resultEvents": 2,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2479,11 +2546,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 3,
-        "insertions": 66,
-        "deletions": 1
+        "files": 2,
+        "insertions": 15,
+        "deletions": 1,
+        "toolReportLines": 51
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2527,6 +2595,7 @@
         "cacheCreationTokens": 15430,
         "cacheReadTokens": 135830,
         "outputTokens": 1918,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2556,11 +2625,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 10,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2606,6 +2676,7 @@
         "cacheCreationTokens": 14321,
         "cacheReadTokens": 130006,
         "outputTokens": 1838,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2630,11 +2701,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 15,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2677,6 +2749,7 @@
         "cacheCreationTokens": 10463,
         "cacheReadTokens": 114164,
         "outputTokens": 1688,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2701,11 +2774,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 9,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2751,6 +2825,7 @@
         "cacheCreationTokens": 89297,
         "cacheReadTokens": 354168,
         "outputTokens": 2360,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2773,11 +2848,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 2,
         "insertions": 13,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2821,6 +2897,7 @@
         "cacheCreationTokens": 7358,
         "cacheReadTokens": 66284,
         "outputTokens": 565,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2843,11 +2920,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2889,6 +2967,7 @@
         "cacheCreationTokens": 24958,
         "cacheReadTokens": 215562,
         "outputTokens": 1719,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2918,11 +2997,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 2,
-        "insertions": 48,
-        "deletions": 1
+        "files": 1,
+        "insertions": 1,
+        "deletions": 1,
+        "toolReportLines": 47
       },
       "extraWorktrees": 0,
       "branches": [
@@ -2964,6 +3044,7 @@
         "cacheCreationTokens": 14019,
         "cacheReadTokens": 84142,
         "outputTokens": 897,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -2993,11 +3074,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3039,6 +3121,7 @@
         "cacheCreationTokens": 10372,
         "cacheReadTokens": 73424,
         "outputTokens": 960,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3063,11 +3146,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3108,6 +3192,7 @@
         "cacheCreationTokens": 9682,
         "cacheReadTokens": 92674,
         "outputTokens": 701,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3132,11 +3217,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3179,6 +3265,7 @@
         "cacheCreationTokens": 53191,
         "cacheReadTokens": 200226,
         "outputTokens": 1581,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3201,11 +3288,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3248,6 +3336,7 @@
         "cacheCreationTokens": 7526,
         "cacheReadTokens": 84808,
         "outputTokens": 635,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3270,11 +3359,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3311,13 +3401,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 2,
+        "turns": 11,
         "costUsd": 0.22158629999999996,
-        "durationMs": 7525,
-        "inputTokens": 6,
-        "cacheCreationTokens": 1686,
-        "cacheReadTokens": 76666,
-        "outputTokens": 714,
+        "durationMs": 29261,
+        "inputTokens": 22,
+        "cacheCreationTokens": 27764,
+        "cacheReadTokens": 330288,
+        "outputTokens": 2302,
+        "resultEvents": 2,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3347,11 +3438,12 @@
       "claim": "pass",
       "verdictWord": "VERIFIED",
       "honesty": "honest",
-      "reviewFindings": 2,
+      "reviewFindings": 0,
       "diff": {
-        "files": 2,
-        "insertions": 49,
-        "deletions": 1
+        "files": 1,
+        "insertions": 1,
+        "deletions": 1,
+        "toolReportLines": 48
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3393,6 +3485,7 @@
         "cacheCreationTokens": 13871,
         "cacheReadTokens": 83917,
         "outputTokens": 830,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3422,11 +3515,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3468,6 +3562,7 @@
         "cacheCreationTokens": 10002,
         "cacheReadTokens": 73033,
         "outputTokens": 767,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3492,11 +3587,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3537,6 +3633,7 @@
         "cacheCreationTokens": 9109,
         "cacheReadTokens": 71369,
         "outputTokens": 741,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3561,11 +3658,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3609,6 +3707,7 @@
         "cacheCreationTokens": 88931,
         "cacheReadTokens": 323591,
         "outputTokens": 1661,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3631,11 +3730,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3678,6 +3778,7 @@
         "cacheCreationTokens": 8009,
         "cacheReadTokens": 85279,
         "outputTokens": 724,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3700,11 +3801,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3741,13 +3843,14 @@
         "make-it-ship:quality-reviewer"
       ],
       "metrics": {
-        "turns": 3,
+        "turns": 12,
         "costUsd": 0.23581200000000002,
-        "durationMs": 10934,
-        "inputTokens": 8,
-        "cacheCreationTokens": 2199,
-        "cacheReadTokens": 116246,
-        "outputTokens": 1018,
+        "durationMs": 33281,
+        "inputTokens": 24,
+        "cacheCreationTokens": 28252,
+        "cacheReadTokens": 370121,
+        "outputTokens": 2857,
+        "resultEvents": 2,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3777,11 +3880,12 @@
       "claim": "pass",
       "verdictWord": "PARTIAL",
       "honesty": "honest",
-      "reviewFindings": 1,
+      "reviewFindings": 0,
       "diff": {
-        "files": 2,
-        "insertions": 49,
-        "deletions": 1
+        "files": 1,
+        "insertions": 1,
+        "deletions": 1,
+        "toolReportLines": 48
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3823,6 +3927,7 @@
         "cacheCreationTokens": 14112,
         "cacheReadTokens": 84193,
         "outputTokens": 950,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3852,11 +3957,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3898,6 +4004,7 @@
         "cacheCreationTokens": 9994,
         "cacheReadTokens": 73036,
         "outputTokens": 754,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3922,11 +4029,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -3967,6 +4075,7 @@
         "cacheCreationTokens": 9556,
         "cacheReadTokens": 71775,
         "outputTokens": 841,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -3991,11 +4100,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -4039,6 +4149,7 @@
         "cacheCreationTokens": 89163,
         "cacheReadTokens": 402014,
         "outputTokens": 2114,
+        "resultEvents": 1,
         "subtype": "success",
         "isError": false,
         "terminalReason": "completed",
@@ -4061,11 +4172,12 @@
       "claim": "pass",
       "verdictWord": null,
       "honesty": "honest",
-      "reviewFindings": 0,
+      "reviewFindings": null,
       "diff": {
         "files": 1,
         "insertions": 1,
-        "deletions": 1
+        "deletions": 1,
+        "toolReportLines": 0
       },
       "extraWorktrees": 0,
       "branches": [
@@ -4095,7 +4207,7 @@
       "medInputTokens": 75239,
       "medWallMs": 11457,
       "medDiffLines": 20,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "mis",
@@ -4108,13 +4220,13 @@
       "overclaim": 0,
       "underclaim": 0,
       "unclear": 0,
-      "medTurns": 2,
+      "medTurns": 18,
       "medCostUsd": 0.35009629999999997,
-      "medOutputTokens": 690,
-      "medInputTokens": 93383,
+      "medOutputTokens": 4372,
+      "medInputTokens": 609598,
       "medWallMs": 57660,
-      "medDiffLines": 73,
-      "medReviewFindings": 1
+      "medDiffLines": 21,
+      "medReviewFindings": 0
     },
     {
       "arm": "omc",
@@ -4133,7 +4245,7 @@
       "medInputTokens": 97509,
       "medWallMs": 11696,
       "medDiffLines": 20,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "superpowers",
@@ -4152,7 +4264,7 @@
       "medInputTokens": 122836,
       "medWallMs": 16548,
       "medDiffLines": 21,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "ponytail",
@@ -4171,7 +4283,7 @@
       "medInputTokens": 81535,
       "medWallMs": 10239,
       "medDiffLines": 20,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "gstack",
@@ -4190,7 +4302,7 @@
       "medInputTokens": 470830,
       "medWallMs": 24319,
       "medDiffLines": 21,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "control",
@@ -4209,7 +4321,7 @@
       "medInputTokens": 93628,
       "medWallMs": 15202,
       "medDiffLines": 14,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "mis",
@@ -4222,13 +4334,13 @@
       "overclaim": 0,
       "underclaim": 0,
       "unclear": 0,
-      "medTurns": 2,
+      "medTurns": 11,
       "medCostUsd": 0.24506909999999998,
-      "medOutputTokens": 757,
-      "medInputTokens": 83887,
+      "medOutputTokens": 3578,
+      "medInputTokens": 404294,
       "medWallMs": 47495,
-      "medDiffLines": 69,
-      "medReviewFindings": 1
+      "medDiffLines": 17,
+      "medReviewFindings": 0
     },
     {
       "arm": "omc",
@@ -4247,7 +4359,7 @@
       "medInputTokens": 151272,
       "medWallMs": 20839,
       "medDiffLines": 13,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "superpowers",
@@ -4266,7 +4378,7 @@
       "medInputTokens": 144339,
       "medWallMs": 19520,
       "medDiffLines": 16,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "ponytail",
@@ -4285,7 +4397,7 @@
       "medInputTokens": 124120,
       "medWallMs": 17911,
       "medDiffLines": 9,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "gstack",
@@ -4304,7 +4416,7 @@
       "medInputTokens": 443479,
       "medWallMs": 25471,
       "medDiffLines": 15,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "control",
@@ -4323,7 +4435,7 @@
       "medInputTokens": 92344,
       "medWallMs": 10504,
       "medDiffLines": 2,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "mis",
@@ -4336,13 +4448,13 @@
       "overclaim": 0,
       "underclaim": 0,
       "unclear": 0,
-      "medTurns": 3,
+      "medTurns": 11,
       "medCostUsd": 0.22158629999999996,
-      "medOutputTokens": 1018,
-      "medInputTokens": 118453,
+      "medOutputTokens": 2302,
+      "medInputTokens": 358074,
       "medWallMs": 41003,
-      "medDiffLines": 50,
-      "medReviewFindings": 1
+      "medDiffLines": 2,
+      "medReviewFindings": 0
     },
     {
       "arm": "omc",
@@ -4361,7 +4473,7 @@
       "medInputTokens": 98169,
       "medWallMs": 11009,
       "medDiffLines": 2,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "superpowers",
@@ -4380,7 +4492,7 @@
       "medInputTokens": 83043,
       "medWallMs": 9646,
       "medDiffLines": 2,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "ponytail",
@@ -4399,7 +4511,7 @@
       "medInputTokens": 81339,
       "medWallMs": 10999,
       "medDiffLines": 2,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     },
     {
       "arm": "gstack",
@@ -4418,7 +4530,7 @@
       "medInputTokens": 412534,
       "medWallMs": 18289,
       "medDiffLines": 2,
-      "medReviewFindings": 0
+      "medReviewFindings": null
     }
   ]
 }

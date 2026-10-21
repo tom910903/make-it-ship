@@ -11,7 +11,7 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { homedir, loadavg } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { parseStream, metricsFromStream, classifyClaim, verdictWord, honesty, countReviewFindings, activation, aggregate } from './lib.mjs';
+import { parseStream, deriveRun, aggregate, pickTmp } from './lib.mjs';
 import { renderHtml } from './report.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -70,7 +70,7 @@ const DIFF_EXCLUDES = ['.claude/**', '.omc/**', '.make-it-ship/**', '.make-it-sh
 
 // The parent Claude/OMC/ponytail session must not leak into the child run.
 const ENV_DROP = /^(CLAUDECODE|CLAUDE_CODE_(?!OAUTH_TOKEN$).*|CLAUDE_PLUGIN_ROOT|CLAUDE_PROJECT_DIR|CLAUDE_PID|CLAUDE_EFFORT|OMC_.*|PONYTAIL_.*|MIS_.*)$/;
-const TMP = process.env.TMPDIR?.startsWith('/private/tmp/claude-501/m10-tmp') ? process.env.TMPDIR : '/private/tmp/claude-501/m10-tmp';
+const TMP = pickTmp(process.env.TMPDIR);
 mkdirSync(TMP, { recursive: true });
 const envRemoved = Object.keys(process.env).filter((k) => ENV_DROP.test(k)).sort();
 const childEnv = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !ENV_DROP.test(k))), TMPDIR: TMP };
@@ -145,12 +145,8 @@ function diffStat(dir, base, logDir) {
   const ns = execFileSync('git', ['diff', '--cached', '--numstat', base, ...spec], { cwd: dir, env, encoding: 'utf8' });
   rmSync(idx, { force: true });
   writeFileSync(join(logDir, 'diff.numstat'), ns);
-  const rows = ns.split('\n').filter(Boolean).map((l) => l.split('\t'));
-  const n = (x) => (x === '-' ? 0 : Number(x));
-  return { files: rows.length, insertions: rows.reduce((s, r) => s + n(r[0]), 0), deletions: rows.reduce((s, r) => s + n(r[1]), 0) };
+  return ns;
 }
-
-const excerpt = (t) => (t.length <= 900 ? t : `${t.slice(0, 300)}\n…\n${t.slice(-600)}`);
 
 async function isolationProbe() {
   const logDir = join(OUT, 'runs', '_probe');
@@ -210,27 +206,18 @@ async function main() {
     process.stdout.write(`${arm} demo ${demo} #${n} … `);
     const r = await runClaude(args, dir, logDir, Number(o['timeout-min']) * 60_000);
     try {
-      const p = parseStream(readFileSync(join(logDir, 'stream.jsonl'), 'utf8'));
-      const metrics = metricsFromStream(p);
       const c = checks(demo, dir);
       writeFileSync(join(logDir, 'checks.json'), JSON.stringify(c, null, 2));
-      const actualPass = c.repoTests.pass && c.fixtureTests.pass && c.acceptance.pass;
-      const claim = classifyClaim(metrics.finalText);
-      const act = activation(arm, p);
       const wt = git(dir, 'worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).length;
-      const run = {
+      const run = deriveRun({
         arm, demo, n, workDir: dir, logDir: relative(ROOT, logDir), base, loadAvg: load, ...r,
-        completed: metrics.subtype === 'success' && !r.timedOut, activated: act.activated, activationChecks: act.checks,
-        skillsInvoked: p.skillsInvoked, subagents: p.subagents, metrics: { ...metrics, finalText: undefined },
-        actual: { repoTests: c.repoTests.pass, fixtureTests: c.fixtureTests.pass, acceptance: c.acceptance.pass }, actualPass,
-        claim, verdictWord: verdictWord(metrics.finalText), honesty: honesty(claim, actualPass), reviewFindings: countReviewFindings(metrics.finalText),
-        diff: diffStat(dir, base, logDir), extraWorktrees: wt - 1, branches: git(dir, 'branch', '--format=%(refname:short)').split('\n'),
+        extraWorktrees: wt - 1, branches: git(dir, 'branch', '--format=%(refname:short)').split('\n'),
         testFilesChanged: git(dir, 'diff', '--name-only', base, '--', DEMO[demo].testDir).split('\n').filter(Boolean),
-        finalExcerpt: excerpt(metrics.finalText), badLines: p.badLines,
-      };
+      }, { stream: readFileSync(join(logDir, 'stream.jsonl'), 'utf8'), checks: c, numstat: diffStat(dir, base, logDir) });
       writeFileSync(join(logDir, 'run.json'), JSON.stringify(run, null, 2));
       runs.push(run);
-      console.log(`${metrics.subtype ?? 'no-result'} turns=${metrics.turns} $${metrics.costUsd} ${(r.wallMs / 1000).toFixed(0)}s activated=${act.activated} actual=${actualPass} claim=${claim}`);
+      const x = run.metrics;
+      console.log(`${x.subtype ?? 'no-result'} turns=${x.turns} $${x.costUsd} ${(r.wallMs / 1000).toFixed(0)}s activated=${run.activated} actual=${run.actualPass} claim=${run.claim}`);
     } catch (e) {
       const run = { arm, demo, n, workDir: dir, logDir: relative(ROOT, logDir), loadAvg: load, ...r, completed: false, activated: false,
         actualPass: null, honesty: 'unknown', harnessError: String(e.stack ?? e).slice(0, 2000) };
