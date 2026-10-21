@@ -1,7 +1,21 @@
 // Project layout (user decision 2026-10-22): `layout` in .make-it-ship.json lists the path globs new files may use and
 // the doc folders (human docs in every language, AI docs in English). Checked by `mis plan set` and `mis layout`.
+import { execFileSync } from 'node:child_process';
 import { globToRegExp } from './policy.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
+import { CONFIG_FILE } from './config.mjs';
+
+/** File names inside the AI docs folder: change them here only. */
+export const AI_DOCS = { index: 'index.md', layout: 'layout.md', modules: 'modules' };
+export const DEFAULT_DOCS = { human: 'docs', ai: '.ai', languages: ['en', 'ko'] };
+
+/** `mis init` proposal: each tracked top-level entry (`dir/**` or the file), then the doc folders and the files MIS writes. */
+export function proposeLayout(root) {
+  const tops = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\0').filter(Boolean)
+    .map((f) => (f.includes('/') ? `${f.split('/')[0]}/**` : f));
+  const extra = [`${DEFAULT_DOCS.ai}/**`, `${DEFAULT_DOCS.human}/**`, CONFIG_FILE, '.make-it-ship/**', 'CLAUDE.md', 'AGENTS.md'];
+  return { paths: [...new Set([...[...new Set(tops)].sort(), ...extra])], docs: { ...DEFAULT_DOCS } };
+}
 
 const isGlob = (p) => /[*?]/.test(p);
 const under = (file, dir) => file.startsWith(`${dir}/`);
@@ -57,7 +71,7 @@ export function renderLayoutDoc(layout) {
       : `- Human docs: \`${d.human}/\` (${langs.join(', ')}).`);
     lines.push(`- \`${REPORT_DIR}/\` (Make It Ship plans and reports) is English only.`);
   }
-  if (d.ai) lines.push(`- AI docs: \`${d.ai}/\`, English only, terse facts (paths, commands, rules, invariants). Index: \`${d.ai}/index.md\`; per-module docs: \`${d.ai}/modules/<dir path>.md\`.`);
+  if (d.ai) lines.push(`- AI docs: \`${d.ai}/\`, English only, terse facts (paths, commands, rules, invariants). Index: \`${d.ai}/${AI_DOCS.index}\`; per-module docs: \`${d.ai}/${AI_DOCS.modules}/<dir path>.md\`.`);
   if (!d.human && !d.ai) lines.push('- No doc rules.');
   lines.push('', '## Checks', '- `mis plan set` refuses planned files outside the allowed paths and human docs without every translation.', '- `mis layout` lists violations in the working tree.');
   return `${lines.join('\n')}\n`;

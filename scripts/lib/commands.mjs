@@ -8,7 +8,7 @@ import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAli
 import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
-import { planLayoutErrors, LAYOUT_FIX } from './layout.mjs';
+import { planLayoutErrors, LAYOUT_FIX, proposeLayout } from './layout.mjs';
 import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
@@ -779,6 +779,7 @@ function cancelRun(cwd) {
 function init(args, cwd) {
   const root = repoRoot(cwd);
   const r = { ...detectConfig(root), ...projectType(root) };
+  if (r.config) r.config.layout = proposeLayout(root); // only here: setup team and memory reuse detectConfig without a layout
   r.hud = {
     statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',

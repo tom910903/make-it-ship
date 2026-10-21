@@ -47,3 +47,15 @@ test('start --plan and plan check apply the layout too; a refused start leaves n
   assert.equal(ok(mis(dir, ['plan', 'check', 'docs/make-it-ship/plans/good.md'])).ok, true);
   ok(mis(dir, ['start', '--plan', 'docs/make-it-ship/plans/good.md']));
 });
+
+test('init proposes a layout from the tracked top-level structure plus .ai/ and docs/, written only with --write', () => {
+  const dir = makeRepo({ 'package.json': { scripts: { test: 'node --test' } }, 'src/a.js': '', 'lib/deep/b.js': '', 'README.md': '# x\n', '.github/ci.yml': '' });
+  write(dir, { 'scratch/untracked.js': '' });
+  const p = ok(mis(dir, ['init']));
+  assert.deepEqual(p.config.layout, {
+    paths: ['.github/**', 'README.md', 'lib/**', 'package.json', 'src/**', '.ai/**', 'docs/**', '.make-it-ship.json', '.make-it-ship/**', 'CLAUDE.md', 'AGENTS.md'],
+    docs: { human: 'docs', ai: '.ai', languages: ['en', 'ko'] } });
+  assert.equal(existsSync(join(dir, '.make-it-ship.json')), false, 'proposal only');
+  ok(mis(dir, ['init', '--write']));
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, '.make-it-ship.json'), 'utf8')).layout, p.config.layout);
+});
