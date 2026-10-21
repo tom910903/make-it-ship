@@ -10,7 +10,7 @@
   - 로컬 `develop`이 이 원격 브랜치를 추적한다.
 - **태그:** `m1-verified` ~ `m5-verified`. 검증 당시의 커밋을 가리킨다.
 - **테스트:** `npm test` 320/320, `claude plugin validate .` 통과.
-- **2026-10-21 작업은 로컬 브랜치 `make-it-ship`에만 커밋했다(push 안 함).** 커밋: `27f86f3`, `8052bd1`, `c0c11c2`, `9aaf3b1`, 그리고 이 문서 갱신.
+- **2026-10-21 작업은 원격 `feature/make-it-ship-m1-m5`에 push했다**(fast-forward). 커밋: `27f86f3`, `8052bd1`, `c0c11c2`, `9aaf3b1`, 그리고 문서 갱신.
 - **최종 검증 이후 바뀐 것**(`FINAL-report.md`에는 없고, `POST-FINAL-report.md`가 7개 모두 검증함):
   1. `73e9260` — NH-1~4를 tmux 대화형 세션으로 자동 확인하고 기록했다(`docs/milestones/NH-auto-check.md`).
   2. `75f2fb8` — guard 수정. 파일 편집 범위를 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 판정한다.
@@ -27,9 +27,9 @@
 
 ```sh
 git clone git@github.com:tom910903/make-it-ship.git && cd make-it-ship
-git checkout feature/make-it-ship-m1-m5   # 주의: 2026-10-21 커밋 6개는 로컬 make-it-ship 브랜치에만 있다(미push)
+git checkout feature/make-it-ship-m1-m5
 node --version              # 22 이상
-npm test                    # 320/320 기대 (make-it-ship 브랜치 기준)
+npm test                    # 320/320 기대
 claude plugin validate .    # 통과 기대
 claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으로 사용
 ```
@@ -46,14 +46,13 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
 | 4 | **NH-6 iOS 실기기 브리지** | **추후 확인 필요**(사용자 결정). 기능은 유지한다. iPhone(개발자 모드, USB)을 연결하면 진행할 수 있다. | `NEEDS_HUMAN.md` NH-6 |
 | 5 | **NH-7 second opinion / NH-8 Codex 어댑터** | **추후 확인 필요**(사용자 결정). 사내 정책이 정해진 뒤 결정한다. | `NEEDS_HUMAN.md` NH-7·8 |
 | 6 | ~~사후 변경 재검증~~ | **완료.** 처음에는 DEFECTS FOUND(D-1 MEDIUM)였고, `9aaf3b1`에서 수정한 뒤 재검증했다. | `POST-FINAL-report.md` |
-| 7 | **main 브랜치 / PR / push** | 원격에는 feature 브랜치만 있다. 로컬 `make-it-ship` 브랜치의 2026-10-21 커밋도 아직 push하지 않았다. 사용자가 요청하면 진행한다. | — |
-| 8 | **문서 업로드 정책 확인** | `docs/`의 기획서와 Spec이 개인 계정 GitHub에 올라가 있다. 회사 정책상 문제가 되면 히스토리에서 제외하고 다시 올린다. | — |
+| 7 | **main 브랜치 / PR** | 원격에는 feature 브랜치만 있다. 2026-10-21 커밋까지 push했다. main 생성과 PR은 사용자가 요청하면 진행한다. | — |
+| 8 | ~~문서 업로드 정책 확인~~ | **결정됨**(2026-10-21, 사용자): 그대로 둔다. | — |
 
 ## 4. 열린 결정 (사용자에게 물어볼 것)
 
 - NH-6~8: 지금은 "추후 확인 필요"(2026-10-21 결정)다. 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지 결정한다.
-- 문서 업로드 정책(3장 8번)
-- (2026-10-21 결정됨) NH-5는 Claude가 진행했다. `hardware` 플래그는 제거했다.
+- (2026-10-21 결정됨) NH-5는 Claude가 진행했다. `hardware` 플래그는 제거했다. 문서 업로드는 그대로 둔다.
 
 ## 4-1. 남은 위험·정리 거리 (사후 재검증에서 나옴, LOW)
 
