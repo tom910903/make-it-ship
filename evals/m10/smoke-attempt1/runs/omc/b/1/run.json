@@ -3,7 +3,7 @@
   "demo": "b",
   "n": 1,
   "workDir": "/private/tmp/claude-501/m10-tmp/m10-omc-b-1-1792558001742",
-  "logDir": "evals/m10/smoke/runs/omc/b/1",
+  "logDir": "evals/m10/smoke-attempt1/runs/omc/b/1",
   "base": "ea84b73f92a2daa1fb968ff7a18fea4d036513a8",
   "loadAvg": [
     23.58642578125,

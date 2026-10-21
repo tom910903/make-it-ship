@@ -3,7 +3,7 @@
   "demo": "b",
   "n": 1,
   "workDir": "/private/tmp/claude-501/m10-tmp/m10-superpowers-b-1-1792558032793",
-  "logDir": "evals/m10/smoke/runs/superpowers/b/1",
+  "logDir": "evals/m10/smoke-attempt1/runs/superpowers/b/1",
   "base": "a248fa9ae2504a1b365352da82e6c35aa20dbfb4",
   "loadAvg": [
     27.17919921875,

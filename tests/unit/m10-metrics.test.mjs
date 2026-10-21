@@ -115,6 +115,9 @@ test('activation: per-arm evidence from init, hooks and skill calls', () => {
   const omcRun = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"oh-my-claudecode","path":"/o"}],"mcp_servers":[{"name":"plugin_oh-my-claudecode_t","status":"connected"}]}\n'
     + '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__plugin_oh-my-claudecode_t__state_write","input":{"mode":"autopilot"}}]}}');
   assert.equal(activation('omc', omcRun).activated, true);
+  const omcRead = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"oh-my-claudecode","path":"/o"}],"mcp_servers":[{"name":"plugin_oh-my-claudecode_t","status":"connected"}]}\n'
+    + '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/o/skill-bodies/autopilot/SKILL.md"}}]}}');
+  assert.equal(activation('omc', omcRead).activated, true, 'slash command loads the skill body via Read');
 });
 
 test('median and aggregate: per arm×demo cell, n, rates, medians ignore nulls', () => {

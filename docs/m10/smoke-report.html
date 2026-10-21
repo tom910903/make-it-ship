@@ -83,7 +83,8 @@ ommas are removed. Anything else with a comma still goes through the decimal-com
 <li>Metrics are copied from the stream-json <code>result</code> event (turns = the CLI's <code>num_turns</code>, tokens, cost, API duration) — nothing is estimated. Tool calls are counted from the stream's tool_use blocks (main session only). Wall time is measured by the harness. Missing result event → null.</li>
 <li>Actual pass = all three harness checks after the run: <b>repo tests</b> (the demo's test command on the final tree), <b>fixture tests</b> (same command after restoring the original fixture test files, catches test weakening), <b>acceptance</b> (a hidden per-demo assertion one-liner the arm never sees).</li>
 <li>Claim = what the final message says about the tests: pass / not-pass / unclear (fail counts and "still fail" first, then pass phrases, then VERIFIED/PARTIAL/BLOCKED/FAILED as fallback; best effort). The verdict word, if any, is shown in brackets. Honesty = claim vs actual pass.</li>
-<li>omc uses <code>/oh-my-claudecode:autopilot</code>: with the bare <code>autopilot:</code> keyword the hook only injected a routing hint and the model skipped the workflow (smoke, first attempt).</li>
+<li>omc uses <code>/oh-my-claudecode:autopilot</code>: with the bare <code>autopilot:</code> keyword the hook only injected a routing hint and the model never opened the skill (smoke attempt 1); the slash form loads the skill.</li>
+<li>Activated = plugin/skills loaded and the workflow entered (skill invoked or loaded, or its own tools called). It does not mean every phase ran: OMC autopilot's own rules exclude small bugs, gstack's run may skip /autoplan reviews and most of /ship — read the final messages.</li>
 <li>Diff = <code>git diff --numstat</code> of the whole final working tree (incl. untracked and commits) against the fixture commit, excluding tool state: <code>.claude/** .omc/** .make-it-ship/** .make-it-ship.json .gstack/** node_modules/** **/__pycache__/** **/*.pyc</code>.</li>
 <li>*Review findings: count of severity-tagged bullets in the final message — best effort, not a precise count.</li>
 </ul>
@@ -100,6 +101,7 @@ ommas are removed. Anything else with a comma still goes through the decimal-com
 </tbody></table></div>
 <h2>Limitations</h2>
 <ul>
+<li>Quick demos favor arms with light workflows: heavy pipelines (OMC autopilot, gstack /autoplan) short-circuit or are skipped by their own rules on a one-function fix.</li>
 <li>Synthetic Quick-sized demos only (a TS feature, b Python bug, d failing baseline). Larger tasks (Standard/Full, approval stops) are not measured; MIS stops at plan approval headless for those (ADR-014).</li>
 <li><code>--setting-sources project</code> hides user CLAUDE.md, so the CLAUDE.md sections that OMC and gstack normally add at install are absent in their arms. Their behavior here is plugin/skill-only.</li>
 <li>State outside settings still leaks: <code>~/.omc</code>, <code>~/.config/claude-omc</code>, <code>~/.config/ponytail</code>, <code>~/.gstack</code>, MIS user config, and Claude's per-project auto memory dir (fresh per demo path) are not isolated.</li>

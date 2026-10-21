@@ -40,8 +40,8 @@ const PLUGIN_DIR = {
   ponytail: join(CACHE, 'ponytail', 'ponytail', '5.2.0'),
 };
 // Same task text for every arm; prefix = that plugin's documented way to start work (README), empty when always-on.
-// omc: the bare `autopilot:` keyword only injects a routing hint ("Preferred invocation: /oh-my-claudecode:autopilot"); in the
-// smoke the model ignored it and fixed the bug directly, so the arm uses the preferred slash form.
+// omc: with the bare `autopilot:` keyword the hook only injected a routing hint ("Preferred invocation: /oh-my-claudecode:autopilot")
+// and the model never opened the skill (smoke attempt 1); the slash form loads it, so the arm uses that.
 const PREFIX = {
   control: '', mis: '/make-it-ship:run ', omc: '/oh-my-claudecode:autopilot ', superpowers: '', ponytail: '',
   gstack: 'Load gstack. Run /autoplan, implement the plan, then run /ship. ',

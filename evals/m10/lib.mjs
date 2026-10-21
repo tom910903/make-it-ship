@@ -1,7 +1,7 @@
 // M10 comparison: pure functions (stream-json → metrics, claim/honesty, aggregation). No I/O.
 
 export function parseStream(text) {
-  const out = { init: null, result: null, skillsInvoked: [], subagents: [], bashCommands: [], toolNames: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
+  const out = { init: null, result: null, skillsInvoked: [], subagents: [], bashCommands: [], readPaths: [], toolNames: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     let e;
@@ -16,6 +16,7 @@ export function parseStream(text) {
         out.toolUses++;
         if (!out.toolNames.includes(c.name)) out.toolNames.push(c.name);
         if (c.name === 'Bash' && c.input?.command) out.bashCommands.push(String(c.input.command));
+        if (c.name === 'Read' && c.input?.file_path) out.readPaths.push(String(c.input.file_path));
         if (c.name === 'Skill' && c.input?.skill) out.skillsInvoked.push(String(c.input.skill));
         if ((c.name === 'Task' || c.name === 'Agent') && c.input) out.subagents.push(String(c.input.subagent_type ?? 'general-purpose'));
       }
@@ -86,7 +87,8 @@ export function countReviewFindings(text) {
 
 const has = (list, re) => list.some((x) => re.test(x));
 
-// Evidence that the arm's plugin really loaded (init event) and its workflow really started (hooks/skill calls).
+// Evidence that the arm's plugin really loaded (init event) and its workflow was entered (skill loaded / own tool calls).
+// "Entered" is not "ran every phase": a skill may short-circuit by its own rules (OMC autopilot: not for small bugs).
 export function activation(arm, p) {
   const init = p.init ?? {};
   const plugins = (init.plugins ?? []).filter((x) => x.path !== 'builtin').map((x) => x.name);
@@ -99,7 +101,7 @@ export function activation(arm, p) {
     mis: { plugin: plugins.includes('make-it-ship'), mcp: mcpOk('plugin_make-it-ship_mis'),
       workflow: has(p.skillsInvoked, /^make-it-ship:/) || has(p.bashCommands, /\bmis(?:\.mjs"?)?\s+start\b/) },
     omc: { plugin: plugins.includes('oh-my-claudecode'), mcp: mcpOk('plugin_oh-my-claudecode_t'),
-      workflow: has(p.skillsInvoked, /autopilot/) || has(p.toolNames, /^mcp__plugin_oh-my-claudecode_t__state/)
+      workflow: has(p.skillsInvoked, /autopilot/) || has(p.readPaths, /autopilot\/SKILL\.md$/) || has(p.toolNames, /^mcp__plugin_oh-my-claudecode_t__state/)
         || has(p.subagents, /^oh-my-claudecode:/) || has(p.bashCommands, /\.omc\/state\/[^ ]*autopilot/) },
     superpowers: { plugin: plugins.includes('superpowers'), hook: has(p.hookOutputs, /superpowers/i), workflow: has(p.skillsInvoked, /^superpowers:/) },
     ponytail: { plugin: plugins.includes('ponytail'), hook: has(p.hookOutputs, /PONYTAIL MODE ACTIVE/) },

@@ -3,7 +3,7 @@
   "demo": "b",
   "n": 1,
   "workDir": "/private/tmp/claude-501/m10-tmp/m10-gstack-b-1-1792558084183",
-  "logDir": "evals/m10/smoke/runs/gstack/b/1",
+  "logDir": "evals/m10/smoke-attempt1/runs/gstack/b/1",
   "base": "7e2b818ee667028b69500c6e82787eb5d9fe0047",
   "loadAvg": [
     23.77099609375,

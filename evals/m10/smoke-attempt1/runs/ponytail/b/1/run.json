@@ -3,7 +3,7 @@
   "demo": "b",
   "n": 1,
   "workDir": "/private/tmp/claude-501/m10-tmp/m10-ponytail-b-1-1792558062881",
-  "logDir": "evals/m10/smoke/runs/ponytail/b/1",
+  "logDir": "evals/m10/smoke-attempt1/runs/ponytail/b/1",
   "base": "e94ef1b692330eba58f3e67efbc608a65e74afa7",
   "loadAvg": [
     24.5185546875,

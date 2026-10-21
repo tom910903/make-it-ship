@@ -57,10 +57,10 @@
     ],
     "gstackTelemetry": "off",
     "timeoutMin": 30,
-    "summaryPath": "evals/m10/smoke/summary.json",
+    "summaryPath": "evals/m10/smoke-attempt1/summary.json",
     "isolationProbe": {
       "answer": "NO",
-      "logDir": "evals/m10/smoke/runs/_probe",
+      "logDir": "evals/m10/smoke-attempt1/runs/_probe",
       "nonBuiltinPlugins": [],
       "userSkillsVisible": [],
       "mcpServers": [],
@@ -114,7 +114,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-control-b-1-1792557921823",
-      "logDir": "evals/m10/smoke/runs/control/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/control/b/1",
       "base": "c4ac2c0460fa709d4d2cbd67a112d123b38b4690",
       "loadAvg": [
         25.8388671875,
@@ -182,7 +182,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-mis-b-1-1792557942519",
-      "logDir": "evals/m10/smoke/runs/mis/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/mis/b/1",
       "base": "504fa0516800c42c1602b737f0becf6942e298e2",
       "loadAvg": [
         26.69287109375,
@@ -257,7 +257,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-omc-b-1-1792558001742",
-      "logDir": "evals/m10/smoke/runs/omc/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/omc/b/1",
       "base": "ea84b73f92a2daa1fb968ff7a18fea4d036513a8",
       "loadAvg": [
         23.58642578125,
@@ -332,7 +332,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-superpowers-b-1-1792558032793",
-      "logDir": "evals/m10/smoke/runs/superpowers/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/superpowers/b/1",
       "base": "a248fa9ae2504a1b365352da82e6c35aa20dbfb4",
       "loadAvg": [
         27.17919921875,
@@ -404,7 +404,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-ponytail-b-1-1792558062881",
-      "logDir": "evals/m10/smoke/runs/ponytail/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/ponytail/b/1",
       "base": "e94ef1b692330eba58f3e67efbc608a65e74afa7",
       "loadAvg": [
         24.5185546875,
@@ -473,7 +473,7 @@
       "demo": "b",
       "n": 1,
       "workDir": "/private/tmp/claude-501/m10-tmp/m10-gstack-b-1-1792558084183",
-      "logDir": "evals/m10/smoke/runs/gstack/b/1",
+      "logDir": "evals/m10/smoke-attempt1/runs/gstack/b/1",
       "base": "7e2b818ee667028b69500c6e82787eb5d9fe0047",
       "loadAvg": [
         23.77099609375,
