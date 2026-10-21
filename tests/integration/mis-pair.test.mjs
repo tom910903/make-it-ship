@@ -62,7 +62,12 @@ test('M9 fix1 D3: a paired agent reads only pages it opened itself: back/forward
     ok(mis(dir, ['browse', 'goto', secretUrl], { env })); // the user's own local page, open before pairing
     s = ok(mis(dir, ['pair-agent', 'start', '--local'], { env }));
     const auth = { authorization: `Bearer ${s.token}` };
-    const post = async (cmd, args = []) => { const r = await fetch(`${s.url}/command`, { method: 'POST', headers: auth, body: JSON.stringify({ cmd, args }) }); return { status: r.status, body: JSON.stringify(await r.json()) }; };
+    const post = async (cmd, args = []) => {
+      let r;
+      try { r = await fetch(`${s.url}/command`, { method: 'POST', headers: auth, body: JSON.stringify({ cmd, args }) }); }
+      catch (e) { throw new Error(`POST ${cmd} ${JSON.stringify(args)}: ${e.message} (${e.cause?.code ?? e.cause?.message ?? 'no cause'})`); }
+      return { status: r.status, body: JSON.stringify(await r.json()) };
+    };
     const leaks = (r) => /LOCAL-SECRET|secret\.html|Local Secret/.test(r.body) || r.body.includes(dir);
     const st = await post('status'); assert.equal(st.status, 200); assert.ok(!leaks(st) && !/stateDir|profile/.test(st.body), `status shows no local paths: ${st.body}`);
     const userTab = JSON.parse((await post('tabs')).body).result.find((x) => x.active).id;

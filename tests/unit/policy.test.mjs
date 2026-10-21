@@ -408,9 +408,11 @@ test('M9-D: commands that mis runs later (wait/detach after --, tournament --ben
 // ---- M9 fix1 (round-1 D/E verifier): stored commands, stored-command files, ask texts with destination and contents
 const { mkdtempSync: mkd, mkdirSync: mkdir, writeFileSync: wf, realpathSync: rp, rmSync: rmf } = await import('node:fs');
 const { tmpdir: tmp } = await import('node:os');
+const { spawnSync: spawnSyncP } = await import('node:child_process');
 const { join: pj } = await import('node:path');
 function storedRepo(files) {
-  const r = rp(mkd(pj(tmp(), 'mis-policy-'))); mkdir(pj(r, '.git'));
+  // a real repository: guard and mis both find the root with git rev-parse (M9 r2 N1); an empty .git dir is not one
+  const r = rp(mkd(pj(tmp(), 'mis-policy-'))); spawnSyncP('git', ['init', '-q'], { cwd: r });
   for (const [p, c] of Object.entries(files)) { mkdir(pj(r, p, '..'), { recursive: true }); wf(pj(r, p), typeof c === 'string' ? c : JSON.stringify(c)); }
   return r;
 }

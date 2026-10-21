@@ -223,8 +223,9 @@ export function normalize(argv, vars, heredoc) {
     const m = w.match(/^\$\{?(\w+)\}?$/);
     return m && vars.has(m[1]) ? vars.get(m[1]) : w;
   });
+  const env = []; // leading assignments (`K=V cmd`, `env K=V cmd`): the command's environment, shown in asks
   for (;;) {
-    while (a.length && /^[A-Za-z_]\w*=/.test(a[0])) { const [k, ...v] = a.shift().split('='); vars.set(k, v.join('=')); }
+    while (a.length && /^[A-Za-z_]\w*=/.test(a[0])) { env.push(a[0]); const [k, ...v] = a.shift().split('='); vars.set(k, v.join('=')); }
     if (!a.length) return { argv: [] };
     if (KEYWORDS.includes(a[0])) { a.shift(); continue; }
     const name = a[0].split('/').pop();
@@ -250,11 +251,11 @@ export function normalize(argv, vars, heredoc) {
       if (/^-[a-z]*c[a-z]*$/i.test(a[k])) hasC = true;
       k++;
     }
-    if (hasC && a[k] !== undefined) return { argv: a, script: a[k] };
-    if (!hasC && a[k] === undefined && heredoc !== undefined) return { argv: a, script: heredoc }; // bash <<EOF
+    if (hasC && a[k] !== undefined) return { argv: a, env, script: a[k] };
+    if (!hasC && a[k] === undefined && heredoc !== undefined) return { argv: a, env, script: heredoc }; // bash <<EOF
   }
-  if (a[0] === 'eval') return { argv: a, script: a.slice(1).join(' ') };
-  return { argv: a };
+  if (a[0] === 'eval') return { argv: a, env, script: a.slice(1).join(' ') };
+  return { argv: a, env };
 }
 
 /** `$@`, `$*`, `$1`… of a function body → the call's arguments */
@@ -287,8 +288,8 @@ export function commandsOf(src, depth = 0, known = new Map()) {
       for (const [k, v] of inner.functions) functions.set(k, v);
     }
     // `exec 3> f` and a bare `> f` still write f: keep the redirects as a no-op command (`:`)
-    if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects }); continue; }
-    out.push({ argv: n.argv, redirects: c.redirects ?? [] });
+    if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects, env: n.env ?? [] }); continue; }
+    out.push({ argv: n.argv, redirects: c.redirects ?? [], env: n.env ?? [] });
     if (functions.has(n.argv[0]) && depth < 5) {
       for (const ic of commandsOf(functions.get(n.argv[0]), depth + 1, functions).commands) {
         const argv = normalize(substitute(ic.argv, n.argv.slice(1)), new Map()).argv;

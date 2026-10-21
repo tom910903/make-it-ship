@@ -1,6 +1,7 @@
 // Small helpers shared by the M9-D command modules (argument parsing, project dirs, PATH lookup, JSON files).
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { repoRoot } from './tree-hash.mjs';
 
 export const fail = (msg) => { throw new Error(msg); };
@@ -22,6 +23,10 @@ export function bool(args, name) {
   args.splice(i, 1);
   return true;
 }
+
+/** Environment for scripts mis runs from stored commands (checks, evaluator, benchmarks, deploy steps): with MIS_CLI set,
+ *  a mis command inside them that the guard would ask about is refused (mis.mjs), since the guard cannot see it there. */
+export const MIS_CLI_ENV = () => ({ ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) });
 
 export const rootOf = (cwd) => { try { return repoRoot(cwd); } catch { return cwd; } };
 /** <repo>/.make-it-ship/<sub>: per-project working files (plain files in the working tree, like the wiki). */

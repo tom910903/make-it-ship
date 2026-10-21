@@ -1,5 +1,5 @@
 // `mis browse <command>` handlers, run inside the daemon. Each gets (browser, tab, args, ctx{cwd, remote, inChain}).
-import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, mkdirSync, lstatSync, readlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, mkdirSync, lstatSync, readlinkSync, readdirSync } from 'node:fs';
 import { resolve, dirname, extname, sep, join, basename } from 'node:path';
 import { tmpdir, hostname } from 'node:os';
 import { browserDataDirs } from './cookies.mjs';
@@ -30,6 +30,35 @@ function foreignUserData(profile, home) {
   const mine = home && ancestors(profile).some((d) => existsSync(home) && sameDir(statSync(d), statSync(home)));
   if (mine) return null;
   return ancestors(profile).find((d) => existsSync(join(d, 'Local State')) && !existsSync(join(d, PROFILE_MARK))) ?? null;
+}
+// M9 r2 N8: Chrome's credential and storage files. A copy of a profile (no Local State) or a hard link of the real files
+// is still the user's data: refused in any dir connect did not create, and hard links of the real ones everywhere.
+const PROFILE_DATA = new Set(['Cookies', 'Login Data', 'Web Data', 'Local Storage', 'Local State']);
+function profileDataIn(dir, depth = 0, out = []) {
+  let ents = [];
+  try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of ents) {
+    if (PROFILE_DATA.has(e.name)) out.push(join(dir, e.name));
+    if (e.isDirectory() && depth < 3) profileDataIn(join(dir, e.name), depth + 1, out); // a Dirent of a symlink is not a directory
+  }
+  return out;
+}
+function copiedProfileData(profile, home) {
+  if (existsSync(join(profile, PROFILE_MARK)) || (home && existsSync(home) && ancestors(profile).some((d) => sameDir(statSync(d), statSync(home))))) return null;
+  return profileDataIn(profile)[0] ?? null;
+}
+/** A credential file in the profile that is a hard link of one in the user's real browser data (same device and inode). */
+function hardlinkedRealData(profile) {
+  const mine = profileDataIn(profile).map((f) => { try { return statSync(f); } catch { return null; } }).filter((st) => st?.isFile() && st.nlink > 1);
+  if (!mine.length) return null;
+  for (const root of browserDataDirs().filter((r) => existsSync(r))) {
+    let subs = [];
+    try { subs = readdirSync(root); } catch { continue; }
+    for (const f of subs.flatMap((sd) => ['Cookies', 'Network/Cookies', 'Login Data', 'Web Data'].map((n) => join(root, sd, n)))) {
+      try { const st = statSync(f); if (mine.some((m) => sameDir(m, st))) return f; } catch { /* none */ }
+    }
+  }
+  return null;
 }
 
 /** A profile a running browser holds: SingletonLock is a symlink to "<host>-<pid>" (a dead pid on this host is a stale lock). */
@@ -879,6 +908,10 @@ const HANDLERS = {
     if (own) throw new Error(`${profile} is inside your browser's own data (${own}); connect uses its own profile. Pick another --profile-dir, or import a site's cookies with cookie-import-browser`);
     const data = foreignUserData(profile, ctx.home);
     if (data) throw new Error(`${profile} looks like a browser's user data (${data} has a Chrome "Local State" file) that connect did not create; connect only uses its own profiles. Pick an empty --profile-dir`);
+    const copied = copiedProfileData(profile, ctx.home);
+    if (copied) throw new Error(`${profile} holds browser profile data (${copied}) that connect did not create (a copied profile?); connect only uses its own profiles. Pick an empty --profile-dir`);
+    const linked = hardlinkedRealData(profile);
+    if (linked) throw new Error(`${profile} contains a hard link of your browser's own data (${linked}, the same file); connect never uses the real browser's credentials. Remove it or pick an empty --profile-dir`);
     // a running browser owns its profile (a second instance just hands the URL to it)
     if (profileInUse(profile)) throw new Error(`${profile} is in use by a running browser; quit it or pick another --profile-dir`);
     mkdirSync(profile, { recursive: true, mode: 0o700 });
