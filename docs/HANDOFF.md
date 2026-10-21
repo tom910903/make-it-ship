@@ -5,11 +5,18 @@
 ## 0. 통합 라인
 
 - **개발은 `feature/make-it-ship-m1-m5` 한 라인에서 끝낸 뒤 master로 만든다**(사용자 결정, 2026-10-21).
-  - 로컬에서는 worktree `orca/workspaces/make-it-ship/make-it-ship`의 `make-it-ship` 브랜치가 이 라인이다.
+  - 로컬에서는 worktree `~/orca/workspaces/make-it-ship/make-it-ship`의 `make-it-ship` 브랜치가 이 라인이다.
   - 원격: `github.com/tom910903/make-it-ship` (비공개). 이 브랜치가 원격 기본 브랜치이고, 마켓플레이스 설치도 이 브랜치에서 받는다.
-- 2026-10-21에 `develop`(M6·M7 검증 PASS)을 이 라인으로 병합했다(3장 1번).
-  - 그 전까지 develop은 별도 라인이었다.
-  - M8·M9 WIP 브랜치는 아직 develop 기반이다. 이 라인으로 가져올 때 `scripts/guard.mjs`·`policy.mjs`·`shell.mjs`에서 충돌이 예상된다. D-1 회귀 테스트(`guard.test.mjs` ".git/ or in a nested repo")가 통과하는지 꼭 다시 확인한다.
+- 2026-10-21에 모든 작업 브랜치를 이 라인으로 병합하고 정리했다.
+  - 병합 순서: `develop`(M6·M7 검증 PASS, 병합 검증 PASS) → `m9-fix4` → `m9-fix3` → `m8-wip`.
+  - **M8·M9 코드는 검증을 통과하지 못한 상태로 들어왔다.** M8은 3차 FAIL, M9는 2차 FAIL 뒤 수정 중이었다. 태그는 달지 않았다.
+  - 병합할 때마다 전체 `npm test`를 돌려 통과했다(최종 737/737). 병합한 브랜치의 테스트 제목이 하나도 빠지지 않은 것도 확인했다.
+  - 병합된 브랜치와 worktree는 지웠다. 남은 것:
+    - `develop` 브랜치: 내용은 모두 병합됐다. 저장소 본체 `~/Dev/Git/tools/make-it-ship`(main worktree, `.git`이 있는 곳)에 checkout돼 있다. 사용자 결정으로 그대로 둔다.
+    - 이 라인
+- 의미 충돌을 고친 곳:
+  - `scripts/lib/keywords.mjs`: M9 코드가 M6 후속 수정에서 없어진 `LOOP_PREFIX`를 참조하고 있었다.
+  - browse `actions.mjs`: M8의 업로드 차단 검사를 M9의 `gated()` 바깥, 호출하는 쪽으로 옮겼다.
 
 ## 1. 목표 (사용자 요청, 2026-10-20)
 
@@ -38,11 +45,11 @@ Make It Ship 하나만 설치하면 OMC·Superpowers·Ponytail·gstack의 기능
 | M1~M5 | 핵심 | 검증 PASS(`FINAL-report.md`). 사후 변경도 재검증 PASS(`POST-FINAL-report.md`) | 이 라인 |
 | M6 | 상시 동작 계층(훅, style, loop, freeze 등) | 검증 PASS, `m6-verified` | 이 라인(develop 병합) |
 | M7 | MCP 도구 서버(memory, wiki, LSP/REPL, trace, run lock) | 검증 PASS(6차), `m7-verified` | 이 라인(develop 병합) |
-| M8 | 내장 브라우저(CDP pipe), pdf, visual-verdict, team, companion | 3차 검증 FAIL. **수정 착수 전 중단** | `m8-wip` @ `152898f` (`~/Dev/Git/tools/make-it-ship-m8`) |
-| M9 | 나머지 기능 전부(A 설치·수명주기, B 흐름 통합, C 에이전트·스킬, D 연구·운영·배포, E 브라우저 고급, F 훅) | 구현 완료, 2차 검증 FAIL. **수정 도중 중단** | `m9-wip` @ `7fc6a80` (`~/Dev/Git/tools/make-it-ship-m9`) |
+| M8 | 내장 브라우저(CDP pipe), pdf, visual-verdict, team, companion | 3차 검증 FAIL. **수정 착수 전.** 코드는 이 라인에 병합됨 | 이 라인 |
+| M9 | 나머지 기능 전부(A 설치·수명주기, B 흐름 통합, C 에이전트·스킬, D 연구·운영·배포, E 브라우저 고급, F 훅) | 구현 완료, 2차 검증 FAIL. 2차 수정(A/F D1~D7, D/E N1~N8)까지 이 라인에 병합됨. **3차 검증 전** | 이 라인 |
 | M10 | 원본 4종 vs MIS 실측 비교 + 로컬 HTML | 미착수 | — |
 
-gap-matrix(m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EXCLUDED 5 / N/A 15.
+gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EXCLUDED 5 / N/A 15.
 
 M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
 - **guard D-1 수정**(`9aaf3b1`): run 중 `.git/` 내부와 중첩 저장소의 편집이 다시 ask가 된다.
@@ -53,13 +60,7 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
 
 ## 3. 다음에 할 일 (순서대로)
 
-1. **develop 병합 검증**
-   - 병합 커밋을 만들었다(3장 이후 `git log` 참고). 충돌은 7개 파일에서 났고(PROGRESS.md는 자동 병합) 양쪽을 모두 살렸다.
-     - `guard.mjs`: D-1 수정과 develop의 freeze·trace를 함께 둔다.
-     - 테스트 4개: 양쪽 테스트를 모두 둔다. `mis-resume`은 이벤트 기반 대기를 쓴다.
-     - README, PROGRESS, HANDOFF.
-   - 남은 일: 독립 verifier로 병합 결과를 검증한다. **push는 사용자 확인 후에 한다.** push하면 마켓플레이스로 새로 설치하는 사람이 M6·M7(상시 훅, MCP 서버)을 받는다.
-2. **M8 3차 결함 수정** (`~/Dev/Git/tools/make-it-ship-m8`, 보고서 `docs/milestones/M8-report.md` "3차 검증")
+1. **M8 3차 결함 수정** (보고서 `docs/milestones/M8-report.md` "3차 검증")
    - R3-1/R3-2: 업로드 파일 유출 경로(Service/Shared Worker, 다른 로컬 문서로 이동, closetab의 pagehide beacon, WebRTC). **사용자 결정: 로컬 전용 모드**로 막는다.
      - `mis browse start --local-only`: Chrome을 다음 옵션으로 띄운다.
        - `--proxy-server=http://127.0.0.1:<닫힌 포트>`: loopback 외 전부 차단
@@ -68,18 +69,12 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
      - 확인 없는 `upload`는 이 모드에서만 허용한다. 다른 모드에서는 `--remote` 여부와 상관없이 upload가 항상 guard ask다. 문구: 페이지 스크립트가 파일을 어디로든 보낼 수 있음.
      - 모드는 데몬 상태 파일에 기록하고 guard가 읽는다. 모드를 바꾸려면 데몬을 재시작한다.
      - 유출 경로마다 로컬 전용 모드에서 실제로 다시 시도해, 유출이 0건인지 측정한다(가정 금지). 기존 목적지 검사와 Fetch 차단은 보조 방어로 남긴다.
-   - R3-3: guard가 `MIS_BROWSE_CHROME_ARGS`/`MIS_BROWSER`/`MIS_BROWSER_EXE`를 원문 정규식이 아니라 파서가 풀어낸 env 할당으로 판정하게 한다. Chrome 플래그는 거부 목록에서 **허용 목록(fail closed)**으로 바꾼다.
+     - M9-E가 추가한 `connect`(지속 프로필 + 확장)와 쿠키 정책도 이 모드 규칙과 맞춰야 한다. 둘은 병합 후 처음으로 함께 놓였다.
+   - R3-3: guard가 `MIS_BROWSE_CHROME_ARGS`/`MIS_BROWSER`/`MIS_BROWSER_EXE`를 원문 정규식이 아니라 파서가 풀어낸 env 할당으로 판정하게 한다. M9 r2에서 셸 파서가 env 할당을 넘겨주게 됐으므로 그것을 쓴다. Chrome 플래그는 거부 목록에서 **허용 목록(fail closed)**으로 바꾼다.
    - R3-4: visual-verdict 정렬 탐색 범위를 ±8px 정도로 넓히고, 정확한 값을 단언한다.
-   - 그다음 M8 4차 독립 검증을 한다. PASS면 보고서를 커밋하고 `m8-verified` 태그를 단다.
-3. **M9 2차 결함 수정 마무리**: WIP가 두 브랜치에 있다(**테스트 미실행**).
-   - `m9-fix3` @ `9e8f1c9` (`~/Dev/Git/tools/make-it-ship-m9fix3`): D/E N1~N8(`docs/milestones/M9-report-r2-DE.md`).
-     - 중단 직전에는 "존재하지 않는 테스트 cwd 때문에 fail-closed 조건을 다듬는 중"이었다.
-     - N2는 고치기로 결정했다. 평가기 등 저장 명령을 실행할 때도 MIS_CLI 거부 환경을 적용한다.
-   - `m9-fix4` @ `99ceb8f` (`~/Dev/Git/tools/make-it-ship-m9fix4`): A/F D1~D7(`M9-report-r2-AF.md`).
-     - 본 수정은 `c11e94e`에 커밋됐고, 그 뒤 RISKS 메모만 WIP다.
-     - 남은 일: 전체 `npm test` 2회와 validate.
-   - 둘 다 끝나면 `m9-wip`에 병합한다(policy.mjs·shell.mjs 충돌 예상). 그다음 m8-wip도 m9-wip에 병합하고, **이 라인으로 병합**한다(0장 주의 참고).
-   - 그 뒤 M9 3차 검증을 두 갈래로 한다(A/B/C/F, D/E). PASS면 `m9-verified` 태그를 단다.
+   - 그다음 M8 4차 독립 검증을 한다. 병합본 기준이다. PASS면 `m8-verified` 태그를 단다.
+2. **M9 3차 검증**: 2차 수정까지 병합됐다. 검증은 두 갈래로 한다(A/B/C/F, D/E). 보고서 `M9-report-r2-*.md`의 결함이 실제로 고쳐졌는지 병합본에서 확인한다. FAIL이면 고치고 다시 검증한다. PASS면 `m9-verified` 태그를 단다.
+3. (M8과 M9 검증은 같은 guard, policy, shell 파일을 공유한다. 한쪽을 고치면 다른 쪽 테스트도 함께 돌린다.)
 4. **M10**: 원본 4종을 각각 `--plugin-dir`와 프로젝트 전용 설정으로 격리해, 같은 합성 데모(`evals/demos`)에서 실제로 실행한다.
    - 셀마다 N≥3번 돌리고, 원시 로그를 보관한다. 추정치는 쓰지 않는다.
    - 지표: 판정 정직성·통과율, 턴, 토큰/비용, 시간, diff 크기, 리뷰 지적 수.
@@ -95,7 +90,7 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
 ## 4. 열린 결정
 
 - version을 언제, 몇으로 올릴지(3장 6번)
-- 병합 결과를 원격에 언제 push할지(3장 1번)
+- 병합 결과를 원격에 언제 push할지. push하면 마켓플레이스로 새로 설치하는 사람이 검증 안 된 M8·M9 코드를 받는다. 여기에는 M8 업로드 유출 결함(R3-1, MEDIUM)도 들어 있다.
 - NH-6~8: 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지
 
 ## 4-1. 남은 위험 (LOW)
@@ -108,7 +103,7 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
   - Spec §435 qa 행에 BSP가 남아 있다. Spec은 수정하지 않고 SPEC_CHANGES에 기록했다.
 - 설치 확인 범위:
   - GitHub 마켓플레이스 설치는 user 범위로만 확인했다. `--scope project`는 확인하지 않았다.
-  - develop 병합 후의 마켓플레이스 설치(MCP 서버 기동 포함)는 3장 1번에서 확인한다.
+  - develop 병합본(`8353e07`)은 로컬 마켓플레이스로 설치해 MCP 서버 연결, 도구 호출, 스킬 동작을 확인했다(AUTO). M8·M9 병합본으로는 다시 확인하지 않았다.
 
 ## 5. 운영 메모
 
@@ -119,7 +114,6 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
 - 테스트 env는 `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CONFIG_DIR`를 지우고, `HOME`·`MIS_STATE_HOME`을 임시 디렉터리로 둔다.
 - 외부 모델 CLI(codex/gemini), ngrok, 실제 배포 서비스는 실제로 호출하지 않는다(사내 정책). 테스트는 stub과 localhost만 쓴다.
 - 플러그인 설치를 확인한 뒤 `~/.claude/plugins/cache/<marketplace>`가 남는다. 직접 지운다.
-- 정리 대상 worktree: `make-it-ship-m2`, `m5`, `m7`, `m7a~c`, `m8a~b`, `m9a~f`. 병합이 끝나 지워도 된다(사용자 확인 후).
 
 ## 6. 다른 장비에서 시작하기
 
