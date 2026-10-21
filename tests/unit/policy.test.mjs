@@ -231,6 +231,16 @@ test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser exe
   assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
 });
 
+test('M8 R3-3: launch overrides are judged on the parsed environment, not the raw text: split, quoted, escaped and exported names ask', () => {
+  const idle = { ...ctx, activeRun: false }, M = 'node /p/scripts/mis.mjs browse goto x';
+  for (const cmd of [`env MIS_BROWSE_CHROME_""ARGS='--x' ${M}`, `export MIS_BROWSE_CHROME_ARG\\S='--x'; ${M}`, `export 'MIS_BROWSER'=/tmp/w; ${M}`,
+    `env MIS_BROWSER$'_EXE'=/tmp/w ${M}`, `MIS_BROWSER=/x; export MIS_BROWSER; ${M}`, `set -a; MIS_BROWSER=/x; ${M}`, `declare -x MIS_BROWSER=/x; ${M}`,
+    `typeset -x MIS_BROWSER_EXE=/x; ${M}`, `f() { MIS_BROWSER=/x ${M}; }; f`, `sh -c "MIS_BROWSER=/x ${M}"`]) {
+    assert.equal(d(bash(cmd), idle), 'ask', cmd);
+  }
+  for (const cmd of [`echo MIS_BROWSER=/x; ${M}`, `FOO=1 ${M}`, "MIS_BROWSER=/x node -e 1"]) assert.equal(d(bash(cmd), idle), 'allow', cmd);
+});
+
 test('M8: team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {

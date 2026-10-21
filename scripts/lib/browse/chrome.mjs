@@ -3,6 +3,7 @@ import { statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join, delimiter } from 'node:path';
 import { homedir } from 'node:os';
+import { isLocalOrigin } from './util.mjs';
 
 const MAC = ['Google Chrome.app/Contents/MacOS/Google Chrome', 'Chromium.app/Contents/MacOS/Chromium',
   'Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'];
@@ -22,17 +23,29 @@ export function findChrome(env = process.env) {
   return candidates.find(isFile) ?? null;
 }
 
-// M8 R2-3: flags that would reopen a DevTools port, drop the same-origin policy, point at a real profile, load code or
-// reroute traffic. Matched on the switch name, any number of leading dashes, any case.
-const DENIED = /^(remote-debugging-.*|remote-allow-origins|disable-web-security|user-data-dir|profile-directory|load-extension|disable-extensions-except|allow-file-access-from-files|proxy-.*|disable-site-isolation-.*|disable-features)$/;
+// M8 R3-3: an allow list (fail closed): display, language and rendering flags only. Anything else (a DevTools port, web
+// security, sandbox, certificates, helper executables, proxies, profiles, extensions, features) is refused.
+const ALLOWED = new Set(['lang', 'accept-lang', 'window-size', 'force-device-scale-factor', 'force-color-profile', 'font-render-hinting',
+  'disable-gpu', 'disable-dev-shm-usage', 'disable-lcd-text', 'hide-scrollbars', 'mute-audio', 'autoplay-policy', 'force-prefers-reduced-motion',
+  'host-resolver-rules']);
+const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i;
+// host-resolver-rules: MAP rules only. A name may point at loopback (or nowhere); only a non-local name without wildcards may
+// point elsewhere (like DNS would). Pointing localhost at another machine would make a remote site look local (R3-3).
+const rulesOk = (v) => v.split(',').every((r) => {
+  const [kind, pattern, target, ...rest] = r.trim().split(/\s+/);
+  if (kind !== 'MAP' || !pattern || !target || rest.length) return false;
+  return target === '~NOTFOUND' || LOOPBACK.test(target.replace(/:\d+$/, '')) || (!pattern.includes('*') && !isLocalOrigin(`http://${pattern}`));
+});
 
-/** MIS_BROWSE_CHROME_ARGS → extra Chrome flags (split before each "--"); throws on anything risky. */
+/** MIS_BROWSE_CHROME_ARGS → extra Chrome flags (split before each "--"); throws on anything not on the allow list. */
 export function chromeArgs(value = '') {
   const args = value.trim() ? value.trim().split(/\s+(?=-)/) : [];
   for (const a of args) {
     if (!a.startsWith('-')) throw new Error(`MIS_BROWSE_CHROME_ARGS: "${a}" is not a flag (Chrome would open it as a page at startup)`);
-    const name = a.replace(/^-+/, '').split('=')[0].toLowerCase();
-    if (DENIED.test(name)) throw new Error(`MIS_BROWSE_CHROME_ARGS: ${a} is not allowed (it would weaken the browser's isolation from this machine and other sites)`);
+    const [name, ...v] = a.replace(/^-+/, '').split('=');
+    if (!ALLOWED.has(name) || (name === 'host-resolver-rules' && !rulesOk(v.join('=')))) {
+      throw new Error(`MIS_BROWSE_CHROME_ARGS: ${a} is not allowed (only display, language and rendering flags are, and host-resolver-rules that map names to loopback or map non-local names: ${[...ALLOWED].join(', ')})`);
+    }
   }
   return args;
 }

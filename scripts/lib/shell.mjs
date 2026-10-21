@@ -226,7 +226,7 @@ export function normalize(argv, vars, heredoc) {
   const env = []; // leading assignments (`K=V cmd`, `env K=V cmd`): the command's environment, shown in asks
   for (;;) {
     while (a.length && /^[A-Za-z_]\w*=/.test(a[0])) { env.push(a[0]); const [k, ...v] = a.shift().split('='); vars.set(k, v.join('=')); }
-    if (!a.length) return { argv: [] };
+    if (!a.length) return { argv: [], env };
     if (KEYWORDS.includes(a[0])) { a.shift(); continue; }
     const name = a[0].split('/').pop();
     if (name in WRAPPERS) {
@@ -287,13 +287,13 @@ export function commandsOf(src, depth = 0, known = new Map()) {
       text += ` ${inner.text} `;
       for (const [k, v] of inner.functions) functions.set(k, v);
     }
-    // `exec 3> f` and a bare `> f` still write f: keep the redirects as a no-op command (`:`)
-    if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects, env: n.env ?? [] }); continue; }
+    // `exec 3> f` and a bare `> f` still write f, and a bare `K=V` sets a variable (exported under `set -a`): keep them as a no-op command (`:`)
+    if (!n.argv.length) { if (c.redirects?.length || n.env?.length) out.push({ argv: [':'], redirects: c.redirects ?? [], env: n.env ?? [] }); continue; }
     out.push({ argv: n.argv, redirects: c.redirects ?? [], env: n.env ?? [] });
     if (functions.has(n.argv[0]) && depth < 5) {
       for (const ic of commandsOf(functions.get(n.argv[0]), depth + 1, functions).commands) {
         const argv = normalize(substitute(ic.argv, n.argv.slice(1)), new Map()).argv;
-        if (argv.length) out.push({ argv, redirects: ic.redirects });
+        if (argv.length) out.push({ argv, redirects: ic.redirects, env: ic.env ?? [] });
       }
     }
   }

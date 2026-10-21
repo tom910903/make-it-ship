@@ -155,7 +155,7 @@ function classifyBash(cmd, ctx, cwd) {
     const stored = written.map((t) => resolve(dir, t.replace(/^~/, homedir()))).find(isStored);
     let r = stored ? storedWrite(stored) : careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(m, text);
-    if (r.decision === 'allow') r = browserLaunchOverride(m, text);
+    if (r.decision === 'allow') r = browserLaunchOverride(m, commands);
     if (r.decision === 'allow') r = misInner(m, text, ctx, dir);
     if (r.decision === 'allow') r = storedMis(m, ctx, dir, text, env, lost || (dir !== cwd && !existsSync(dir)));
     if (r.decision === 'allow') r = externalMis(m, dir, text, env);
@@ -231,9 +231,19 @@ function runOnly(ws, ctx, functions) {
   return allow;
 }
 
-/** M8 R2-3: launch overrides change what the browser runs with (flags, or a wrapper executable that can add any flag). */
-function browserLaunchOverride(mis, text) {
-  if (mis?.[0] !== 'browse' || !/\b(MIS_BROWSE_CHROME_ARGS|MIS_BROWSER|MIS_BROWSER_EXE)=/.test(text)) return allow;
+/**
+ * M8 R2-3/R3-3: launch overrides change what the browser runs with (flags, or a wrapper executable that can add any flag).
+ * Judged on the parsed commands (names unquoted and unescaped by the shell parser): a command's own assignments, bare
+ * assignments (exported by `set -a`) and the names given to export/declare/typeset/readonly/local. shortcut: names built at
+ * run time (printf -v, read, source) are not seen (R2-4); the daemon still refuses flags outside the allow list.
+ */
+const LAUNCH_VARS = new Set(['MIS_BROWSE_CHROME_ARGS', 'MIS_BROWSER', 'MIS_BROWSER_EXE']);
+function browserLaunchOverride(mis, commands) {
+  if (mis?.[0] !== 'browse') return allow;
+  const names = commands.flatMap(({ argv, env = [] }) => [...env,
+    ...(['export', 'declare', 'typeset', 'readonly', 'local'].includes(argv[0]) ? argv.slice(1).filter((w) => !w.startsWith('-')) : [])]
+    .map((w) => w.split('=')[0]));
+  if (!names.some((n) => LAUNCH_VARS.has(n))) return allow;
   return ask('mis browse with a browser launch override (MIS_BROWSE_CHROME_ARGS / MIS_BROWSER): extra flags or another executable can open a DevTools port or turn off web security — needs your approval');
 }
 
