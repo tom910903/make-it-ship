@@ -64,3 +64,15 @@ test('M8 R2-3: extra Chrome flags cannot reopen a DevTools port, drop web securi
   }
   assert.throws(() => chromeArgs('http://evil.test/'), /MIS_BROWSE_CHROME_ARGS[\s\S]*flag/, 'a bare URL would open at startup, before any gate');
 });
+
+test('M8 R3-3: extra Chrome flags are an allow list (fail closed); host-resolver-rules may only point names at loopback or map non-local names', () => {
+  assert.deepEqual(chromeArgs('--lang=ko --window-size=800,600 --force-device-scale-factor=2 --disable-gpu'), ['--lang=ko', '--window-size=800,600', '--force-device-scale-factor=2', '--disable-gpu']);
+  assert.deepEqual(chromeArgs('--host-resolver-rules=MAP *.test 127.0.0.1, MAP lan.test 10.0.0.5, MAP a.test [::1]:8080, MAP b.test ~NOTFOUND'),
+    ['--host-resolver-rules=MAP *.test 127.0.0.1, MAP lan.test 10.0.0.5, MAP a.test [::1]:8080, MAP b.test ~NOTFOUND']);
+  for (const bad of ['--host-resolver-rules=MAP localhost 10.10.77.78', '--host-resolver-rules=MAP * 10.0.0.5', '--host-resolver-rules=MAP *.localhost 1.2.3.4',
+    '--host-resolver-rules=MAP 127.0.0.1 1.2.3.4', '--host-resolver-rules=MAP x.test 127.0.0.1, EXCLUDE *', '--host-resolver-rules=MAP app.localhost 10.0.0.5',
+    '--ignore-certificate-errors', '--no-sandbox', '--unsafely-treat-insecure-origin-as-secure=http://x.test', '--renderer-cmd-prefix=/tmp/w',
+    '--browser-subprocess-path=/tmp/w', '--gpu-launcher=/tmp/w', '--enable-features=X', '--LANG=ko', '--some-future-flag']) {
+    assert.throws(() => chromeArgs(bad), /MIS_BROWSE_CHROME_ARGS[\s\S]*not allowed/, bad);
+  }
+});

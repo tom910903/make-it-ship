@@ -35,7 +35,8 @@ const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.som
 
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
-import { BROWSE_ALWAYS_ASK, alwaysAskIn } from './browse/util.mjs';
+import { BROWSE_ALWAYS_ASK, alwaysAskIn, uploadsIn } from './browse/util.mjs';
+import { browseDir } from './browse/client.mjs';
 import { maskSecrets } from './mask.mjs';
 import { claudeDir, homeDir } from './home.mjs';
 import { ingestCandidates } from './commands-gbrain.mjs';
@@ -155,7 +156,7 @@ function classifyBash(cmd, ctx, cwd) {
     const stored = written.map((t) => resolve(dir, t.replace(/^~/, homedir()))).find(isStored);
     let r = stored ? storedWrite(stored) : careful(ws, ctx, dir, functions);
     if (r.decision === 'allow') r = otherModelTeam(m, text);
-    if (r.decision === 'allow') r = browserLaunchOverride(m, text);
+    if (r.decision === 'allow') r = browserLaunchOverride(m, commands);
     if (r.decision === 'allow') r = misInner(m, text, ctx, dir);
     if (r.decision === 'allow') r = storedMis(m, ctx, dir, text, env, lost || chdir || (dir !== cwd && !existsSync(dir)));
     if (r.decision === 'allow') r = externalMis(m, dir, text, env);
@@ -174,6 +175,14 @@ const DESTRUCTIVE = [
   [/\btruncate\s+(table\s+)?[a-z_]\w*/i, 'SQL TRUNCATE deletes all rows of a table'],
 ];
 
+function localOnlyBrowser(dir) {
+  try {
+    const s = JSON.parse(readFileSync(join(browseDir(dir), 'state.json'), 'utf8'));
+    process.kill(s.pid, 0);
+    return s.localOnly === true;
+  } catch { return false; }
+}
+
 function careful(ws, ctx, dir, functions) {
   const browse = misSub(ws, functions);
   if (browse?.[0] === 'browse') {
@@ -184,10 +193,15 @@ function careful(ws, ctx, dir, functions) {
     if (hit) return ask(`mis browse ${hit} ${BROWSE_ALWAYS_ASK.get(hit)} — credential access needs your approval every time`);
     if (browse.includes('--remote')) {
       const sub = browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? '';
-      if (sub === 'upload' || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
-        return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services)`);
+      if (sub === 'upload' || uploadsIn(browse.slice(1)) || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
+        return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services), and a page script can send the file anywhere, not only where the form posts`);
       }
       return ask(`mis browse ${sub} --remote reads or changes cookies/storage, runs JavaScript, or browses with imported credentials (logged-in cookies) on a non-local site`);
+    }
+    // M8 R3-1: unconfirmed upload only with the local-only browser running (the daemon refuses it otherwise, so a stale or
+    // forged state file can only skip a question, never let a file out)
+    if (uploadsIn(browse.slice(1)) && !localOnlyBrowser(dir)) {
+      return ask('mis browse upload attaches a local file to a page, and a page script can send the file anywhere (workers, other pages, beacons, WebRTC), not only where the form posts. Unconfirmed upload needs the local-only browser (`mis browse start --local-only`); otherwise use --remote');
     }
   }
   if (browse?.[0] === 'setup' && browse[1] === 'routing' && browse.includes('--write')) return ask('mis setup routing --write changes the project CLAUDE.md; check the dry-run diff first — needs your approval');
@@ -231,9 +245,19 @@ function runOnly(ws, ctx, functions) {
   return allow;
 }
 
-/** M8 R2-3: launch overrides change what the browser runs with (flags, or a wrapper executable that can add any flag). */
-function browserLaunchOverride(mis, text) {
-  if (mis?.[0] !== 'browse' || !/\b(MIS_BROWSE_CHROME_ARGS|MIS_BROWSER|MIS_BROWSER_EXE)=/.test(text)) return allow;
+/**
+ * M8 R2-3/R3-3: launch overrides change what the browser runs with (flags, or a wrapper executable that can add any flag).
+ * Judged on the parsed commands (names unquoted and unescaped by the shell parser): a command's own assignments, bare
+ * assignments (exported by `set -a`) and the names given to export/declare/typeset/readonly/local. shortcut: names built at
+ * run time (printf -v, read, source) are not seen (R2-4); the daemon still refuses flags outside the allow list.
+ */
+const LAUNCH_VARS = new Set(['MIS_BROWSE_CHROME_ARGS', 'MIS_BROWSER', 'MIS_BROWSER_EXE']);
+function browserLaunchOverride(mis, commands) {
+  if (mis?.[0] !== 'browse') return allow;
+  const names = commands.flatMap(({ argv, env = [] }) => [...env,
+    ...(['export', 'declare', 'typeset', 'readonly', 'local'].includes(argv[0]) ? argv.slice(1).filter((w) => !w.startsWith('-')) : [])]
+    .map((w) => w.split('=')[0]));
+  if (!names.some((n) => LAUNCH_VARS.has(n))) return allow;
   return ask('mis browse with a browser launch override (MIS_BROWSE_CHROME_ARGS / MIS_BROWSER): extra flags or another executable can open a DevTools port or turn off web security — needs your approval');
 }
 

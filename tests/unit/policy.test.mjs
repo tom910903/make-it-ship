@@ -231,6 +231,16 @@ test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser exe
   assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
 });
 
+test('M8 R3-3: launch overrides are judged on the parsed environment, not the raw text: split, quoted, escaped and exported names ask', () => {
+  const idle = { ...ctx, activeRun: false }, M = 'node /p/scripts/mis.mjs browse goto x';
+  for (const cmd of [`env MIS_BROWSE_CHROME_""ARGS='--x' ${M}`, `export MIS_BROWSE_CHROME_ARG\\S='--x'; ${M}`, `export 'MIS_BROWSER'=/tmp/w; ${M}`,
+    `env MIS_BROWSER$'_EXE'=/tmp/w ${M}`, `MIS_BROWSER=/x; export MIS_BROWSER; ${M}`, `set -a; MIS_BROWSER=/x; ${M}`, `declare -x MIS_BROWSER=/x; ${M}`,
+    `typeset -x MIS_BROWSER_EXE=/x; ${M}`, `f() { MIS_BROWSER=/x ${M}; }; f`, `sh -c "MIS_BROWSER=/x ${M}"`]) {
+    assert.equal(d(bash(cmd), idle), 'ask', cmd);
+  }
+  for (const cmd of [`echo MIS_BROWSER=/x; ${M}`, `FOO=1 ${M}`, "MIS_BROWSER=/x node -e 1"]) assert.equal(d(bash(cmd), idle), 'allow', cmd);
+});
+
 test('M8: team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {
@@ -314,7 +324,37 @@ test('remote upload: mis browse upload --remote asks (a local file leaves the ma
     assert.equal(r.decision, 'ask', c);
     assert.match(r.reason, /upload|sends? (a )?(local )?files?/i, c);
   }
-  for (const c of [`${MIS} browse goto https://example.com`, `${MIS} browse upload '#f' a.txt`]) assert.equal(d(bash(c), idle), 'allow', c);
+  assert.equal(d(bash(`${MIS} browse goto https://example.com`), idle), 'allow');
+});
+
+test('M8 R3-1: an upload without --remote asks unless this workspace runs the local-only browser (read from the daemon state)', async () => {
+  const { makeRepo } = await import('../helpers.mjs');
+  const { browseDir } = await import('../../scripts/lib/browse/client.mjs');
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const idle = { ...ctx, activeRun: false }, repo = makeRepo(), sd = browseDir(repo);
+  const at = (command) => classify({ tool_name: 'Bash', tool_input: { command }, cwd: repo }, idle);
+  const P = 'node /p/scripts/mis.mjs browse';
+  const uploads = [`${P} upload '#f' a.txt`, `${P} tab-each upload '#f' a.txt`, `${P} chain '[["goto","http://localhost:3"],["upload","#f","a.txt"]]'`];
+  for (const c of uploads) {
+    const r = at(c);
+    assert.equal(r.decision, 'ask', c);
+    assert.match(r.reason, /page script can send the file anywhere[\s\S]*--local-only/, c);
+  }
+  mkdirSync(sd, { recursive: true });
+  const state = (s) => writeFileSync(join(sd, 'state.json'), JSON.stringify(s));
+  state({ pid: process.pid, port: 1, localOnly: false });
+  for (const c of uploads) assert.equal(at(c).decision, 'ask', `normal daemon: ${c}`);
+  state({ pid: process.pid, port: 1, localOnly: true });
+  for (const c of uploads) assert.equal(at(c).decision, 'allow', `local-only daemon: ${c}`);
+  for (const c of uploads.map((u) => `${u} --remote`)) {
+    const r = at(c);
+    assert.equal(r.decision, 'ask', `--remote still asks: ${c}`);
+    assert.match(r.reason, /uploads local files[\s\S]*page script can send the file anywhere/, c);
+  }
+  state({ pid: 2 ** 22 + 7, port: 1, localOnly: true });
+  assert.equal(at(uploads[0]).decision, 'ask', 'a dead daemon (stale state) is not local-only');
+  rmSync(repo, { recursive: true, force: true });
 });
 
 test('M9-F8: debug scope asks (not denies) for edits outside it, with or without a run; files and dirs both count', () => {

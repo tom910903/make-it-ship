@@ -109,7 +109,8 @@ test('interaction: select, check, hover, type, press Enter submits, scroll, view
   assert.equal(ok(b('js', 'innerWidth')).trim(), '375');
   ok(b('viewport', '1280x720'));
   const f = join(out, 'up.txt'); writeFileSync(f, 'hello');
-  ok(b('upload', '#file', f));
+  failed(b('upload', '#file', f), /local-only[\s\S]*--remote/); // M8 R3-1: a normal browser attaches files only with --remote
+  ok(b('upload', '#file', f, '--remote'));
   assert.equal(ok(b('js', 'document.querySelector("#file").files[0].name')).trim(), 'up.txt');
   ok(b('dialog-dismiss'));
   ok(b('click', '#confirm'));
@@ -237,11 +238,12 @@ test('M8 D0: a blob: page and an about:blank popup made by a real site count as 
   assert.equal(ok(b('js', 'document.title')).trim(), 'Local file', 'file: pages stay local');
 });
 
-test('remote upload: sending a file to a non-local page needs --remote (the guard asks); local pages take it directly', () => {
+test('remote upload: sending a file to a non-local page needs --remote (the guard asks); local pages take it directly only in the local-only browser', () => {
   if (!chrome) return blocked(b('upload', '#f', 'x'));
   const f = join(out, 'up2.txt'); writeFileSync(f, 'internal');
   ok(b('goto', `${base}/upload.html`));
-  ok(b('upload', '#f', f));
+  failed(b('upload', '#f', f), /upload without --remote runs only in the local-only browser[\s\S]*start --local-only[\s\S]*--remote/);
+  assert.equal(ok(b('js', 'document.querySelector("#f").files.length')).trim(), '0', 'nothing was attached');
   ok(b('goto', `${base.replace('127.0.0.1', 'shop.test')}/upload.html`));
   failed(b('upload', '#f', f), /upload on a non-local page[\s\S]*--remote/);
   failed(b('chain', JSON.stringify([['upload', '#f', f]])), /--remote/);
@@ -254,6 +256,8 @@ const remoteHits = () => hits().filter((h) => h.host.startsWith('shop.test'));
 
 test('M8 R2-1: a file attached without --remote never leaves the machine, whatever page holds it and however the page sends it', () => {
   if (!chrome) return blocked(b('upload', '#f', 'x'));
+  // M8 R3-1: unconfirmed upload runs only in the local-only browser; the destination check and the hold stay as a second line
+  assert.equal(ok(b('start', '--local-only')).localOnly, true);
   const site = base.replace('127.0.0.1', 'shop.test');
   const f = join(out, 'secret.txt'); writeFileSync(f, 'internal data');
   // the verifier's repro: a local file page whose form posts to a real site
@@ -281,29 +285,32 @@ test('M8 R2-1: a file attached without --remote never leaves the machine, whatev
   ok(b('upload', '#f', f));
   assert.match(ok(b('click', '#send')), /→ http:\/\/127\.0\.0\.1:\d+\/up/);
   assert.ok(hits().some((h) => h.host.startsWith('127.0.0.1') && h.url === '/up' && h.bytes > 0));
+  // a page that holds a file stays held while it is open; the error points to a normal browser and --remote for a deliberate send
+  ok(b('goto', `${base}/jsupload.html`));
+  failed(b('upload', '#f', f), /mis browse stop[\s\S]*upload \.\.\. --remote/);
+  const holder = ok(b('tabs')).find((t) => t.active).id;
+  ok(b('newtab', `${base}/jsupload.html`));
+  assert.equal(ok(b('js', '1 + 1')).trim(), '2', 'a tab opened while a hold is armed starts normally');
+  ok(b('closetab', String(holder)));
+  // even with --remote, the local-only browser cannot reach the site: closing the holder and sending let nothing out
+  ok(b('upload', '#f', f, '--remote'));
+  b('click', '#send');
+  pause(1500);
+  assert.deepEqual(remoteHits(), [], 'the local-only network reaches no remote host, --remote or not');
+  // passive loads of a held page (a remote image) are blocked and logged, but do not fail unrelated commands
+  ok(b('goto', `${base}/img.html`));
+  const logos = () => hits().filter((h) => h.url === '/logo.png').length, before = logos(); // the local-only network never loads it; the hold still logs the attempt
+  ok(b('upload', '#f', f));
+  ok(b('goto', `${base}/img.html`));
+  assert.match(ok(b('console')), /blocked GET http:\/\/shop\.test:\d+\/logo\.png/);
+  assert.equal(logos(), before);
+  // a deliberate send (--remote, the guard asks) goes from a normal browser; ordinary remote browsing works there
+  assert.equal(ok(b('start')).localOnly, false);
   ok(b('goto', `${base}/remoteform.html`));
   ok(b('upload', '#f', f, '--remote'));
   assert.match(ok(b('click', '#send')), /→ http:\/\/shop\.test:\d+\/up/);
   assert.equal(remoteHits().length, 1);
   ok(b('goto', `${site}/next`));
-  // a page that holds a file stays held until its tab closes; the recovery the error names: reopen, close the holder, attach with --remote
-  ok(b('goto', `${base}/jsupload.html`));
-  failed(b('upload', '#f', f), /closetab[\s\S]*--remote/);
-  const holder = ok(b('tabs')).find((t) => t.active).id;
-  ok(b('newtab', `${base}/jsupload.html`));
-  assert.equal(ok(b('js', '1 + 1')).trim(), '2', 'a tab opened while a hold is armed starts normally');
-  ok(b('closetab', String(holder)));
-  ok(b('upload', '#f', f, '--remote'));
-  ok(b('click', '#send'));
-  until(() => hits().some((h) => h.url === '/up?click'), 'the deliberate upload');
-  assert.ok(hits().some((h) => h.url === '/up?onchange' && h.bytes > 0));
-  // passive loads of a held page (a remote image) are blocked and logged, but do not fail unrelated commands
-  ok(b('goto', `${base}/img.html`));
-  const logos = () => hits().filter((h) => h.url === '/logo.png').length, before = logos(); // loaded once before the hold
-  ok(b('upload', '#f', f));
-  ok(b('goto', `${base}/img.html`));
-  assert.match(ok(b('console')), /blocked GET http:\/\/shop\.test:\d+\/logo\.png/);
-  assert.equal(logos(), before);
 });
 
 test('M8 D1: in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {

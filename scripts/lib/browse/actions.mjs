@@ -578,6 +578,9 @@ const HANDLERS = {
     if (!sel || !files.length) throw USAGE_ERR('upload <selector|@ref> <file> [file...]');
     const abs = files.map((f) => resolve(ctx.cwd, f));
     for (const f of abs) if (!existsSync(f)) throw new Error(`no such file: ${f}`);
+    // M8 R3-1: a page script can send an attached file anywhere (workers, other documents, unload beacons, WebRTC), so
+    // without --remote (which the guard asks about) a file is attached only where the network reaches nothing but loopback
+    if (!ctx.remote && !b.localOnly) throw new Error('upload without --remote runs only in the local-only browser: in a normal browser a page script can send the file anywhere. Run `mis browse start --local-only` (only this machine is reachable), or rerun with --remote (the guard asks the user first)');
     const objectId = await b.element(tab, sel);
     if (!ctx.remote) {
       // M8 R2-1: judge where the file goes, not only the page: the form's action and any submit button's formaction
@@ -913,6 +916,8 @@ const HANDLERS = {
   async connect(b, tab, args, ctx) {
     const [o] = flags(args, { '--profile-dir': 1, '--no-extension': true });
     if (b.handoff) throw new Error('a handoff is in progress; run `mis browse resume` first');
+    // a persistent profile is for logging into real sites (unreachable here), and its extensions could change the proxy
+    if (b.localOnly) throw new Error('connect is not available in the local-only browser: it opens a persistent profile for real sites, which local-only mode cannot reach, and that profile\'s extensions could change the proxy. Run `mis browse stop` first');
     const profile = resolve(ctx.cwd, o['--profile-dir'] ?? join(ctx.home, 'chrome-profile'));
     // never the user's own browser data (Chrome 136+ refuses DevTools there, and its logins must not be driven from here);
     // to use those sessions, import one site's cookies with cookie-import-browser
@@ -1055,15 +1060,18 @@ export async function runCommand(b, cmd, args, ctx) {
   // M9-E: the guard asks for these every time, and it cannot see inside chain files, tab-each or browser skills
   if (BROWSE_ALWAYS_ASK.has(cmd) && ctx.inChain) throw new Error(`${cmd} is not allowed inside chain, tab-each or a browser skill; run \`mis browse ${cmd} ...\` on its own so the guard can ask`);
   const seen = b.blocked.length;
-  const result = await gated(b, h, cmd, args, ctx);
-  const blocked = [...new Set(b.blocked.slice(seen))]; // a popup's request is seen by both of its sessions
-  if (blocked.length) {
-    throw new Error(`${cmd} ran, but a page that holds a file attached without --remote made requests to non-local hosts, and the browser blocked them: ${blocked.join('; ')}. `
-      + 'Such a file may only go to local hosts, and the page stays held (non-local requests of every tab are blocked) until its tab is closed. '
-      + 'To send a file on purpose: `newtab <url>`, `closetab <id of the holding tab>`, then `upload ... --remote` in the new tab (the guard asks the user first)');
-  }
+  const result = failIfBlocked(b, seen, cmd, await gated(b, h, cmd, args, ctx));
   record(b, cmd, args); // only commands that succeeded
   return result;
+}
+
+/** Fails `cmd` if a page holding a file attached without --remote made non-local requests (blocked) while it ran. */
+export function failIfBlocked(b, seen, cmd, result) {
+  const blocked = [...new Set(b.blocked.slice(seen))]; // a popup's request is seen by both of its sessions
+  if (!blocked.length) return result;
+  throw new Error(`${cmd} ran, but a page that holds a file attached without --remote made requests to non-local hosts, and the browser blocked them: ${blocked.join('; ')}. `
+    + 'Such a file may only go to local hosts; non-local requests of every tab stay blocked while the page is open. '
+    + 'To send a file to a site on purpose: `mis browse stop`, then `upload ... --remote` in a normal browser (the guard asks the user first)');
 }
 
 /** Where a navigation command is about to go (M9 fix1: checked against imported credentials before it runs). */

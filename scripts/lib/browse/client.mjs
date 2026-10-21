@@ -55,7 +55,8 @@ async function waitForDaemon(dir, ms) {
   throw new Error(`browser daemon did not start within ${ms / 1000}s${tail ? `:\n${tail}` : ''}`);
 }
 
-export async function ensureDaemon(dir) {
+/** The workspace daemon, started if none runs (`localOnly`: the local-only browser; a running daemon keeps its mode). */
+export async function ensureDaemon(dir, { localOnly = false } = {}) {
   const s = readState(dir);
   if (await live(s)) return s;
   const exe = findChrome();
@@ -66,8 +67,8 @@ export async function ensureDaemon(dir) {
   let fd;
   try { fd = openSync(lock, 'wx'); } catch {
     let age = 0;
-    try { age = Date.now() - statSync(lock).mtimeMs; } catch { return ensureDaemon(dir); }
-    if (age > 40000) { rmSync(lock, { force: true }); return ensureDaemon(dir); }
+    try { age = Date.now() - statSync(lock).mtimeMs; } catch { return ensureDaemon(dir, { localOnly }); }
+    if (age > 40000) { rmSync(lock, { force: true }); return ensureDaemon(dir, { localOnly }); }
     return waitForDaemon(dir, 40000); // another call is starting it
   }
   try {
@@ -81,7 +82,7 @@ export async function ensureDaemon(dir) {
     }
     const logFd = openSync(join(dir, 'daemon.log'), 'a');
     // detached with file stdio: a pipe would keep the caller (e.g. spawnSync) waiting for the daemon to exit
-    spawn(process.execPath, [DAEMON, dir], { detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env, MIS_BROWSER_EXE: exe } }).unref();
+    spawn(process.execPath, [DAEMON, dir, ...(localOnly ? ['--local-only'] : [])], { detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env, MIS_BROWSER_EXE: exe } }).unref();
     closeSync(logFd);
     return await waitForDaemon(dir, 30000);
   } finally { closeSync(fd); rmSync(lock, { force: true }); }

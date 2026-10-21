@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Browser daemon: one per workspace. Started detached by client.mjs; serves 127.0.0.1:<random port> with a bearer token.
-// Usage: node daemon.mjs <stateDir>. Exits on idle, on `stop`, or when the browser dies (no self-healing; the next call restarts it).
+// Usage: node daemon.mjs <stateDir> [--local-only]. Exits on idle, on `stop`, or when the browser dies (no self-healing; the next call restarts it).
 import { createServer } from 'node:http';
+import { createServer as tcpServer } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { writeFileSync, renameSync, rmSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Browser } from './browser.mjs';
-import { runCommand, printPdf } from './actions.mjs';
+import { runCommand, printPdf, failIfBlocked } from './actions.mjs';
 import { findChrome, chromeArgs } from './chrome.mjs';
 import { homeDir } from '../home.mjs';
 
@@ -16,12 +17,16 @@ const IDLE_MS = Number(process.env.MIS_BROWSE_IDLE_MS) || 30 * 60 * 1000;
 const extraArgs = chromeArgs(process.env.MIS_BROWSE_CHROME_ARGS);
 const exe = process.env.MIS_BROWSER_EXE || findChrome();
 const token = randomBytes(24).toString('hex');
-const browser = new Browser({ exe, extraArgs, headlessOnly: process.env.MIS_BROWSE_HEADLESS_ONLY === '1' });
+// M8 R3-1: local-only = Chrome's only proxy is this socket, which drops every connection; owned (not a closed port) so no
+// other local process can take the port and receive the traffic. It lives and dies with the daemon.
+const sink = process.argv.includes('--local-only') ? tcpServer((s) => s.destroy()) : null;
+if (sink) await new Promise((r) => sink.listen(0, '127.0.0.1', r));
+const browser = new Browser({ exe, extraArgs, headlessOnly: process.env.MIS_BROWSE_HEADLESS_ONLY === '1', localOnly: sink?.address().port ?? null });
 const log = (m) => process.stderr.write(`[${new Date().toISOString()}] ${m}\n`);
 let server, idleTimer, queue = Promise.resolve(), stopping = false;
 
 function writeState() {
-  const s = { pid: process.pid, port: server.address().port, token, chromePid: browser.proc?.pid ?? null, browser: exe, profile: browser.profile, startedAt: started };
+  const s = { pid: process.pid, port: server.address().port, token, chromePid: browser.proc?.pid ?? null, browser: exe, profile: browser.profile, localOnly: !!sink, startedAt: started };
   const tmp = `${stateFile}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(s, null, 2), { mode: 0o600 });
   renameSync(tmp, stateFile);
@@ -46,7 +51,7 @@ function touch() {
 function status() {
   const t = browser.tabs.get(browser.active);
   return { running: true, pid: process.pid, port: server.address().port, chromePid: browser.proc?.pid ?? null, browser: exe,
-    mode: browser.handoff ? 'handoff' : browser.connected ? 'connected' : browser.headless ? 'headless' : 'headed', handoff: browser.handoff, tabs: browser.tabs.size,
+    localOnly: !!sink, mode: browser.handoff ? 'handoff' : browser.connected ? 'connected' : browser.headless ? 'headless' : 'headed', handoff: browser.handoff, tabs: browser.tabs.size,
     ...(browser.connected ? { profile: browser.connected.profile, extensionId: browser.extensionId } : {}), watching: !!browser.watch,
     activeTab: t?.id ?? null, url: t?.url ?? null, viewport: browser.viewport, idleShutdownMin: Math.round(IDLE_MS / 600) / 100, stateDir: dir, startedAt: started };
 }
@@ -95,7 +100,9 @@ try {
       queue = queue.then(async () => {
         try {
           const before = browser.proc?.pid;
-          const result = body.cmd === '_render-pdf' ? await renderPdf(body.args[0])
+          // _render-pdf skips runCommand, so it gets the same check for requests a held page made meanwhile
+          const seen = browser.blocked.length;
+          const result = body.cmd === '_render-pdf' ? failIfBlocked(browser, seen, 'pdf', await renderPdf(body.args[0]))
             : await runCommand(browser, body.cmd, body.args ?? [], { cwd: body.cwd, remote: !!body.remote, inChain: false, data: body.data, stateDir: dir, home: homeDir() });
           if (browser.proc?.pid !== before) writeState(); // handoff/resume relaunched the browser
           reply(200, { ok: true, result });

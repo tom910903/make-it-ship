@@ -3,6 +3,7 @@ import { statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join, delimiter } from 'node:path';
 import { homedir } from 'node:os';
+import { isLocalOrigin } from './util.mjs';
 
 const MAC = ['Google Chrome.app/Contents/MacOS/Google Chrome', 'Chromium.app/Contents/MacOS/Chromium',
   'Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'];
@@ -22,17 +23,29 @@ export function findChrome(env = process.env) {
   return candidates.find(isFile) ?? null;
 }
 
-// M8 R2-3: flags that would reopen a DevTools port, drop the same-origin policy, point at a real profile, load code or
-// reroute traffic. Matched on the switch name, any number of leading dashes, any case.
-const DENIED = /^(remote-debugging-.*|remote-allow-origins|disable-web-security|user-data-dir|profile-directory|load-extension|disable-extensions-except|allow-file-access-from-files|proxy-.*|disable-site-isolation-.*|disable-features)$/;
+// M8 R3-3: an allow list (fail closed): display, language and rendering flags only. Anything else (a DevTools port, web
+// security, sandbox, certificates, helper executables, proxies, profiles, extensions, features) is refused.
+const ALLOWED = new Set(['lang', 'accept-lang', 'window-size', 'force-device-scale-factor', 'force-color-profile', 'font-render-hinting',
+  'disable-gpu', 'disable-dev-shm-usage', 'disable-lcd-text', 'hide-scrollbars', 'mute-audio', 'autoplay-policy', 'force-prefers-reduced-motion',
+  'host-resolver-rules']);
+const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i;
+// host-resolver-rules: MAP rules only. A name may point at loopback (or nowhere); only a non-local name without wildcards may
+// point elsewhere (like DNS would). Pointing localhost at another machine would make a remote site look local (R3-3).
+const rulesOk = (v) => v.split(',').every((r) => {
+  const [kind, pattern, target, ...rest] = r.trim().split(/\s+/);
+  if (kind !== 'MAP' || !pattern || !target || rest.length) return false;
+  return target === '~NOTFOUND' || LOOPBACK.test(target.replace(/:\d+$/, '')) || (!pattern.includes('*') && !isLocalOrigin(`http://${pattern}`));
+});
 
-/** MIS_BROWSE_CHROME_ARGS → extra Chrome flags (split before each "--"); throws on anything risky. */
+/** MIS_BROWSE_CHROME_ARGS → extra Chrome flags (split before each "--"); throws on anything not on the allow list. */
 export function chromeArgs(value = '') {
   const args = value.trim() ? value.trim().split(/\s+(?=-)/) : [];
   for (const a of args) {
     if (!a.startsWith('-')) throw new Error(`MIS_BROWSE_CHROME_ARGS: "${a}" is not a flag (Chrome would open it as a page at startup)`);
-    const name = a.replace(/^-+/, '').split('=')[0].toLowerCase();
-    if (DENIED.test(name)) throw new Error(`MIS_BROWSE_CHROME_ARGS: ${a} is not allowed (it would weaken the browser's isolation from this machine and other sites)`);
+    const [name, ...v] = a.replace(/^-+/, '').split('=');
+    if (!ALLOWED.has(name) || (name === 'host-resolver-rules' && !rulesOk(v.join('=')))) {
+      throw new Error(`MIS_BROWSE_CHROME_ARGS: ${a} is not allowed (only display, language and rendering flags are, and host-resolver-rules that map names to loopback or map non-local names: ${[...ALLOWED].join(', ')})`);
+    }
   }
   return args;
 }
@@ -43,7 +56,23 @@ export function chromeArgs(value = '') {
  */
 export const OWNER_MARK = '--mis-browse-owner'; // ignored by Chrome; lets client.mjs recognize (and only kill) browsers it started
 
-export async function launchChrome({ exe, userDataDir, headless, extraArgs = [], extensions = false }) {
+/**
+ * M8 R3-1/R3-2 local-only mode: nothing but loopback is reachable. Every connection goes to `proxyPort` (a socket the daemon
+ * owns that drops each connection), except loopback, listed explicitly because Chrome's implicit bypass also covers
+ * link-local addresses (measured); no name resolves except loopback ones (also stops DNS-name exfiltration, e.g.
+ * dns-prefetch; IP literals are covered too), and WebRTC may not send UDP outside the proxy (measured: the
+ * --force-webrtc-ip-handling-policy spelling did not stop STUN/TURN UDP on Chrome 156; this one did). The user's validated
+ * host rules go first in the one merged rule set (Chrome uses the last --host-resolver-rules given); these flags go last.
+ */
+export function localOnlyArgs(proxyPort, extraArgs) {
+  const rules = (a) => /^-+host-resolver-rules=/.test(a);
+  const user = extraArgs.filter(rules).map((a) => a.slice(a.indexOf('=') + 1));
+  return [...extraArgs.filter((a) => !rules(a)), `--proxy-server=http://127.0.0.1:${proxyPort}`, '--proxy-bypass-list=<-loopback>;localhost;*.localhost;127.0.0.1;[::1]',
+    `--host-resolver-rules=${[...user, 'MAP * ~NOTFOUND', 'EXCLUDE localhost', 'EXCLUDE *.localhost', 'EXCLUDE 127.0.0.1', 'EXCLUDE ::1'].join(', ')}`,
+    '--webrtc-ip-handling-policy=disable_non_proxied_udp'];
+}
+
+export async function launchChrome({ exe, userDataDir, headless, extraArgs = [], extensions = false, localOnly = null }) {
   const args = [OWNER_MARK, `--user-data-dir=${userDataDir}`, '--remote-debugging-pipe', '--no-first-run', '--no-default-browser-check',
     // no phoning home: the org forbids sending data out, and background traffic would pollute `network`/`perf`
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
@@ -52,7 +81,7 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [],
     '--password-store=basic', '--use-mock-keychain', ...(extensions ? ['--enable-unsafe-extension-debugging'] : ['--disable-extensions']),
     // cross-origin iframes stay in-process so `frame` can reach them through one session
     '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process', '--disable-site-isolation-trials',
-    ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...extraArgs, 'about:blank'];
+    ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...(localOnly ? localOnlyArgs(localOnly, extraArgs) : extraArgs), 'about:blank'];
   const proc = spawn(exe, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], detached: false });
   const cdp = new CDP(proc.stdio[3], proc.stdio[4]);
   const died = new Promise((_, reject) => {
