@@ -39,7 +39,10 @@ try {
   let at = file ? resolve(cwd, String(file)) : cwd;
   while (file && !existsSync(at) && dirname(at) !== at) at = dirname(at);
   if (file && existsSync(at) && !statSync(at).isDirectory()) at = dirname(at);
-  const r = classify(input, context(at));
+  // only another worktree of the same repo; .git/ internals or a nested repo keep the session's context
+  const gitDir = (d) => { try { return execFileSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'], { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[1]; } catch { return null; } };
+  const own = file ? gitDir(at) : null;
+  const r = classify(input, context(own && own === gitDir(cwd) ? at : cwd));
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

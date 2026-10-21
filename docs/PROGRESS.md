@@ -133,6 +133,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 
 ## FIXES (사후)
 - (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 둔 채 `.worktrees/<run>-T<n>/…` 파일을 편집하면, guard가 그 task가 소유한 파일도 계획 범위 밖으로 판정해 ask를 냈다. **수정함.** 이제 파일 편집은 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 범위를 판정한다(`scripts/guard.mjs`). 테스트: `tests/integration/guard.test.mjs` "a file inside a task worktree is scoped by that worktree". npm test 320/320.
+- (사후 재검증 D-1, MEDIUM, 2026-10-21) 위 수정이 회귀를 만들었다. run 진행 중 `.git/` 내부(`hooks/pre-commit`, `config`) 파일과 저장소 안 중첩 저장소 파일의 편집이 ask에서 allow로 바뀌었다. 원인은 파일 위치의 컨텍스트가 run 없음으로 잡힌 것이다. **수정함.** 파일 기준 컨텍스트는 그 파일이 세션과 같은 git 저장소(같은 `--git-common-dir`)의 worktree 안에 있을 때만 쓴다. 그 밖의 경우는 세션 cwd 기준으로 판정한다. 테스트: `guard.test.mjs` "files under .git/ or in a nested repo keep the session run scope". 보고서: `docs/milestones/POST-FINAL-report.md`.
 
 ## RISKS
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.

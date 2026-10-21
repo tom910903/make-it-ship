@@ -109,3 +109,17 @@ test('guard: a file inside a task worktree is scoped by that worktree, whatever 
   assert.equal(w(wt, `${dir}/other.js`), 'ask', 'worktree cwd, main-repo file outside the plan');
   assert.equal(w(dir, `${dir}/src/b.js`), 'allow', 'main repo keeps the whole plan scope');
 });
+
+test('guard: files under .git/ or in a nested repo keep the session run scope (not an unrelated context without a run)', () => {
+  const dir = makeRepo();
+  createRun(dir, { input: { kind: 'text', text: 'x' } });
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'plan', 'set', '-'], { cwd: dir, encoding: 'utf8', env,
+    input: JSON.stringify({ goal: 'g', plannedFiles: ['src/**'], tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) });
+  assert.equal(spawnSync('git', ['init', '-q', `${dir}/vendor/lib`]).status, 0);
+  const w = (p) => run({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: p }, cwd: dir }).out?.permissionDecision ?? 'allow';
+  assert.equal(w(`${dir}/.git/hooks/pre-commit`), 'ask');
+  assert.equal(w(`${dir}/.git/config`), 'ask');
+  assert.equal(w(`${dir}/vendor/lib/x.js`), 'ask');
+  assert.equal(w(`${dir}/src/a.js`), 'allow');
+});

@@ -35,6 +35,7 @@ test('bench: median of N runs, compared with the first measurement in the run; r
   write(dir, { slow: '1' });
   const slow = ok(mis(dir, ['bench', 'perf', '--runs', '3']));
   assert.equal(slow.status, 'REGRESSION');
+  assert.equal(slow.baselineMs, 1);
   assert.ok(slow.deltaPct > 50);
   const md = readFileSync(join(dir, ok(mis(dir, ['report'])).path), 'utf8');
   assert.match(md, /성능 회귀: perf/);
