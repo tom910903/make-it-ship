@@ -49,7 +49,8 @@ after(() => {
   rmSync(HOME, { recursive: true, force: true });
 });
 
-const until = (fn, what, ms = 20000) => {
+// event waits end as soon as the event happens; the bound only matters under heavy load (load avg 20-60 exceeded 20 s)
+const until = (fn, what, ms = 120000) => {
   const end = Date.now() + ms;
   for (;;) { const v = fn(); if (v) return v; if (Date.now() > end) assert.fail(`timed out waiting for ${what}`); pause(200); }
 };

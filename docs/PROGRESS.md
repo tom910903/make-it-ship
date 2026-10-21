@@ -195,6 +195,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (해석, Spec 본문은 수정하지 않음) §4는 `agents/`가 모두 읽기 전용이라고 적었다. 그러나 M3 병렬 실행(§11 M3, §14 parallel)에는 쓰기 가능한 작업자가 필요하다. 그래서 `agents/implementer.md`를 추가했다. 도구는 허용목록(Read, Write, Edit, Grep, Glob, Bash)으로 지정해 Agent와 MCP를 차단했다(ADR-013 방식). 쓰기는 자기 worktree의 task 파일로 제한되며, guard가 범위 밖 편집에 ask를 건다.
 
 ## FIXES (사후)
+- (M9 r4 남은 위험 1·2) `sudo --chdir <dir>`(띄어 쓴 형태)와 `env -vC`/`-iC`/`-0C` 같은 묶음 짧은 옵션, `env -C … -S`도 디렉터리가 바뀌는 것으로 보고 ask한다(`shell.mjs` WRAPPERS, 테스트 `policy-m9de`).
 - (NH-4 자동 확인 중 발견, LOW·안전 쪽) 메인 세션이 main 저장소를 cwd로 둔 채 `.worktrees/<run>-T<n>/…` 파일을 편집하면, guard가 그 task가 소유한 파일도 계획 범위 밖으로 판정해 ask를 냈다. **수정함.** 이제 파일 편집은 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 범위를 판정한다(`scripts/guard.mjs`). 테스트: `tests/integration/guard.test.mjs` "a file inside a task worktree is scoped by that worktree". npm test 320/320.
 - (사후 재검증 D-1, MEDIUM, 2026-10-21) 위 수정이 회귀를 만들었다. run 진행 중 `.git/` 내부(`hooks/pre-commit`, `config`) 파일과 저장소 안 중첩 저장소 파일의 편집이 ask에서 allow로 바뀌었다. 원인은 파일 위치의 컨텍스트가 run 없음으로 잡힌 것이다. **수정함.** 파일 기준 컨텍스트는 그 파일이 세션과 같은 git 저장소(같은 `--git-common-dir`)의 worktree 안에 있을 때만 쓴다. 그 밖의 경우는 세션 cwd 기준으로 판정한다. 테스트: `guard.test.mjs` "files under .git/ or in a nested repo keep the session run scope". 보고서: `docs/milestones/POST-FINAL-report.md`.
 - (M9 r3, 2026-10-21) **수정함.** R3-DE-1(MEDIUM): `mis health`와 `session create` 기준선이 저장된 check를 MIS_CLI 없이 실행했다 → `MIS_CLI_ENV()`(CI=1 유지). N1(LOW): 상태줄 소유 판별이 경로에 `make-it-ship`을 요구했다 → 현재 `statusLineCommand()`와 정확히 같으면 우리 것으로 본다(옛 경로용 정규식은 유지). 권고 항목: `env -C`/`--chdir`/`sudo -D` 뒤 저장된 명령을 읽는 mis는 cd $X처럼 ask. uninstall은 프로젝트 CLAUDE.md의 `## Skill routing` 절을 지우지 않고 `routingNote`로 알린다. 테스트: `m9-fix-de` N2(health·session create 추가), `mis-lifecycle` A6 setup→uninstall 왕복(기존 상태줄 복구, 디렉터리 이름 `mis-m9r3`에서 통과), `policy-m9de` env -C. 보고서: `docs/milestones/M9-report-r3-{AF,DE}.md`.
@@ -204,6 +205,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 - (M8 3차 R3-4, LOW) visual-verdict 정렬 범위를 ±8px로 넓혔다(px당 1점). 그래서 5px 이동은 95점 pass, 8px 92점 pass, 9px는 8px까지만 정렬돼 69점 revise. 크기 차 허용(loose)은 2×maxShift와 이미지의 10% 중 작은 값까지.
 
 ## RISKS
+- (2026-10-21, M9 r4 이후) 로컬 전용 브라우저 통합 테스트(`mis-browse-local-only`)는 CPU 여유가 있어야 통과한다. 코어 수의 2배로 `yes`를 돌려 CPU를 포화시키면 Chrome 렌더러가 실행되지 않는다. 그러면 탭을 닫을 때의 pagehide beacon(브라우저가 보장하지 않는 동작)이 나가지 않아 "공격이 실행됐다"는 마커가 오지 않고, CDP 호출도 30초를 넘겨 실패한다. 이때도 외부 수신 바이트는 0이었다. 다른 프로세스로 load가 130~160일 때는 4/4 통과했다. Chrome 시작 대기는 20초에서 60초로, 데몬 대기는 30초에서 90초로, 테스트 이벤트 대기는 20초에서 120초로 늘렸다.
 - (M7 N8·N9) run lock 회수: 회수자는 `.reclaim` 표식으로 직렬화되고, 지우기 전에 lock 내용과 inode가 판단 시점과 같은지 확인한다. pid가 없는(빈·깨진) lock은 inode 번호를 곧바로 재사용하는 파일시스템(ext4 등)에서도 새 lock을 지우지 않도록, 지우는 순간에도 수정 시각이 5초보다 오래됐는지 다시 확인한다(`tests/unit/state.test.mjs` N9-fs). 남은 이론상 위험: 회수자가 `.reclaim`을 쥔 채 5초 넘게 멈추거나(SIGSTOP) 죽으면 다른 회수자가 표식을 지우고 겹칠 수 있다. 측정: M7 5차 검증에서 e30ce81 기준 스트레스 160회(성공 쓰기 1398건, SIGKILL 292건) 유실 0건, N9 순서 재현 200회 새 lock 삭제 0건(macOS APFS). 실제 Linux에서는 측정하지 않았다.
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
 - (M1 검증 L-1) 헤드리스 첫 실행에서 모델이 설정 확인을 기다리며 멈추는 경우가 많다(비결정적). 확인 요청은 Spec에 부합하므로 수용한다. 무인 실행 시 요청에 "질문 없이 진행"을 명시.

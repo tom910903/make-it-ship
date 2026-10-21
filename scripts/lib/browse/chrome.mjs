@@ -89,7 +89,7 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [],
     proc.once('exit', (code) => reject(new Error(`browser exited during start (code ${code})`)));
   });
   try {
-    await Promise.race([cdp.send('Browser.getVersion', {}, undefined, 20000), died]);
+    await Promise.race([cdp.send('Browser.getVersion', {}, undefined, 60000), died]); // a loaded machine can take > 20 s to start Chrome
   } catch (e) {
     proc.kill('SIGKILL'); cdp.close();
     throw new Error(/timed out/.test(e.message) ? 'browser did not answer on its DevTools pipe within 20s' : e.message);

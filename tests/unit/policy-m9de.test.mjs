@@ -79,7 +79,10 @@ test('M9 r3: env -C / --chdir (and sudo -D) move where a stored-command mis runs
   assert.equal(v(r, `cd other && ${M} autoresearch eval m1`).decision, 'ask');
   for (const cmd of [`env -C other ${M} autoresearch eval m1`, `env --chdir other ${M} autoresearch eval m1`, `env --chdir=other ${M} autoresearch eval m1`,
     `env -Cother ${M} autoresearch eval m1`, `env -u X -C other FOO=1 ${M} autoresearch eval m1`, `sudo -D other ${M} autoresearch eval m1`,
-    `env -C other sh -c '${M} autoresearch eval m1'`]) {
+    `env -C other sh -c '${M} autoresearch eval m1'`,
+    // M9 r4: spaced sudo --chdir, clustered short options, -C then -S
+    `sudo --chdir other ${M} autoresearch eval m1`, `env -vC other ${M} autoresearch eval m1`, `env -iC other ${M} autoresearch eval m1`,
+    `env -0C other ${M} autoresearch eval m1`, `env -C other -S '${M} autoresearch eval m1'`]) {
     const x = v(r, cmd); assert.equal(x.decision, 'ask', cmd); assert.match(x.reason, /cannot tell which repository/, cmd);
   }
   assert.equal(v(r, `env -C other true && ${M} autoresearch eval m1`).decision, 'allow', 'env -C moves only its own command');

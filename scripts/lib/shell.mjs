@@ -203,7 +203,7 @@ function functionDefs(src) {
 
 // Wrapper programs and which of their options take a value.
 const WRAPPERS = {
-  sudo: ['-u', '-g', '-h', '-p', '-C', '-U', '-r', '-t', '-T', '-D', '-R', '--user', '--group'],
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-U', '-r', '-t', '-T', '-D', '-R', '--user', '--group', '--chdir'],
   env: ['-u', '-C', '--unset', '--chdir'],
   nice: ['-n', '--adjustment'],
   time: ['-f', '-o', '--format', '--output'],
@@ -234,9 +234,19 @@ export function normalize(argv, vars, heredoc) {
       a.shift();
       while (a[0]?.startsWith('-')) {
         const f = a.shift();
-        if (name === 'env' && f === '-S') { return { argv: [], script: a.join(' ') }; }
+        if (name === 'env' && f === '-S') { return { argv: [], env, chdir, script: a.join(' ') }; }
         if ((name === 'env' && /^(-C|--chdir(=|$))/.test(f)) || (name === 'sudo' && /^(-D|--chdir(=|$))/.test(f))) chdir = true;
-        if (WRAPPERS[name].includes(f)) a.shift();
+        if (WRAPPERS[name].includes(f)) { a.shift(); continue; }
+        // clustered short options (`env -vC dir`, `env -iS 'cmd'`): the first value-taking letter takes the rest or the next word
+        const cl = /^-([A-Za-z0-9]{2,})$/.exec(f);
+        if (cl && (name === 'env' || name === 'sudo')) {
+          for (let i = 0; i < cl[1].length; i++) {
+            const opt = `-${cl[1][i]}`, last = i === cl[1].length - 1;
+            if ((name === 'env' && opt === '-C') || (name === 'sudo' && opt === '-D')) chdir = true;
+            if (name === 'env' && opt === '-S') return { argv: [], env, chdir, script: (last ? '' : cl[1].slice(i + 1) + ' ') + a.join(' ') };
+            if (WRAPPERS[name].includes(opt)) { if (last) a.shift(); break; }
+          }
+        }
         if (name === 'nice' && /^-\d+$/.test(f)) continue;
       }
       if (name === 'timeout' && a.length) a.shift(); // DURATION

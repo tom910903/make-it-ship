@@ -84,7 +84,7 @@ export async function ensureDaemon(dir, { localOnly = false } = {}) {
     // detached with file stdio: a pipe would keep the caller (e.g. spawnSync) waiting for the daemon to exit
     spawn(process.execPath, [DAEMON, dir, ...(localOnly ? ['--local-only'] : [])], { detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env, MIS_BROWSER_EXE: exe } }).unref();
     closeSync(logFd);
-    return await waitForDaemon(dir, 30000);
+    return await waitForDaemon(dir, 90000); // longer than the 60 s Chrome start bound
   } finally { closeSync(fd); rmSync(lock, { force: true }); }
 }
 
