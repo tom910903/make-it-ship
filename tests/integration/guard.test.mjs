@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { makeRepo, GUARD, ROOT } from '../helpers.mjs';
 import { createRun } from '../../scripts/lib/state.mjs';
 
@@ -122,4 +124,68 @@ test('guard: files under .git/ or in a nested repo keep the session run scope (n
   assert.equal(w(`${dir}/.git/config`), 'ask');
   assert.equal(w(`${dir}/vendor/lib/x.js`), 'ask');
   assert.equal(w(`${dir}/src/a.js`), 'allow');
+});
+
+test('guard: mis freeze limits edits to one directory without a run; mis unfreeze lifts it', () => {
+  const dir = makeRepo({ 'src/a.js': '', 'README.md': '' });
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  const m = (...args) => spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, ...args], { cwd: dir, encoding: 'utf8', env });
+  const w = (p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: p }, cwd: dir }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(m('freeze', 'nope').status, 1, 'missing directory is rejected');
+  assert.equal(JSON.parse(m('freeze', 'src').stdout).freezeDir, `${dir}/src`);
+  assert.equal(w(`${dir}/src/a.js`), 'allow');
+  assert.equal(w(`${dir}/README.md`), 'deny');
+  assert.equal(JSON.parse(m('unfreeze').stdout).freezeDir, null);
+  assert.equal(w(`${dir}/README.md`), 'allow');
+});
+
+test('M6 D10: freeze follows symlinks (no escape through a link inside the frozen dir; links to inside are fine)', () => {
+  const dir = makeRepo({ 'src/a.js': '', 'outside/b.js': '' });
+  symlinkSync(join(dir, 'outside'), join(dir, 'src', 'escape'));
+  const alias = join(mkdtempSync(join(tmpdir(), 'mis-alias-')), 'repo');
+  symlinkSync(dir, alias);
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'freeze', 'src'], { cwd: dir, encoding: 'utf8', env });
+  const w = (p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p }, cwd: dir }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(w(join(dir, 'src', 'escape', 'pwn.js')), 'deny', 'link inside src pointing outside');
+  assert.equal(w(join(alias, 'src', 'new.js')), 'allow', 'symlinked path to a frozen file is inside');
+});
+
+test('M6 R2-7: freeze applies only to the repo it was set in; broken links do not escape it', () => {
+  const dir = makeRepo({ 'src/a.js': '' }), other = makeRepo({ 'b.js': '' });
+  symlinkSync(join(mkdtempSync(join(tmpdir(), 'mis-out-')), 'nowhere.js'), join(dir, 'src', 'dangling.js'));
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'freeze', 'src'], { cwd: dir, encoding: 'utf8', env });
+  const w = (cwd, p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p }, cwd }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  assert.equal(w(other, join(other, 'b.js')), 'allow', 'another repository is not frozen');
+  assert.equal(w(dir, join(dir, 'README.md')), 'deny');
+  assert.equal(w(dir, join(dir, 'src', 'dangling.js')), 'deny', 'dangling link pointing outside');
+});
+
+test('M6 R3-4: in a session inside the frozen repo, writes anywhere outside the frozen dir are denied (other repos, outside paths, links)', () => {
+  const dir = makeRepo({ 'src/a.js': '' }), other = makeRepo({ 'b.js': '' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-out-'));
+  symlinkSync(outside, join(dir, 'src', 'escape'));
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.NODE_TEST_CONTEXT;
+  spawnSync(process.execPath, [`${ROOT}/scripts/mis.mjs`, 'freeze', 'src'], { cwd: dir, encoding: 'utf8', env });
+  const w = (cwd, p) => {
+    const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p }, cwd }), encoding: 'utf8', env });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow';
+  };
+  for (const p of [join(dir, 'src', 'escape', 'p.js'), join(outside, 'x.js'), join(other, 'b.js'), join(dir, '..', 'zz.js')]) assert.equal(w(dir, p), 'deny', p);
+  assert.equal(w(dir, join(dir, 'src', 'ok.js')), 'allow');
+  assert.equal(w(other, join(other, 'b.js')), 'allow', 'a session in another repo is not frozen');
 });

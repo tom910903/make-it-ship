@@ -159,3 +159,17 @@ test('the repository is its own marketplace: the root plugin is listed under the
   assert.ok(m.owner?.name);
   assert.deepEqual(m.plugins.map((p) => [p.name, p.source]), [[JSON.parse(read('.claude-plugin/plugin.json')).name, '.']]);
 });
+
+test('M6 always-on layer is wired: hooks for every event, skills, notices, README', () => {
+  const hooks = JSON.parse(read('hooks/hooks.json')).hooks;
+  for (const ev of ['SessionStart', 'SubagentStart', 'UserPromptSubmit', 'Stop', 'PostToolUse', 'PostToolUseFailure', 'PreCompact', 'SessionEnd']) {
+    const cmd = hooks[ev]?.[0]?.hooks?.[0]?.command ?? '';
+    assert.match(cmd, new RegExp(`scripts/hooks\\.mjs" ${ev}$`), ev);
+  }
+  for (const s of ['loop', 'style', 'cancel']) assert.match(read(`skills/${s}/SKILL.md`), new RegExp(`^---\\nname: ${s}\\n`));
+  const notices = read('THIRD_PARTY_NOTICES.md');
+  for (const p of ['oh-my-claudecode', 'Superpowers', 'Ponytail', 'gstack']) assert.match(notices, new RegExp(p));
+  const readme = read('README.md');
+  assert.match(readme, /## Always on/);
+  assert.match(readme, /asked about \*\*at any time\*\*/);
+});

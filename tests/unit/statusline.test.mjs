@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { renderHud } from '../../scripts/statusline.mjs';
 import { makeRepo, mis, ROOT } from '../helpers.mjs';
 
@@ -18,13 +20,20 @@ test('HUD one-liner format', () => {
   assert.equal(line, 'MIS ▸ EXECUTING · T1/3 · unit✓ lint✗ e2e~ build· · FAILED');
 });
 
-test('statusline script: prints the run line for the session cwd, nothing without a run', () => {
+test('statusline script: idle line without a run, run line plus extras with one', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
-  const sl = (cwd) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd }), encoding: 'utf8' });
-  assert.equal(sl(dir).stdout, '');
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')), CLAUDE_CODE_SESSION_ID: 'S' };
+  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, session_id: 'S', ...extra }), encoding: 'utf8', env });
+  assert.equal(sl(dir).stdout, 'MIS ▸ idle · style full · main\n');
   mis(dir, ['start', '--input', 'x']);
-  assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL\n?$/);
+  assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL · style full · main\n?$/);
+  mis(dir, ['loop', 'start', '--max', '7', 'x'], { env });
+  mis(dir, ['style', 'ultra'], { env });
+  assert.match(sl(dir, { model: { display_name: 'Opus 5.5' } }).stdout, / · style ULTRA · loop 0\/7 · main · Opus 5\.5\n$/);
+  mis(dir, ['style', 'off'], { env });
+  assert.doesNotMatch(sl(dir).stdout, /style/);
   assert.equal(sl('/').status, 0, 'non-repo cwd does not crash');
+  assert.match(sl('/').stdout, /^MIS ▸ idle/);
 });
 
 test('mis init proposes the HUD statusLine (user applies it)', () => {
@@ -46,4 +55,32 @@ test('doctor states that token budgets are not enforceable by a plugin', () => {
   const tb = r.json.checks.find((c) => c.name === 'token-budget');
   assert.equal(tb.status, 'warn');
   assert.match(tb.detail, /not supported/);
+});
+
+test('M6 D11: freeze shows in the line; statusLine.chain appends another status line command', () => {
+  const dir = makeRepo({ 'src/a.js': '' });
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  mis(dir, ['freeze', 'src'], { env });
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('OTHER '+JSON.parse(s).model.display_name))\"" } }));
+  const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, model: { display_name: 'M' } }), encoding: 'utf8', env });
+  assert.match(r.stdout, /· frozen src · /);
+  assert.match(r.stdout, / \| OTHER M\n$/);
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: 'exit 3' } }));
+  const bad = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
+  assert.match(bad.stdout, /^MIS ▸ idle/, 'a failing chained command is ignored');
+});
+
+test('M6 R2-4: a chain that points back at this status line does not recurse', () => {
+  const dir = makeRepo();
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const self = `MIS_STATE_HOME=${home} node ${join(ROOT, 'scripts', 'statusline.mjs')}`;
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: self } }));
+  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env, timeout: 10000 });
+  assert.ok(Date.now() - t0 < 3000, 'returns quickly');
+  assert.match(r.stdout, /^MIS ▸ idle .* \| MIS ▸ idle[^|]*\n$/, 'chained once, not again');
+  const ps = spawnSync('pgrep', ['-f', home], { encoding: 'utf8' });
+  assert.equal(ps.stdout.trim(), '', 'no leftover processes');
 });

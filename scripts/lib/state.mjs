@@ -1,11 +1,11 @@
 // Run state (Spec §5): JSON state + JSONL events under <git-common-dir>/make-it-ship/.
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, existsSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, existsSync, openSync, closeSync, unlinkSync , statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 export function stateRoot(cwd) {
-  const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8' }).trim();
+  const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   return join(resolve(cwd, common), 'make-it-ship');
 }
 
@@ -97,13 +97,20 @@ export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS
   for (;;) {
     try {
       const fd = openSync(lock, 'wx');
-      writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-      closeSync(fd);
+      try { writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); }
+      catch (w) { try { unlinkSync(lock); } catch { /* gone */ } throw w; }
+      finally { closeSync(fd); }
       break;
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
-      const pid = holder(lock);
-      if (pid && !pidAlive(pid)) { try { unlinkSync(lock); } catch { /* raced */ } run.reclaimedLock = { pid }; continue; }
+      const seen = readLock(lock);
+      const seenIno = (() => { try { return statSync(lock).ino; } catch { return null; } })();
+      const pid = seen && (() => { try { return JSON.parse(seen).pid; } catch { return null; } })();
+      // dead owner, or an empty/garbled lock old enough that its writer must have crashed mid-create
+      const orphan = !pid && seen !== null && (() => { try { return Date.now() - statSync(lock).mtimeMs > ORPHAN_LOCK_MS; } catch { return false; } })();
+      if ((pid && !pidAlive(pid)) || orphan) {
+        if (reclaimLock(lock, seen, seenIno)) { run.reclaimedLock = { pid }; continue; }
+      }
       if (Date.now() >= until) throw new Error(`run is locked by pid ${pid}`);
       sleepMs(20 + Math.floor(Math.random() * 30));
     }
@@ -111,6 +118,27 @@ export function withLock(run, fn, { waitMs = Number(process.env.MIS_LOCK_WAIT_MS
   try { return fn(); } finally { try { unlinkSync(lock); } catch { /* already gone */ } }
 }
 
-function holder(lock) {
-  try { return JSON.parse(readFileSync(lock, 'utf8')).pid; } catch { return null; }
+const readLock = (lock) => { try { return readFileSync(lock, 'utf8'); } catch { return null; } };
+
+/** Remove a stale lock only if it is still exactly the one judged stale: its owner may have exited and a new owner
+ *  taken the lock since we read it. Reclaimers are serialized by a short-lived `.reclaim` file. */
+// shortcut: a reclaimer that stalls (SIGSTOP) or dies for over 5s while holding `.reclaim` can have the marker removed by
+// another and overlap with it; the reclaim step is a read+unlink of microseconds, so this is accepted (docs/PROGRESS.md
+// RISKS) rather than built on heavier primitives.
+export const ORPHAN_LOCK_MS = 5000;
+export function reclaimLock(lock, seen, seenIno = null) {
+  const r = `${lock}.reclaim`;
+  try { closeSync(openSync(r, 'wx')); } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+    try { if (Date.now() - statSync(r).mtimeMs > ORPHAN_LOCK_MS) unlinkSync(r); } catch { /* gone */ }
+    return false;
+  }
+  // same content AND same file: an empty lock looks like every brand-new lock, so the inode tells them apart; inode numbers
+  // can be reused at once (ext4), so a lock without a pid must also still be older than the orphan age
+  const noPid = (() => { try { return !JSON.parse(seen).pid; } catch { return true; } })();
+  try {
+    const st = statSync(lock);
+    if (readLock(lock) === seen && (seenIno === null || st.ino === seenIno) && (!noPid || Date.now() - st.mtimeMs > ORPHAN_LOCK_MS)) unlinkSync(lock);
+  } catch { /* gone */ } finally { try { unlinkSync(r); } catch { /* gone */ } }
+  return true;
 }

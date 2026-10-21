@@ -23,7 +23,7 @@ function context(cwd) {
     const wtTask = wt && run?.state.runId === wt[1] ? plan?.tasks.find((t) => t.id === wt[2]) : null;
     const plannedFiles = !inScope ? null : wtTask ? (wtTask.files ?? [])
       : plan?.plannedFiles ? [...plan.plannedFiles, ...plan.tasks.flatMap((t) => t.files ?? [])] : null;
-    return { repoRoot, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
+    return { repoRoot, inRepo: true, activeRun: !!run && run.state.state !== 'CANCELLED', currentBranch, plannedFiles };
   } catch {
     return { repoRoot: cwd, activeRun: false, currentBranch: null }; // not a git repo
   }
@@ -42,7 +42,19 @@ try {
   // only another worktree of the same repo; .git/ internals or a nested repo keep the session's context
   const gitDir = (d) => { try { return execFileSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'], { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[1]; } catch { return null; } };
   const own = file ? gitDir(at) : null;
-  const r = classify(input, context(own && own === gitDir(cwd) ? at : cwd));
+  // A freeze belongs to the repository it was set in (or to non-repo paths when set outside one).
+  const ctx = context(own && own === gitDir(cwd) ? at : cwd);
+  let freezeDir = null;
+  try {
+    const f = (await import('./lib/home.mjs')).readHome('freeze.json');
+    const { realpathSync } = await import('node:fs');
+    // Scope by the session's repository (cwd), not the target file's: a frozen session may not write anywhere else.
+    const sessionCtx = context(cwd);
+    const root = sessionCtx.inRepo ? realpathSync(sessionCtx.repoRoot) : null;
+    if (f?.dir && (f.root ?? null) === root) freezeDir = f.dir;
+  } catch { /* no home */ }
+  const r = classify(input, { ...ctx, freezeDir });
+  try { (await import('./lib/trace.mjs')).appendTrace({ cwd, hook: 'PreToolUse', tool: input.tool_name, decision: r.decision, reason: r.reason }); } catch { /* tracing is optional */ }
   if (r.decision !== 'allow') out(r.decision, r.reason);
 } catch (e) {
   out('ask', `make-it-ship guard error (fail-closed): ${e.message}`);

@@ -144,3 +144,60 @@ test('glob matcher', async () => {
   assert.ok(m('a?.md', 'ab.md'));
   assert.ok(!m('a.md', 'aXmd'));
 });
+
+test('careful rules apply with or without a run (M6-07): destructive commands ask, force push to main is denied', () => {
+  const idle = { ...ctx, activeRun: false };
+  for (const c of [ctx, idle]) {
+    assert.equal(d(bash('git push --force origin main'), c), 'deny');
+    assert.equal(d(bash('git push -f origin feature'), c), 'ask', 'force push elsewhere rewrites history');
+    assert.equal(d(bash('git reset --hard HEAD~1'), c), 'ask');
+    assert.equal(d(bash('git clean -fd'), c), 'ask');
+    assert.equal(d(bash('git checkout -- .'), c), 'ask');
+    assert.equal(d(bash('git restore .'), c), 'ask');
+    assert.equal(d(bash('rm -rf ~/projects'), c), 'ask');
+    assert.equal(d(bash('psql -c "DROP TABLE users"'), c), 'ask');
+    assert.equal(d(bash('mysql -e "truncate table logs"'), c), 'ask');
+    assert.equal(d(bash('kubectl delete pod web-1'), c), 'ask');
+    assert.equal(d(bash('docker system prune -af'), c), 'ask');
+    assert.equal(d(bash('docker rm -f web'), c), 'ask');
+    assert.equal(d(bash('codex exec "review this"'), c), 'ask', 'external model is always asked (data leaves the company)');
+  }
+  // Safe or run-only things stay allowed without a run.
+  for (const cmd of ['git push origin feature', 'npm install lodash', 'gh pr create -t x', 'rm -rf dist', 'truncate -s 0 log.txt', 'git checkout main', 'git restore src/a.js', 'git commit -m "drop table support"'])
+    assert.equal(d(bash(cmd), idle), 'allow', cmd);
+  assert.equal(d(bash('git push origin feature')), 'ask', 'inside a run a normal push still asks');
+});
+
+test('freeze boundary (M6-07): edits outside the frozen directory are denied, with or without a run', () => {
+  const frozen = { ...ctx, activeRun: false, freezeDir: `${REPO}/src` };
+  const w = (p, c = frozen) => d({ tool_name: 'Write', tool_input: { file_path: p }, cwd: REPO }, c);
+  assert.equal(w(`${REPO}/src/a.js`), 'allow');
+  assert.equal(w(`${REPO}/src/deep/b.js`), 'allow');
+  assert.equal(w(`${REPO}/srcx/c.js`), 'deny', 'prefix sibling is outside');
+  assert.equal(w(`${REPO}/README.md`), 'deny');
+  assert.equal(w('src/rel.js'), 'allow', 'relative paths resolve against cwd');
+  assert.equal(w(`${REPO}/README.md`, { ...frozen, activeRun: true }), 'deny');
+  assert.match(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/x.js` }, cwd: REPO }, frozen).reason, /mis unfreeze/);
+});
+
+test('own MCP tools (M7): memory-style writes are not treated as external writes; file-writing tools ask in a run and respect freeze', () => {
+  const t = (name, input = {}, c = ctx) => d({ tool_name: `mcp__plugin_make-it-ship_mis__${name}`, tool_input: input, cwd: REPO }, c);
+  for (const n of ['notepad_write_priority', 'state_write', 'wiki_delete', 'shared_memory_delete', 'project_memory_write']) assert.equal(t(n), 'allow', n);
+  assert.equal(d({ tool_name: 'mcp__other__wiki_delete', tool_input: {}, cwd: REPO }), 'ask', 'other servers keep the external-write rule');
+  assert.equal(t('ast_grep_replace', { apply: false }), 'allow', 'dry run');
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src'] }), 'ask');
+  assert.equal(t('lsp_rename', { apply: true }), 'ask');
+  assert.equal(t('lsp_code_action_resolve', {}), 'ask');
+  const idle = { ...ctx, activeRun: false };
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src'] }, idle), 'allow');
+  const frozen = { ...idle, freezeDir: `${REPO}/src` };
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['src/a.js'] }, frozen), 'allow');
+  assert.equal(t('ast_grep_replace', { apply: true, paths: ['lib'] }, frozen), 'deny');
+  assert.equal(t('lsp_rename', { apply: true, file: `${REPO}/src/a.js` }, frozen), 'deny', 'rename may touch any file → frozen means no');
+});
+
+test('M6 D8: unstaging is not a discard', () => {
+  assert.equal(d(bash('git restore --staged .')), 'allow');
+  assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
+  assert.equal(d(bash('git restore -S .')), 'allow');
+});

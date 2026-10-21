@@ -1,6 +1,8 @@
-STATUS: DONE
-CURRENT: FINAL
-VERIFY: PASSED
+STATUS: IN_PROGRESS
+CURRENT: M6
+VERIFY: PENDING
+
+> M1~M5 + FINAL은 완료(VERIFY PASSED, 태그 m1~m5-verified). 2026-10-20 사용자 결정으로 M6~M10 추가: `docs/adr/0003-single-plugin-full-absorption.md`, 범위 기준 `docs/research/gap-matrix.md`(392행: ABSORBED 20 · PARTIAL 113 · MISSING 239 · 제외 5 · N/A 15).
 
 > 다른 장비에서 이어서 작업할 때는 `docs/HANDOFF.md`(남은 일·시작 방법·규칙)부터 읽는다.
 > 진행 상태의 유일한 기록. 재시작 시 이 파일 + `git log`부터 읽는다.
@@ -110,6 +112,41 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | M5-10 | 독립 검증 → `M5-report.md`, `m5-verified` | DONE | VERIFIER_PROMPT | §11 M5 | (this) | M5-report.md 1~3차, ROUND3: PASS |
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
+## M6 — 갭 매트릭스 + 상시 계층
+VERIFY: PASSED (11차, `docs/milestones/M6-report.md` ROUND11: PASS) — 태그 `m6-verified` — 범위: gap-matrix §7 M6 행. 세부 task는 착수 시 아래 표에 추가한다.
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M6-00 | 갭 매트릭스 + ADR-0003 + plugin MCP strict 실측 | DONE | — | ADR-0003 | 3db8b0c | probe 실측 |
+| M6-01 | 전역 상태·설정(`~/.make-it-ship`, `MIS_STATE_HOME`) + 스타일 레벨 off/lite/full/ultra 규칙 빌더 + `mis style [lvl]`, `mis style default <lvl>` | DONE | `tests/unit/style.test.mjs` | gap §4 Ponytail 레벨·config | (이 커밋) | npm test |
+| M6-02 | 상시 훅 디스패처 `scripts/hooks.mjs`(fail-open) + SessionStart: 스킬 사용 규율·상시 TDD/검증/디버그 규율, 스타일 규칙, 활성 run·모드 안내, 코드베이스 지도 | DONE | `tests/integration/hooks-session.test.mjs` | gap §3 using-superpowers, §4 activate·map, §2.3 session-start | (이 커밋) | npm test 327 |
+| M6-03 | SubagentStart: 스타일 규칙 주입(`subagentMatcher`) | DONE | 같은 파일 | gap §4 subagent | (이 커밋) | npm test 327 |
+| M6-04 | UserPromptSubmit 키워드 라우터(§2.5 전 키워드, 한국어 변형, 비활성 목록) + 스타일 전환 문구 + 학습 스킬 주입 + `mis test-prompt` | DONE | `tests/unit/keywords.test.mjs` | gap §2.5, §2.3 skill-injector, §4 mode-tracker | (이 커밋) | npm test 334 |
+| M6-05 | 지속 모드(loop: ralph/autopilot/ultrawork) `mis loop start/status/cancel` + Stop 훅(증거 기반 종료, 반복 상한) + 컨텍스트 경고 | DONE | `tests/integration/loop.test.mjs` | gap §2.3 persistent-mode·context-guard | (이 커밋) | npm test 338 |
+| M6-06 | statusLine 통합: run 없이도 스타일·모드·브랜치·모델·컨텍스트 표시 + run 정보 | DONE | `tests/unit/statusline.test.mjs` 확장 | gap §6.2 | (이 커밋) | npm test |
+| M6-07 | run 밖 guard 정책(careful 상시: main force push 거부, 파괴 명령 ask) + freeze/unfreeze 경계 + README 정정 | DONE | `tests/integration/guard.test.mjs` 확장 | gap §5.2, §6.3 | (이 커밋) | npm test |
+| M6-08 | PostToolUse: 규칙 파일 주입(세션당 1회), 편집 후 검증 알림, 반복 도구 실패 시 근본 원인 안내 | DONE | `tests/integration/hooks-posttool.test.mjs` | gap §2.3 rules-injector·verifier·failure | (이 커밋) | npm test 344 |
+| M6-09 | 새 스킬(loop, cancel, style) + hooks.json 연결 + THIRD_PARTY_NOTICES + README 상시 계층 절 | DONE | `tests/unit/plugin-files.test.mjs` | ADR-0003 | (이 커밋) | npm test 345 |
+| M6-10 | 대화형(tmux)·headless 실사용 확인 + 독립 검증 → `m6-verified` | DONE — 11차 PASS(`M6-report.md`) | — | VERIFIER_PROMPT | | |
+
+## M7 — MCP 도구 서버
+VERIFY: PASSED (6차, `docs/milestones/M7-report.md` ROUND6: PASS) — 태그 `m7-verified` — 범위: gap-matrix §7 M7 행. 실측: 플러그인 MCP 서버 cwd=세션 cwd, `CLAUDE_PROJECT_DIR`·`CLAUDE_PLUGIN_DATA` 제공(2026-10-20 probe). `--strict-mcp-config`에서는 로드 안 됨(ADR-0003).
+| ID | 작업 | 상태 | 테스트 | 근거 | 커밋 | 검증 |
+|---|---|---|---|---|---|---|
+| M7-01 | MCP 서버 골격(stdio JSON-RPC, registry), `.mcp.json`, 스킬 도구 3개(list_skills, load_skills_local/global), guard: 자체 MCP 도구 허용·파일 재작성 도구 ask/freeze | DONE | `tests/integration/mcp-server.test.mjs`, `tests/unit/policy.test.mjs` | gap §2.4 skills, §6.3 | (이 커밋) | npm test 352 |
+| M7-02 | 기억 도구 20개: notepad_*(6), project_memory_*(4), state_*(5), shared_memory_*(5) + `<remember>` 태그 + SessionStart 주입 + PreCompact 보존 | DONE | `tests/integration/mcp-memory.test.mjs` | gap §2.3·§2.4 | c0969f2 | npm test |
+| M7-03 | wiki_*(7)+wiki 키워드, session_search, trace_timeline/summary, deepinit_manifest, merge_readiness_*(5) | DONE | `tests/integration/mcp-knowledge.test.mjs` | gap §2.4 | 57967ac | npm test |
+| M7-04 | lsp_*(12), ast_grep_search/replace, python_repl (설치된 언어 서버·sg·python3 사용, 없으면 BLOCKED 안내) | DONE | `tests/integration/mcp-code.test.mjs` | gap §2.4 | a51d38f | npm test |
+| M7-05 | 훅 연결(SessionStart·PreCompact·Stop·PostToolUse), README 도구 절, 실사용(헤드리스, strict 없이) + 독립 검증 → `m7-verified` | IN_PROGRESS — 1차 검증 DEFECTS(D1~D9) 수정 후 2차 | — | ADR-0003 | | |
+
+## M8 — 브라우저·팀·문서 변환
+VERIFY: PENDING — 범위: gap-matrix §7 M8 행.
+
+## M9 — 나머지 이전 제외 기능
+VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이전트 수·todo 요소(서브에이전트 추적과 함께) + M6에서 넘긴 훅(서브에이전트 추적·산출물 확인, 권한 자동 허용, pre-tool 알림, 워크플로 이탈, 세션 종료 요약, CLAUDE.md 라우팅 작성). [정책] 항목(§6.4)은 구현하되 외부 전송마다 guard ask, 텔레메트리 기본 꺼짐(2026-10-20 사용자 결정).
+
+## M10 — 원본 대비 비교 + HTML 보고서
+VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
+
 ## NEEDS_HUMAN
 전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20, NH-5는 2026-10-21에 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님). NH-6~NH-8은 사용자 결정으로 "추후 확인 필요"다(2026-10-21).
 - **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 추후 확인 필요(사용자 결정)
@@ -124,6 +161,11 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 ## PROPOSALS
 
 ## SPEC_CHANGES
+- (M6 9차, 구조 변경) 해로운 오판(잘못 끄기·잘못 켜기)이 구조적으로 불가능하도록: cancel은 닫힌 목록의 완성된 끄기 단어만(부정 활용형은 목록에 없음), 접두형도 본문에 끄기 어간이 있으면 자동 loop 대신 모델 힌트. 판단이 갈리면 항상 모델에게 넘긴다.
+- (M6 6차, 같은 원칙 적용) cancel도 프롬프트 전체가 짧은 끄기 요청일 때만 자동 실행하고, 그 밖의 문장은 `loop-hint`로 모델이 판단한다(힌트에 `mis loop cancel` 안내 포함). 접두형 검사는 정리 전 원문 기준.
+- (사용자 결정, 2026-10-20, M6 5차) ralph 동사형(`use ralph`, `랄프로`, `ラルフで`)도 오탐이 계속되어 **접두형만 자동**(`ralph:`, `/ralph`, `ralph mode:`, `랄프:`, `ラルフ:`)으로 좁혔다. 그 밖의 언급은 모두 `loop-hint`(모델 판단). 이전 결정(명시형 전체 자동)을 대체한다.
+- (사용자 결정, 2026-10-20, M6 3차) ralph 키워드: 휴리스틱 3회 실패 후 "확실한 형태만 자동 + 나머지는 모델 판단 힌트"로 결정. 명시형(`ralph:`, `/ralph`, `use ralph`, `랄프로`, `ラルフで`)만 loop를 켜고, 그 밖의 언급은 `loop-hint`(모델이 판단)만 주입한다. OMC 원본과 다른 동작이다.
+- (사용자 결정, 2026-10-20, ADR-0003) 원본 4종 전체 대체: Spec §14.4 제외표 해제(알림·BSP 제외), PRD 11.2 "자동 프로세스 자가 수정" 대신 승인 게이트 있는 self-improve, ADR-003 무의존 원칙은 신규 범위에서 npm 허용(코어 `mis`·guard는 무의존 유지). 단독 설치 전제. Spec·기획서 본문은 수정하지 않는다.
 - (사용자 결정, 2026-10-20) Spec §11 M5의 "BSP QA 프로파일"을 제거했다. `scripts/lib/qa.mjs`의 Yocto/Buildroot/커널 탐지와 `build-bsp`/`qa-bsp` 제안, QA 스킬 문서, README 항목을 삭제했고 NH-9는 해당 없음이다. Spec 문서 본문은 수정하지 않았다. 일반 위험 플래그 `hardware`는 유지한다. 회귀 테스트: `mis-qa.test.mjs` "BSP QA profile was removed".
 - (사용자 결정, 2026-10-21) Spec §418(ADR-009)의 위험 신호 중 '하드웨어'를 제거했다. `RISK_FLAGS`에서 `hardware`를 빼고 run 스킬·discover/plan 단계·security-reviewer·explorer·README 목록에서 지웠다. BLOCKED 사유로서의 하드웨어(§190)는 그대로 둔다. 회귀 테스트: `mis-plan.test.mjs`에서 `riskFlags: ['hardware']`가 거부된다.
 - (해석) §14 second opinion: 다른 모델 CLI(codex, gemini, `omc ask`) 호출은 저장소 내용을 외부 서비스로 보내므로 PRD 8.1(외부 전송 기본 차단)과 조직 데이터 정책에 따라 guard가 ask로 분류한다. §7 표에 같은 성격의 행(외부 쓰기 ask)이 있어 그 연장으로 본다.
@@ -136,6 +178,7 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 - (사후 재검증 D-1, MEDIUM, 2026-10-21) 위 수정이 회귀를 만들었다. run 진행 중 `.git/` 내부(`hooks/pre-commit`, `config`) 파일과 저장소 안 중첩 저장소 파일의 편집이 ask에서 allow로 바뀌었다. 원인은 파일 위치의 컨텍스트가 run 없음으로 잡힌 것이다. **수정함.** 파일 기준 컨텍스트는 그 파일이 세션과 같은 git 저장소(같은 `--git-common-dir`)의 worktree 안에 있을 때만 쓴다. 그 밖의 경우는 세션 cwd 기준으로 판정한다. 테스트: `guard.test.mjs` "files under .git/ or in a nested repo keep the session run scope". 보고서: `docs/milestones/POST-FINAL-report.md`.
 
 ## RISKS
+- (M7 N8·N9) run lock 회수: 회수자는 `.reclaim` 표식으로 직렬화되고, 지우기 전에 lock 내용과 inode가 판단 시점과 같은지 확인한다. pid가 없는(빈·깨진) lock은 inode 번호를 곧바로 재사용하는 파일시스템(ext4 등)에서도 새 lock을 지우지 않도록, 지우는 순간에도 수정 시각이 5초보다 오래됐는지 다시 확인한다(`tests/unit/state.test.mjs` N9-fs). 남은 이론상 위험: 회수자가 `.reclaim`을 쥔 채 5초 넘게 멈추거나(SIGSTOP) 죽으면 다른 회수자가 표식을 지우고 겹칠 수 있다. 측정: M7 5차 검증에서 e30ce81 기준 스트레스 160회(성공 쓰기 1398건, SIGKILL 292건) 유실 0건, N9 순서 재현 200회 새 lock 삭제 0건(macOS APFS). 실제 Linux에서는 측정하지 않았다.
 - 사용자 환경에는 OMC·Superpowers·Ponytail 훅이 활성화돼 있음. E2E는 `--setting-sources project --strict-mcp-config`로 격리해 실행한다.
 - (M1 검증 L-1) 헤드리스 첫 실행에서 모델이 설정 확인을 기다리며 멈추는 경우가 많다(비결정적). 확인 요청은 Spec에 부합하므로 수용한다. 무인 실행 시 요청에 "질문 없이 진행"을 명시.
 - (M1 검증 L-2) `mis doctor`는 설정 파일의 `enabledPlugins`를 읽으므로, 이번 세션에 실제로 로드되지 않은 플러그인도 경고할 수 있다. 플러그인이 로드 목록을 얻을 방법이 없어 "enabled in settings" 문구로 수용.
