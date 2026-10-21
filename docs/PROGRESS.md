@@ -111,9 +111,9 @@ VERIFY: PASSED (3차, `docs/milestones/M5-report.md` ROUND3: PASS) — 태그 `m
 | F-01 | 최종 검증 + `docs/milestones/FINAL-report.md` | DONE | 결과, 추적표 상태, 사람 확인 항목, 남은 위험, 설치·사용법 | 골 | (this) | FINAL-verification.md FINAL: PASS; FINAL-report.md |
 
 ## NEEDS_HUMAN
-전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님).
-- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 미확인
-- **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: `docs/milestones/NEEDS_HUMAN.md` NH-5. 미확인
+전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20, NH-5는 2026-10-21에 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님). NH-6~NH-8은 사용자 결정으로 "추후 확인 필요"다(2026-10-21).
+- **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 추후 확인 필요(사용자 결정)
+- **NH-5 (M4)**: 실제 플러그인 설치 경로(마켓플레이스/`claude plugin install`). 절차: `docs/milestones/NEEDS_HUMAN.md` NH-5. AUTO(tmux) 통과 · 사람 미확인
 - **NH-4 (M3)**: 병렬 중 소유 밖 편집 확인 창 → 승인 시 충돌 처리. 절차: `docs/milestones/M3-e2e.md`. 미확인
 - **NH-2 (M2)**: limit BLOCKED 후 `mis approve continue` 확인 창. 절차: `docs/milestones/M2-e2e.md`. 미확인
 - **NH-3 (M2)**: HUD statusLine 실제 표시. 절차: `docs/milestones/M2-e2e.md`. 미확인

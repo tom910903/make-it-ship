@@ -106,4 +106,5 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
      - `~/.claude/plugins/installed_plugins.json`
    - uninstall 뒤에도 `~/.claude/plugins/cache/mis-local`(1.4MB)이 남아 있어서 직접 지웠다.
    - 참고: 설치 중에는 `known_marketplaces.json`에 `mis-local`이 잠시 추가된다. `--scope project`여도 마찬가지다.
+   - 참고: 이 확인은 `8052bd1`에서 했다. 이후 `9aaf3b1`의 guard 수정은 `file_path`가 있는 편집 경로만 바꿨다. 여기서 확인한 `git push`(Bash) 경로는 그 수정과 무관하다.
    - 참고: uninstall이 데모의 `.claude/settings.json`을 바꾸므로, 이후 `mis verdict`는 STALE(PARTIAL)로 바뀐다. 검증 후 저장소가 바뀌면 STALE이 되는 것은 의도된 동작이다.

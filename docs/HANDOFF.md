@@ -11,7 +11,7 @@
 - **태그:** `m1-verified` ~ `m5-verified`. 검증 당시의 커밋을 가리킨다.
 - **테스트:** `npm test` 320/320, `claude plugin validate .` 통과.
 - **2026-10-21 작업은 로컬 브랜치 `make-it-ship`에만 커밋했다(push 안 함).** 커밋: `27f86f3`, `8052bd1`, `c0c11c2`, `9aaf3b1`, 그리고 이 문서 갱신.
-- **최종 검증 이후 바뀐 것**(검증 보고서에는 반영되지 않음):
+- **최종 검증 이후 바뀐 것**(`FINAL-report.md`에는 없고, `POST-FINAL-report.md`가 7개 모두 검증함):
   1. `73e9260` — NH-1~4를 tmux 대화형 세션으로 자동 확인하고 기록했다(`docs/milestones/NH-auto-check.md`).
   2. `75f2fb8` — guard 수정. 파일 편집 범위를 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 판정한다.
   3. `a95fb61` — **BSP QA 프로파일 제거**(사용자 결정). NH-9는 해당 없음이다.
@@ -27,9 +27,9 @@
 
 ```sh
 git clone git@github.com:tom910903/make-it-ship.git && cd make-it-ship
-git checkout feature/make-it-ship-m1-m5
+git checkout feature/make-it-ship-m1-m5   # 주의: 2026-10-21 커밋 6개는 로컬 make-it-ship 브랜치에만 있다(미push)
 node --version              # 22 이상
-npm test                    # 319/319 기대
+npm test                    # 320/320 기대 (make-it-ship 브랜치 기준)
 claude plugin validate .    # 통과 기대
 claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으로 사용
 ```
