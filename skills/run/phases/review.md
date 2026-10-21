@@ -9,6 +9,7 @@ Which reviews: Quick → quality. Standard/Full → spec, then quality. Risk fla
    - **spec** first: `make-it-ship:spec-reviewer` — requirements met, nothing extra.
    - **quality** second: `make-it-ship:quality-reviewer` — correct, safe, under load, tested, fast, lean.
    - **security** when the plan has risk flags: `make-it-ship:security-reviewer` — attack surface, secrets, OWASP, dependencies; include the risk flags in its brief.
+   - **docs** (include in the quality brief when the project has `.ai/` or a `layout`): the `.ai/` docs of every touched module (`.ai/index.md`, `.ai/modules/<dir path>.md`) still match the code, and every changed human doc was changed in every language (`x.md` and `x.ko.md` together). A stale or one-language doc is a MAJOR finding.
 3. Record each output verbatim:
 
 ```

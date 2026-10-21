@@ -29,6 +29,7 @@ MIS
 ```
 
    `riskFlags` ⊆ `auth, payment, pii, migration, security`. `ui: true` when the work builds Web or iOS screens (Full mode then requires design-explore). Tasks may add `"dependsOn": ["T1"]`; `files` is the task's ownership for parallel work. `mis` rejects unknown keys and prints every schema error; fix and resend.
+   **Layout**: when `.make-it-ship.json` has a `layout` (`mis layout` prints it), every `plannedFiles` and `files` entry must match one of its path globs, and a human doc under the docs folder needs one file per language (`docs/guide/x.md` + `docs/guide/x.ko.md`); AI docs go under `.ai/` in English, without a pair. `mis plan set` refuses a plan that breaks this and lists every violation. Fix the plan (move files under an allowed path, narrow a glob, add the translation), or, if the layout itself is wrong, propose the `layout` change to the user: it is a config change, and during a run it needs `mis approve config`.
 6. Choose the mode and say why: `mis mode set <quick|standard|full> --reason "<why>"`. Risk flags force Standard or higher.
 7. Until the plan is approved (or Quick without risk flags starts), make **no** code changes.
 

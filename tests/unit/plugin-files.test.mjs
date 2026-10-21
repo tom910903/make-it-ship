@@ -327,3 +327,13 @@ test('M9-D: external-transfer skills say company policy may forbid it; the scien
   assert.equal(fm.tools, 'Read, Grep, Glob, Bash, mcp__plugin_make-it-ship_mis__python_repl');
   for (const re of [/untrusted/i, /\[FINDING:/, /\[EVIDENCE:/, /\[CONFIDENCE:/, /Do not modify/, /\.git\/make-it-ship\//]) assert.match(sci, re);
 });
+
+// User decision 2026-10-22: project layout; AI docs in .ai/ (English), human docs in docs/ in every language.
+test('layout: the run flow reads .ai/, plans follow the layout, writer and review keep both doc kinds right', () => {
+  const ph = (p) => read(`skills/run/phases/${p}.md`);
+  for (const re of [/\.ai\/index\.md/, /\.ai\/layout\.md/, /\.ai\/modules\//, /mis layout/]) assert.match(ph('discover'), re, `discover: ${re}`);
+  for (const re of [/layout/, /mis layout/, /\.ko\.md/, /mis approve config/]) assert.match(ph('plan'), re, `plan: ${re}`);
+  for (const re of [/\.ai\//, /\.ko\.md|every language/]) assert.match(ph('review'), re, `review: ${re}`);
+  for (const re of [/\.ai\//, /English/, /\.ko\.md/, /separate files/]) assert.match(read('agents/writer.md'), re, `writer: ${re}`);
+  assert.match(read('skills/setup/SKILL.md'), /mis layout write/);
+});
