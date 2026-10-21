@@ -129,3 +129,15 @@ test('M8 R2-2: a margin change that moves content 2px and makes the page 4px tal
   const taller = compareImages(page([10, 30, 50], 400, 304), page([10, 30, 50]));
   assert.equal(taller.score, 99); assert.equal(taller.sizeMatch, false);
 });
+
+test('M8 R3-4: alignment reaches 8px: a 5px or 8px move and a long page 12px taller (content 6px down) score high, each px costing a point; 9px is past the reach and drops to revise', () => {
+  const five = compareImages(page([10, 30, 50]), page([15, 35, 55]));
+  assert.equal(five.score, 95); assert.deepEqual(five.shift, { dx: 0, dy: 5 });
+  const eight = compareImages(page([10, 30, 50]), page([18, 38, 58]));
+  assert.equal(eight.score, 92); assert.deepEqual(eight.shift, { dx: 0, dy: 8 });
+  const margin = compareImages(page([16, 36, 56], 400, 312), page([10, 30, 50]));
+  assert.equal(margin.score, 94); assert.deepEqual(margin.shift, { dx: 0, dy: -6 });
+  const nine = compareImages(page([10, 30, 50]), page([19, 39, 59]));
+  assert.equal(nine.score, 69, "aligned only as far as 8px: the 9th px row of each line differs"); assert.deepEqual(nine.shift, { dx: 0, dy: 8 });
+});
+

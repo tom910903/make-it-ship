@@ -89,7 +89,7 @@ export function encodePng({ width, height, data }) {
  * while different text in the same layout still differs (whole-image shifts cannot line up different glyphs).
  * @returns {{score:number, diffPixels:number, contentPixels:number, totalPixels:number, sizeMatch:boolean, hotspots:object[], diff:object, shift?:{dx:number, dy:number}}}
  */
-export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } = {}) {
+export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 8 } = {}) {
   const W = Math.max(a.width, b.width), H = Math.max(a.height, b.height), total = W * H;
   const flat = (img) => { // RGB composited over white
     const o = new Uint8Array(img.width * img.height * 3);
@@ -107,10 +107,11 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 3 } =
   const bg = [((bgKey >> 10) << 3) + 4, (((bgKey >> 5) & 31) << 3) + 4, ((bgKey & 31) << 3) + 4], bgTol = Math.max(tolerance, 4);
   const isBg = (f, o) => Math.abs(f[o] - bg[0]) <= bgTol && Math.abs(f[o + 1] - bg[1]) <= bgTol && Math.abs(f[o + 2] - bg[2]) <= bgTol;
   const floor = 100;
-  // sizes within 2*maxShift (a full-page shot a few px taller after a margin change): edge pixels fill the missing strip
-  // instead of it counting as different; larger size differences count the area only one image covers as different
+  // sizes within 2*maxShift and a tenth of the image (a full-page shot a few px taller after a margin change): edge pixels
+  // fill the missing strip instead of it counting as different; larger size differences count the area only one image covers
   const sizeMatch = a.width === b.width && a.height === b.height;
-  const loose = !sizeMatch && Math.abs(a.width - b.width) <= 2 * maxShift && Math.abs(a.height - b.height) <= 2 * maxShift;
+  const near = (p, q) => Math.abs(p - q) <= Math.min(2 * maxShift, Math.min(p, q) / 10);
+  const loose = !sizeMatch && near(a.width, b.width) && near(a.height, b.height);
   const clamp = (v, n) => Math.min(n - 1, Math.max(0, v));
   // one pass with b moved by (dx, dy); b's own edge pixels fill in what the move uncovers
   const pass = (dx, dy, mark) => {
