@@ -1,0 +1,8 @@
+{
+  "name": "make-it-ship",
+  "owner": { "name": "Make It Ship" },
+  "description": "Marketplace for the Make It Ship plugin (this repository)",
+  "plugins": [
+    { "name": "make-it-ship", "source": ".", "description": "Idea or requirements to verified code: plan, approve, build, check with real evidence, review, and report." }
+  ]
+}

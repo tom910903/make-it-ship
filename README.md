@@ -14,47 +14,30 @@ It makes two promises:
 There are no runtime dependencies and no build step.
 
 ## Install
-You need read access to `github.com/tom910903/make-it-ship` (a private repository).
+This repository is also its own plugin marketplace (`.claude-plugin/marketplace.json`). It is private, so your machine needs git access to `github.com/tom910903/make-it-ship`: an SSH key, or HTTPS through `gh auth setup-git`.
 
-### Option A: load it for one session
+### Option A: install from the marketplace (recommended)
+```sh
+claude plugin marketplace add tom910903/make-it-ship
+claude plugin install make-it-ship@make-it-ship
+claude plugin list    # make-it-ship@make-it-ship should show as enabled
+```
+Then start `claude` with no flags. The commands below are now available.
+- To install for one repository only, run both commands from inside that repository with `--scope project` added.
+- To update, run `claude plugin marketplace update make-it-ship` and then `claude plugin update make-it-ship@make-it-ship`. A new release reaches users only when `version` in `.claude-plugin/plugin.json` changes.
+- To remove the plugin:
+```sh
+claude plugin uninstall make-it-ship@make-it-ship
+claude plugin marketplace remove make-it-ship
+```
+
+### Option B: load a clone for one session
 ```sh
 git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship
 cd /path/to/your/repo
 claude --plugin-dir ~/make-it-ship
 ```
-To update later, run `git -C ~/make-it-ship pull`.
-
-### Option B: install through a local marketplace
-Create the marketplace in `~/make-it-ship-marketplace`. The plugin is cloned inside it.
-```sh
-mkdir -p ~/make-it-ship-marketplace/.claude-plugin ~/make-it-ship-marketplace/plugins
-git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship-marketplace/plugins/make-it-ship
-cat > ~/make-it-ship-marketplace/.claude-plugin/marketplace.json <<'EOF'
-{
-  "name": "mis-local",
-  "owner": { "name": "local" },
-  "description": "Local marketplace for the Make It Ship plugin",
-  "plugins": [ { "name": "make-it-ship", "source": "./plugins/make-it-ship" } ]
-}
-EOF
-```
-Then install it from inside the repository where you want to use it. `--scope project` writes only to that repository's `.claude/settings.json`.
-```sh
-cd /path/to/your/repo
-claude plugin marketplace add ~/make-it-ship-marketplace --scope project
-claude plugin install make-it-ship@mis-local --scope project
-claude plugin list    # make-it-ship@mis-local should show as enabled
-```
-Start `claude` with no flags. The commands below are now available.
-
-To update, run `git -C ~/make-it-ship-marketplace/plugins/make-it-ship pull` and then `claude plugin update make-it-ship@mis-local`. To remove the plugin, run these commands from the same repository:
-```sh
-claude plugin uninstall make-it-ship@mis-local --scope project
-claude plugin marketplace remove mis-local
-rm -rf ~/.claude/plugins/cache/mis-local    # uninstall leaves this cached copy behind
-```
-
-Claude checked Option B in an interactive session on 2026-10-21 (`docs/milestones/NH-auto-check.md`, NH-5). A person has not yet checked it.
+To update the clone, run `git -C ~/make-it-ship pull`.
 
 ## Use
 ```
@@ -101,9 +84,11 @@ Commands run without a shell. A command that is missing, not installed, or times
 ## Development
 ```sh
 npm test                       # node:test, no dependencies
-claude plugin validate .
+claude plugin validate .claude-plugin/plugin.json
+claude plugin validate .      # marketplace manifest
 node evals/setup-demo.mjs a    # demo repo in a temp dir
 ```
+Releasing: bump `version` in `.claude-plugin/plugin.json`, or marketplace users keep their cached copy.
 Design documents: `docs/Make_It_Ship_Spec_v1.1.md` (authoritative), `docs/adr/`, `docs/PROGRESS.md`.
 
 ## Limits

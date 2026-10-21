@@ -152,3 +152,10 @@ test('M5 features are reachable from the flow and docs (M5 D-2, L-2, L-6)', () =
   for (const m of read('adapters/codex/AGENTS.md').matchAll(/agents\/([a-z-]+)\.md/g)) assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), m[0]);
   assert.match(read('adapters/codex/AGENTS.md'), /spec-reviewer/);
 });
+
+test('the repository is its own marketplace: the root plugin is listed under the plugin.json name', () => {
+  const m = JSON.parse(read('.claude-plugin/marketplace.json'));
+  assert.equal(m.name, 'make-it-ship');
+  assert.ok(m.owner?.name);
+  assert.deepEqual(m.plugins.map((p) => [p.name, p.source]), [[JSON.parse(read('.claude-plugin/plugin.json')).name, '.']]);
+});
