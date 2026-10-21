@@ -34,11 +34,13 @@ claude plugin install make-it-ship@make-it-ship
 - **저장소 하나에만 설치:** 그 저장소 안에서 두 명령에 `--scope project`를 붙입니다.
 - **업데이트:** `claude plugin marketplace update make-it-ship` → `claude plugin update make-it-ship@make-it-ship` → Claude Code 재시작. 순서를 지켜야 합니다. 새 릴리스는 `.claude-plugin/plugin.json`의 `version`이 바뀌어야만 배포됩니다.
 - **제거:** `claude plugin uninstall make-it-ship@make-it-ship`, `claude plugin marketplace remove make-it-ship`, 그리고 `rm -rf ~/.claude/plugins/cache/make-it-ship`(uninstall 후에도 이 캐시가 남습니다).
-- **클론을 한 세션에만:** `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship` 후 `claude --plugin-dir ~/make-it-ship`.
+- **클론을 한 세션에만:** `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship` 후 `claude --plugin-dir ~/make-it-ship`. 클론은 `git -C ~/make-it-ship pull`로 업데이트합니다.
+
+마켓플레이스 설치는 2026-10-21에 Claude가 GitHub에서 직접 확인했습니다(`docs/milestones/NH-auto-check.md`). 사람이 확인한 것은 아직 아닙니다.
 
 ## 실제로 보기
 
-`evals/demos/a` 데모 저장소("`slugify` 추가" 요청)에서 실제로 나온 출력입니다. 계획을 등록했고 `unit` check는 통과했지만, 작업을 완료로 표시하지 않았고 리뷰도 아직 없습니다. `mis verdict`는 이를 끝났다고 보지 않습니다.
+`evals/demos/a` 데모 저장소("`slugify` 추가" 요청)에서 `mis`를 직접 실행해 얻은 실제 출력입니다. 계획은 아직 승인 대기 중이고, `unit` check는 통과했지만 작업이 끝나지 않았고 리뷰도 아직 없습니다. `mis verdict`는 이를 끝났다고 보지 않습니다.
 
 ```json
 {
@@ -228,7 +230,7 @@ docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
 
 ## 자주 묻는 질문
 
-**oh-my-claudecode, superpowers, gstack, ponytail과 무엇이 다른가요?** 이 플러그인들의 작업 흐름을 하나로 흡수했고(`THIRD_PARTY_NOTICES.md`), 판정은 모델이 아니라 기록된 check 결과에서 나온다는 규칙을 더했습니다. 직접 측정했습니다([docs/m10/report.html](docs/m10/report.html)). 작은 데모 세 개에서 칸마다 N=3으로 돌렸더니 모든 방식의 54회 실행이 전부 통과했고 결과도 정직하게 설명했습니다. 그래서 정확도와 정직성으로는 방식들을 구별할 수 없었습니다. 차이가 난 것은 플러그인 없는 대조군 대비 오버헤드입니다. Make It Ship은 비용이 4.1~6.1배, 턴 수가 2.2~2.6배였습니다. OMC 작업 흐름은 9회 중 1회, superpowers는 9회 중 6회만 실제로 발동했으므로, 그 결과는 일부가 "플러그인이 설치된 상태"를 잰 것입니다. 더 큰 Standard·Full 작업은 측정하지 않았습니다.
+**oh-my-claudecode, superpowers, gstack, ponytail과 무엇이 다른가요?** 이 플러그인들의 작업 흐름을 하나로 흡수했고(`THIRD_PARTY_NOTICES.md`), 판정은 모델이 아니라 기록된 check 결과에서 나온다는 규칙을 더했습니다. 직접 측정했습니다([docs/m10/report.html](docs/m10/report.html)). 방식 6개 × 작은 데모 3개 × N=3으로 모두 54회를 돌렸고, 54회 모두 통과했으며 결과도 정직하게 설명했습니다. 그래서 정확도와 정직성으로는 방식들을 구별할 수 없었습니다. 차이가 난 것은 플러그인 없는 대조군 대비 오버헤드(비용 중앙값)입니다. Make It Ship은 4.1~6.1배(턴 수 2.2~2.6배), gstack은 7.5~8.2배, oh-my-claudecode·superpowers·ponytail은 1.1~1.8배였습니다. OMC 작업 흐름은 9회 중 1회, superpowers는 9회 중 6회만 실제로 발동했으므로, 그 결과는 일부가 "플러그인이 설치된 상태"를 잰 것입니다. 중앙값만 봤고 유의성 검정은 하지 않았으며, 부하가 들쭉날쭉한 기기 한 대에서 쟀습니다. 더 큰 Standard·Full 작업은 측정하지 않았습니다.
 
 **제 코드를 어딘가로 보내나요?** 스스로 보내지는 않습니다. 기기 밖으로 데이터를 보내는 명령(다른 모델, 배포, 기본으로 꺼진 텔레메트리)은 항상 먼저 묻고, 해당 스킬은 회사 정책상 금지될 수 있다고 안내합니다.
 
@@ -252,7 +254,11 @@ docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
   npm test                                         # node:test, 의존성 없음
   claude plugin validate .claude-plugin/plugin.json
   node evals/setup-demo.mjs a                      # 임시 디렉터리에 데모 저장소
+  claude plugin validate .                         # 마켓플레이스 매니페스트
   node scripts/mis.mjs capabilities --write        # 명령, 스킬, 에이전트, MCP 도구, 훅을 추가한 뒤
+  node scripts/gap-matrix.mjs --write              # docs/research/gap-matrix.md 집계 다시 계산
+  node evals/m10/run.mjs --arms control,mis --demos b --n 1   # 비교 하네스(실제 claude 실행)
+  node evals/m10/report.mjs <summary.json> [out.html]         # 결과로 HTML 보고서 생성
   ```
   릴리스할 때는 `.claude-plugin/plugin.json`의 `version`을 올리세요.
 - **한계:** guard는 부주의한 실수를 막을 뿐, 의도적인 난독화까지 막지는 못합니다. 플러그인은 토큰 사용량을 읽을 수 없어서 토큰 예산은 지원하지 않고, 대신 실행 시간과 재시도 횟수를 제한합니다. headless 실행은 승인 단계에서 멈춥니다.
