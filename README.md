@@ -24,7 +24,7 @@ claude plugin list    # make-it-ship@make-it-ship should show as enabled
 ```
 Then start `claude` with no flags. The commands below are now available.
 - To install for one repository only, run both commands from inside that repository with `--scope project` added.
-- To update, run `claude plugin marketplace update make-it-ship` and then `claude plugin update make-it-ship@make-it-ship`. A new release reaches users only when `version` in `.claude-plugin/plugin.json` changes.
+- To update, run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart Claude Code. Running `plugin update` alone does not see a new release. A new release reaches users only when `version` in `.claude-plugin/plugin.json` changes; new commits without a version bump are not installed.
 - To remove the plugin:
 ```sh
 claude plugin uninstall make-it-ship@make-it-ship

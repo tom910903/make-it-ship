@@ -125,3 +125,15 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
      - `known_marketplaces.json`
      - `installed_plugins.json`
    - `~/.claude/plugins/cache/make-it-ship`(1.5MB)이 남아 있어 지웠다. README 제거 절차에 이 줄을 넣었다.
+
+### 업데이트 경로 — AUTO PASS (2026-10-21)
+
+원격에 임시 브랜치 `update-test`를 만들어 `tom910903/make-it-ship#update-test`로 설치했다. 확인이 끝난 뒤 브랜치는 지웠다.
+
+| 단계 | 실행 | 결과 |
+|---|---|---|
+| 설치 | `marketplace add` + `install` | 0.1.0, `77abfb3` |
+| version 그대로 커밋(`35a2726`) push | `marketplace update` → `plugin update` | 마켓플레이스 사본은 `35a2726`을 받음. 플러그인은 "already at the latest version (0.1.0)"으로 `77abfb3`에 머묾 |
+| version 0.1.1 커밋(`7753ad6`) push | `marketplace update` → `plugin update` | "updated from 0.1.0 to 0.1.1 … Restart to apply changes". 설치 경로가 `cache/…/0.1.1`, sha `7753ad6`로 바뀜 |
+| version 0.1.2 커밋(`8210872`) push | `plugin update`만 | "already at the latest version (0.1.1)". 마켓플레이스를 먼저 update해야 한다 |
+| 정리 | `uninstall`, `marketplace remove`, cache 삭제, 원격 브랜치 삭제 | 전역 파일 3개와 플러그인 디렉터리 목록이 백업과 같음 |
