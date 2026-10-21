@@ -104,10 +104,10 @@ Common situations, each with what to type and what happens next. Claude runs the
 
 ### 6. Browser QA of a web page (local-only mode)
 ```
-/make-it-ship:qa Check the sign-up page at http://localhost:3000, including the profile photo upload
+/make-it-ship:qa Check the sign-up page at http://localhost:3000 in local-only mode, including the profile photo upload
 ```
 - No Playwright needed: it drives the Chrome, Chromium or Edge already installed, headless, and checks screenshots and console errors. With no browser it reports `BLOCKED`.
-- **File upload** without asking runs only in the local-only browser, which Claude starts with `mis browse start --local-only`: nothing but this machine (localhost, `127.0.0.1`, …) is reachable. In a normal browser an upload always asks, because the file can leave the machine. `mis browse status` shows `localOnly`; switching modes restarts the browser.
+- **File upload** without asking runs only in the local-only browser; with "local-only mode" in the prompt, Claude starts it with `mis browse start --local-only`: nothing but this machine (localhost, `127.0.0.1`, …) is reachable. In a normal browser an upload always asks, because the file can leave the machine. `mis browse status` shows `localOnly`; switching modes restarts the browser.
 - Credential commands (cookies, headers, downloads, …) always ask, run or not.
 
 ## Reading the verdict
@@ -122,13 +122,7 @@ Common situations, each with what to type and what happens next. Claude runs the
 
 Required checks: Quick uses `required.quick`; Standard and Full use `required.standard` plus every `qa-*` check. Required reviews: quality (Quick), spec and quality (Standard, Full), plus security with risk flags.
 
-## Troubleshooting
-- **A headless run (`claude -p`) stops at approval.** Expected: no prompt can be shown, so steps that need approval stop. Continue in an interactive session with `/make-it-ship:resume`.
-- **An update does not show the new version.** Run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart. Also check that the release bumped `version` in `.claude-plugin/plugin.json`.
-- **Files are left after removal.** `claude plugin uninstall` keeps `~/.claude/plugins/cache/make-it-ship`; delete it with `rm -rf`. `mis uninstall --yes` removes the plugin's own user state.
-- **The MCP tools are missing.** Claude Code does not load a plugin's MCP server under `--strict-mcp-config`.
-
-## Use
+## What a run does
 ```
 /make-it-ship:run Implement docs/feature-request.md
 /make-it-ship:run Fix the bug described in ISSUE.md
@@ -285,6 +279,13 @@ node evals/m10/report.mjs <summary.json> [out.html]         # one local HTML rep
 ```
 Releasing: bump `version` in `.claude-plugin/plugin.json`, or marketplace users keep their cached copy.
 Design documents: `docs/Make_It_Ship_Spec_v1.1.md` (authoritative), `docs/adr/`, `docs/PROGRESS.md`.
+
+## Troubleshooting
+- **A headless run (`claude -p`) stops at approval.** Expected: no prompt can be shown, so steps that need approval stop. Continue in an interactive session with `/make-it-ship:resume`.
+- **An update does not show the new version.** Run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart. Also check that the release bumped `version` in `.claude-plugin/plugin.json`.
+- **Files are left after removal.** `claude plugin uninstall` keeps `~/.claude/plugins/cache/make-it-ship`; delete it with `rm -rf`. `mis uninstall --yes` removes the plugin's own user state.
+- **The MCP tools are missing.** Claude Code does not load a plugin's MCP server under `--strict-mcp-config`.
+
 
 ## Limits
 - The guard protects against careless mistakes, not against a model deliberately obfuscating commands.
