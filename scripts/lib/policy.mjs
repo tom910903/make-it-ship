@@ -291,6 +291,7 @@ export const APPROVAL_MIS = [
   [['canary'], 'mis canary loads your deployed site repeatedly in the browser'],
   [['redact', 'file'], 'mis redact file --apply rewrites the file with personal data and secrets replaced', { when: '--apply' }],
   [['ios', 'sync'], 'mis ios sync --apply overwrites the debug bridge files in this project', { when: '--apply' }],
+  [['layout', 'write'], 'mis layout write writes .ai/layout.md (and .ai/index.md if missing) and a marked section in the project CLAUDE.md and AGENTS.md'],
 ];
 const hit = (mis) => ([prefix, , o = {}]) => prefix.every((w, i) => mis[i] === w) && (!o.when || mis.includes(o.when)) && (!o.unless || !mis.includes(o.unless));
 function externalMis(mis, dir = '.', text = '', env = []) {

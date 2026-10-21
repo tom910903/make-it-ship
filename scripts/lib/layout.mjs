@@ -1,9 +1,11 @@
 // Project layout (user decision 2026-10-22): `layout` in .make-it-ship.json lists the path globs new files may use and
 // the doc folders (human docs in every language, AI docs in English). Checked by `mis plan set` and `mis layout`.
 import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { globToRegExp } from './policy.mjs';
-import { REPORT_DIR } from './tree-hash.mjs';
-import { CONFIG_FILE } from './config.mjs';
+import { REPORT_DIR, repoRoot } from './tree-hash.mjs';
+import { CONFIG_FILE, loadConfig } from './config.mjs';
 
 /** File names inside the AI docs folder: change them here only. */
 export const AI_DOCS = { index: 'index.md', layout: 'layout.md', modules: 'modules' };
@@ -75,4 +77,73 @@ export function renderLayoutDoc(layout) {
   if (!d.human && !d.ai) lines.push('- No doc rules.');
   lines.push('', '## Checks', '- `mis plan set` refuses planned files outside the allowed paths and human docs without every translation.', '- `mis layout` lists violations in the working tree.');
   return `${lines.join('\n')}\n`;
+}
+
+// ---------------------------------------------------------------- mis layout [--json] | write
+
+const START = '<!-- MIS:LAYOUT:START -->', END = '<!-- MIS:LAYOUT:END -->';
+const BLOCK_RE = /<!-- MIS:LAYOUT:START -->[\s\S]*?<!-- MIS:LAYOUT:END -->/;
+
+/** The marked section replaced in place, or appended; nothing else in the file changes. */
+function upsertBlock(text, body) {
+  const block = `${START}\n${body}\n${END}`;
+  if (BLOCK_RE.test(text)) return text.replace(BLOCK_RE, () => block);
+  return `${text}${text && !text.endsWith('\n') ? '\n' : ''}${text ? '\n' : ''}${block}\n`;
+}
+
+const indexSkeleton = (d) => `# AI index
+
+Terse facts for AI agents, in English: paths, commands, rules, invariants.${d.human ? ` Human docs live in \`${d.human}/\` (${(d.languages ?? ['en']).join(', ')}).` : ''}
+
+- Layout rules: [${AI_DOCS.layout}](${AI_DOCS.layout})
+- Per-module docs: \`${AI_DOCS.modules}/<dir path>.md\`
+
+## Commands
+
+## Modules
+
+## Invariants
+`;
+
+const files = (root) => execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+  .split('\0').filter((f) => f && existsSync(join(root, f))).sort(); // deleted-but-tracked files are gone
+
+function writeDocs(root, layout) {
+  const ai = layout.docs?.ai ?? DEFAULT_DOCS.ai;
+  const written = [];
+  const put = (rel, next) => {
+    const p = join(root, rel);
+    const old = existsSync(p) ? readFileSync(p, 'utf8') : null;
+    if (old === next) return;
+    mkdirSync(join(p, '..'), { recursive: true });
+    writeFileSync(p, next);
+    written.push(rel);
+  };
+  const read = (rel) => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), 'utf8') : '');
+  put(`${ai}/${AI_DOCS.layout}`, renderLayoutDoc(layout));
+  if (!existsSync(join(root, ai, AI_DOCS.index))) put(`${ai}/${AI_DOCS.index}`, indexSkeleton(layout.docs ?? {}));
+  // Claude Code memory import (`@path`) loads the AI docs with CLAUDE.md; AGENTS.md readers get a pointer.
+  put('CLAUDE.md', upsertBlock(read('CLAUDE.md'), `## Project docs for AI\nFacts, commands and layout rules for AI agents (English):\n@${ai}/${AI_DOCS.index}\n@${ai}/${AI_DOCS.layout}`));
+  put('AGENTS.md', upsertBlock(read('AGENTS.md'), `## Project docs for AI\nRead \`${ai}/${AI_DOCS.index}\` (facts, commands) and \`${ai}/${AI_DOCS.layout}\` (where files and docs go) before working.`));
+  return { written };
+}
+
+export function layoutCommand([sub, ...rest], cwd) {
+  const root = repoRoot(cwd);
+  const cfg = loadConfig(root);
+  if (cfg.errors.length) throw new Error(`.make-it-ship.json invalid: ${cfg.errors.join('; ')}`);
+  const layout = cfg.config?.layout ?? null;
+  if (sub === 'write' && !rest.length) {
+    if (!layout) throw new Error('no "layout" in .make-it-ship.json; `mis init` proposes one (add it with the user\'s approval)');
+    return writeDocs(root, layout);
+  }
+  if (!(sub === undefined || (sub === '--json' && !rest.length))) throw new Error('usage: mis layout [--json] | write');
+  const json = sub === '--json';
+  if (!layout) return json ? { layout: null } : 'no "layout" in .make-it-ship.json: layout rules are off. `mis init` proposes one.';
+  const all = files(root);
+  const v = layoutViolations(all, layout);
+  if (json) return { layout, files: all.length, ...v };
+  return [renderLayoutDoc(layout).trimEnd(), '', `## Working tree (${all.length} files)`,
+    `Outside the layout (${v.outside.length}):`, ...v.outside.map((f) => `- ${f}`),
+    `Human docs missing a translation (${v.missingTranslation.length}):`, ...v.missingTranslation.map((m) => `- ${m.file} → ${m.missing}`)].join('\n');
 }

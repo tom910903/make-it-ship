@@ -8,7 +8,7 @@ import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAli
 import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
-import { planLayoutErrors, LAYOUT_FIX, proposeLayout } from './layout.mjs';
+import { planLayoutErrors, LAYOUT_FIX, proposeLayout, layoutCommand } from './layout.mjs';
 import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
@@ -793,7 +793,7 @@ function init(args, cwd) {
 
 
 /** Commands by the module that defines them (`mis help` groups by this); later groups override earlier ones. */
-export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel },
+export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, layout: layoutCommand },
   always: alwaysCommands, browse: browseCommands, team: teamCommands, setup: setupCommands, skill: skillCommands, tty: ttyCommands, flow: flowCommands, models: modelCommands,
   research: researchCommands, ops: opsCommands, telemetry: telemetryCommands, gbrain: gbrainCommands, design: designCommands, pair: pairCommands, help: helpCommands };
 export const commands = Object.assign({}, ...Object.values(commandGroups));
