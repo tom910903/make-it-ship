@@ -59,7 +59,7 @@ const SECTIONS = {
     ...Object.entries(c.commands).map(([g, ks]) => `- ${g}: ${ks.join(', ')}`)],
   skills: (c) => [`## Skills (${c.skills.length})`, ...c.skills.map((s) => `- \`/make-it-ship:${s.name}\` — ${short(s.description)}`)],
   agents: (c) => [`## Agents (${c.agents.length})`, ...c.agents.map((a) => `- \`make-it-ship:${a.name}\` — ${short(a.description)}`)],
-  keywords: (c) => [`## Keywords (said in a prompt; earlier wins; off with \`keywords.disabled\` in .make-it-ship.json)`,
+  keywords: (c) => [`## Keywords (said in a prompt; earlier wins; off with \`keywords.disabled\` in ~/.make-it-ship/config.json, e.g. \`mis config set keywords.disabled ...\`)`,
     ...c.keywords.map((k) => `- \`${k.name}\` — ${short(k.trigger, 400)}\n  → ${short(k.action, 200)}`)],
   styles: (c) => ['## Style levels', `${c.styles.join(', ')} (\`mis style <level>\`, or say "style <level>" / "normal mode")`],
   mcp: (c) => [`## MCP tools (server \`mis\`, ${c.mcp.length})`, ...c.mcp.map((t) => `- \`${t.name}\` — ${short(t.description, 120)}`)],
