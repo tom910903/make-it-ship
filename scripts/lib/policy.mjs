@@ -143,7 +143,7 @@ function classifyBash(cmd, ctx, cwd) {
     return ask('changing .make-it-ship.json invalidates existing evidence');
   }
   let verdict = allow, lost = false; // lost: the shell's directory can no longer be followed (cd $X, cd -, pushd)
-  for (const { argv: ws, redirects, env = [] } of commands) {
+  for (const { argv: ws, redirects, env = [], chdir } of commands) {
     if (['cd', 'pushd', 'popd'].includes(ws[0])) {
       if (ws[0] === 'cd' && ws[1] && ws[1] !== '-' && !/[$`]/.test(ws[1])) dir = resolve(dir, ws[1].replace(/^~/, homedir())); else lost = true;
       continue;
@@ -157,7 +157,7 @@ function classifyBash(cmd, ctx, cwd) {
     if (r.decision === 'allow') r = otherModelTeam(m, text);
     if (r.decision === 'allow') r = browserLaunchOverride(m, text);
     if (r.decision === 'allow') r = misInner(m, text, ctx, dir);
-    if (r.decision === 'allow') r = storedMis(m, ctx, dir, text, env, lost || (dir !== cwd && !existsSync(dir)));
+    if (r.decision === 'allow') r = storedMis(m, ctx, dir, text, env, lost || chdir || (dir !== cwd && !existsSync(dir)));
     if (r.decision === 'allow') r = externalMis(m, dir, text, env);
     if (r.decision === 'allow') r = outsideRepoMis(misSub(ws, functions));
     if (r.decision === 'allow') r = lastingChange(ws, misSub(ws, functions), text, redirects, dir, ctx);
@@ -357,7 +357,7 @@ function storedMis(mis, ctx, dir, text, env = [], lost = false) {
   if (!mis) return allow;
   // M9 r2 N1: fail closed when the guard cannot read the files mis will read
   if (READS_STORED(mis) && (lost || env.some((e) => /^GIT_(DIR|WORK_TREE)=/.test(e)))) {
-    const why = `mis ${mis.slice(0, 2).join(' ')} runs commands or changes stored in the repository, but the guard cannot tell which repository it will run in (cd to a variable or a missing dir, pushd, GIT_DIR); run it from that directory so the guard can show them`;
+    const why = `mis ${mis.slice(0, 2).join(' ')} runs commands or changes stored in the repository, but the guard cannot tell which repository it will run in (cd to a variable or a missing dir, pushd, env -C, GIT_DIR); run it from that directory so the guard can show them`;
     const own = EXTERNAL_MIS.find(hit(mis)) ?? APPROVAL_MIS.find(hit(mis)); // its reason, without details read from the wrong dir
     return ask(`${own ? `${own[1]} [${why}]` : why}${env.length ? ` [env: ${list(env)}]` : ''} — needs your approval`);
   }

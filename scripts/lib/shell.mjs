@@ -224,6 +224,7 @@ export function normalize(argv, vars, heredoc) {
     return m && vars.has(m[1]) ? vars.get(m[1]) : w;
   });
   const env = []; // leading assignments (`K=V cmd`, `env K=V cmd`): the command's environment, shown in asks
+  let chdir = false; // `env -C dir`, `sudo -D dir`: the command runs in another directory (M9 r3)
   for (;;) {
     while (a.length && /^[A-Za-z_]\w*=/.test(a[0])) { env.push(a[0]); const [k, ...v] = a.shift().split('='); vars.set(k, v.join('=')); }
     if (!a.length) return { argv: [] };
@@ -234,6 +235,7 @@ export function normalize(argv, vars, heredoc) {
       while (a[0]?.startsWith('-')) {
         const f = a.shift();
         if (name === 'env' && f === '-S') { return { argv: [], script: a.join(' ') }; }
+        if ((name === 'env' && /^(-C|--chdir(=|$))/.test(f)) || (name === 'sudo' && /^(-D|--chdir(=|$))/.test(f))) chdir = true;
         if (WRAPPERS[name].includes(f)) a.shift();
         if (name === 'nice' && /^-\d+$/.test(f)) continue;
       }
@@ -251,11 +253,11 @@ export function normalize(argv, vars, heredoc) {
       if (/^-[a-z]*c[a-z]*$/i.test(a[k])) hasC = true;
       k++;
     }
-    if (hasC && a[k] !== undefined) return { argv: a, env, script: a[k] };
-    if (!hasC && a[k] === undefined && heredoc !== undefined) return { argv: a, env, script: heredoc }; // bash <<EOF
+    if (hasC && a[k] !== undefined) return { argv: a, env, chdir, script: a[k] };
+    if (!hasC && a[k] === undefined && heredoc !== undefined) return { argv: a, env, chdir, script: heredoc }; // bash <<EOF
   }
-  if (a[0] === 'eval') return { argv: a, env, script: a.slice(1).join(' ') };
-  return { argv: a, env };
+  if (a[0] === 'eval') return { argv: a, env, chdir, script: a.slice(1).join(' ') };
+  return { argv: a, env, chdir };
 }
 
 /** `$@`, `$*`, `$1`… of a function body → the call's arguments */
@@ -283,13 +285,13 @@ export function commandsOf(src, depth = 0, known = new Map()) {
     const n = normalize(c.argv, vars, c.heredoc);
     if (n.script !== undefined && depth < 5) {
       const inner = commandsOf(n.script, depth + 1, functions);
-      out.push(...inner.commands);
+      out.push(...inner.commands.map((ic) => (n.chdir ? { ...ic, chdir: true } : ic)));
       text += ` ${inner.text} `;
       for (const [k, v] of inner.functions) functions.set(k, v);
     }
     // `exec 3> f` and a bare `> f` still write f: keep the redirects as a no-op command (`:`)
     if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects, env: n.env ?? [] }); continue; }
-    out.push({ argv: n.argv, redirects: c.redirects ?? [], env: n.env ?? [] });
+    out.push({ argv: n.argv, redirects: c.redirects ?? [], env: n.env ?? [], chdir: n.chdir });
     if (functions.has(n.argv[0]) && depth < 5) {
       for (const ic of commandsOf(functions.get(n.argv[0]), depth + 1, functions).commands) {
         const argv = normalize(substitute(ic.argv, n.argv.slice(1)), new Map()).argv;
