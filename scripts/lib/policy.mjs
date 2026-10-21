@@ -350,14 +350,19 @@ function misInner(mis, text, ctx, dir) {
 const TMUX_KEY = /^(?:(?:[CMS]-)+(?:.|[A-Z]\w*)|\^.|Enter|Escape|Tab|BTab|Space|BSpace|Up|Down|Left|Right|Home|End|PageUp|PgUp|PPage|PageDown|PgDn|NPage|Insert|IC|Delete|DC|F\d{1,2}|KP\w+)$/;
 const NEWLINE_KEY = /^(?:Enter|KPEnter|C-[mj]|\^[MJ])$/;
 // A word tmux may take as a send-keys option (flags c:FHKlMN:Rt:X); `-1` is not one. tmux may permute options, so any such
-// word before `--` asks; after `--` every word is a key or text.
+// word before the first `--` asks. A leading `--` is always consumed; a later one is consumed by a permuting getopt but
+// typed by tmux's own parser, so the text is classified both ways and the stricter decision wins.
 const TMUX_OPTION = /^-[FHKlMRX]*(?:[FHKlMRX]|[cNt].*)$/;
+const RANK = { allow: 0, ask: 1, deny: 2 };
 function ttyKeys(words, ctx, dir) {
-  const dd = words.indexOf('--'), ks = dd < 0 ? words : [...words.slice(0, dd), ...words.slice(dd + 1)];
+  const dd = words.indexOf('--');
   if (words.slice(0, dd < 0 ? words.length : dd).some((k) => TMUX_OPTION.test(k))) return ask('mis tty keys passes words starting with "-" to tmux as options (hex input, another pane) — needs your approval');
   // Other key names (C-c, Up, ...) type nothing; text on both sides of them is joined, which can only make this stricter.
-  const typed = ks.map((k) => (k === 'Space' ? ' ' : NEWLINE_KEY.test(k) ? '\n' : TMUX_KEY.test(k) ? '' : k)).join('');
-  return classifyBash(typed, ctx, dir);
+  const typed = (ks) => classifyBash(ks.map((k) => (k === 'Space' ? ' ' : NEWLINE_KEY.test(k) ? '\n' : TMUX_KEY.test(k) ? '' : k)).join(''), ctx, dir);
+  const without = dd < 0 ? words : [...words.slice(0, dd), ...words.slice(dd + 1)];
+  if (dd <= 0) return typed(without);
+  const [a, b] = [typed(words), typed(without)];
+  return RANK[b.decision] > RANK[a.decision] ? b : a;
 }
 
 // M9-A: mis subcommands that change files outside this repository (~/.claude settings and CLAUDE.md, MCP config,
@@ -405,15 +410,15 @@ const lc = (p) => p.toLowerCase();
 const CLAUDE_MD = /^claude(?:\.local)?\.md$/;
 function protectedFile(abs, repoRoot) {
   const home = lc(homedir()), mh = lc(homeDir()), cds = [...new Set([claudeDir(), join(homedir(), '.claude')].flatMap((c) => [lc(c), lc(realish(c))]))];
-  for (const p of new Set([lc(abs), lc(realish(abs))])) {
-    const name = basename(p), d = dirname(p);
-    if (cds.includes(d) && (/^settings.*\.json$/.test(name) || name === 'claude.md')) return `${p} is your Claude Code configuration (used by every session)`;
+  for (const shown of new Set([abs, realish(abs)])) {
+    const p = lc(shown), name = basename(p), d = dirname(p);
+    if (cds.includes(d) && (/^settings.*\.json$/.test(name) || name === 'claude.md')) return `${shown} is your Claude Code configuration (used by every session)`;
     // skills, agents, commands and rules are instructions in every session; hooks scripts run in every session
-    if (cds.some((c) => ['skills', 'agents', 'commands', 'rules', 'hooks'].some((x) => under(p, join(c, x))))) return `${p} is in your Claude Code configuration (skills, agents, commands, rules or hooks used by every session)`;
-    if (p === join(home, '.claude.json') || cds.some((c) => p === join(c, '.claude.json'))) return `${p} holds your Claude Code MCP servers and project settings`;
-    if (basename(d) === '.claude' && /^settings.*\.json$/.test(name)) return `${p} is Claude Code settings (permissions and hooks that run commands)`;
-    if (CLAUDE_MD.test(name) && !under(p, lc(realish(repoRoot)))) return `${p} is a ${name} outside this repository (instructions for other sessions)`;
-    if (p === join(mh, 'config.json') || under(p, join(mh, 'skills')) || p === join(mh, 'trusted-repos.json')) return `${p} is Make It Ship user configuration (applies to every repository)`;
+    if (cds.some((c) => ['skills', 'agents', 'commands', 'rules', 'hooks'].some((x) => under(p, join(c, x))))) return `${shown} is in your Claude Code configuration (skills, agents, commands, rules or hooks used by every session)`;
+    if (p === join(home, '.claude.json') || cds.some((c) => p === join(c, '.claude.json'))) return `${shown} holds your Claude Code MCP servers and project settings`;
+    if (basename(d) === '.claude' && /^settings.*\.json$/.test(name)) return `${shown} is Claude Code settings (permissions and hooks that run commands)`;
+    if (CLAUDE_MD.test(name) && !under(p, lc(realish(repoRoot)))) return `${shown} is a ${basename(shown)} outside this repository (instructions for other sessions)`;
+    if (p === join(mh, 'config.json') || under(p, join(mh, 'skills')) || p === join(mh, 'trusted-repos.json')) return `${shown} is Make It Ship user configuration (applies to every repository)`;
   }
   return null;
 }

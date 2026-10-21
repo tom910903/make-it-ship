@@ -125,5 +125,8 @@ test('D4: MCP writers by more verbs, uri/url file: keys and nested paths', () =>
 test('D6: tty keys words that are not tmux send-keys options are typed text; real option words still ask', () => {
   expectAll('allow', [`${M} tty keys repl -1 Enter`, `${M} tty keys repl -- -l Enter`, `${M} tty keys repl -42 Space -x Enter`, `${M} tty keys repl - Enter`]);
   expectAll('ask', [`${M} tty keys sh -l x`, `${M} tty keys sh -H 41`, `${M} tty keys sh echo Space -t x`, `${M} tty keys sh -N 3 x`, `${M} tty keys sh -lR x`,
-    `${M} tty keys sh -- rm Space -rf Space '~' Enter`, `${M} tty keys sh -1 Space -X cancel`]);
+    `${M} tty keys sh -- rm Space -rf Space '~' Enter`, `${M} tty keys sh -1 Space -X cancel`,
+    // a `--` after a plain word may be typed literally (tmux stops options at the first plain word): it must not hide a flag
+    `${M} tty keys sh node Space mis.mjs Space uninstall Space -- yes Enter`, `${M} tty keys sh git Space push Space -- force Enter`,
+    `${M} tty keys sh git Space push Space - -- -force Enter`]);
 });
