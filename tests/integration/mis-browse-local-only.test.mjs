@@ -49,15 +49,29 @@ after(() => {
   rmSync(HOME, { recursive: true, force: true });
 });
 
-/** One R3 path: open the attack page, attach the file, trigger the send, then `finish` (e.g. close the tab). */
-function run(kind, finish = () => b('click', '#go')) {
-  const tab = ok(b('newtab', attack(kind)));
-  if (kind === 'sw') ok(b('wait', '--load'));
-  b('upload', '#f', secret); // a command that saw a blocked request fails; what counts is what reached the listeners
-  finish(tab);
-  pause(2500);
+const until = (fn, what, ms = 20000) => {
+  const end = Date.now() + ms;
+  for (;;) { const v = fn(); if (v) return v; if (Date.now() > end) assert.fail(`timed out waiting for ${what}`); pause(200); }
+};
+const closeHolder = () => { const holder = ok(b('tabs')).find((t) => t.active).id; ok(b('newtab', `${base}/next`)); ok(b('closetab', String(holder))); };
+/** The R3-1/R3-2 paths: [name, attack page kind, loopback marker it sends right before its remote send, how it is triggered] */
+const PATHS = [
+  ['Service Worker', 'sw', 'worker'], ['SharedWorker', 'shared', 'worker'],
+  ['another local document (sessionStorage)', 'nav-storage', 'moved'], ['another local document (?query)', 'nav-query', 'moved'],
+  ['WebSocket', 'ws', 'ws'], ['WebRTC TURN/STUN (UDP)', 'webrtc', 'webrtc'],
+  ['pagehide beacon + keepalive on closetab', 'pagehide', 'pagehide', closeHolder],
+  ...[1, 2, 3].map((n) => [`pagehide keepalive on goto (race, try ${n})`, 'pagehide', 'pagehide', () => b('goto', `${base}/next`)]),
+];
+/** Run one path (file attached with or without --remote) and return what the remote listeners got, once its marker arrived. */
+function attempt([name, kind, marker, finish = () => b('click', '#go')], remote) {
+  reset();
+  ok(b('newtab', attack(kind)));
+  if (kind === 'sw') until(() => ok(b('js', 'navigator.serviceWorker.controller ? 1 : 0')).trim() === '1', `${name}: service worker active`);
+  b('upload', '#f', secret, ...(remote ? ['--remote'] : [])); // a command that saw a blocked request fails; what counts is what reached the listeners
+  finish();
+  until(() => local('/marks').includes(marker), `${name}: the attack ran (marker ${marker})`);
+  return received;
 }
-
 test('local-only: start --local-only records the mode, launches Chrome with the network closed and loopback open', () => {
   if (!chrome) return blocked(b('start', '--local-only'));
   const s = ok(b('start', '--local-only'));
@@ -77,26 +91,15 @@ test('local-only: start --local-only records the mode, launches Chrome with the 
   assert.equal(ok(b('start', '--local-only')).pid, s.pid, 'same mode: the running daemon is kept');
 });
 
-test('local-only: every R3-1/R3-2 path delivers 0 bytes to the remote listeners (IP and mapped name)', () => {
+test('local-only: every R3-1/R3-2 path runs (its loopback marker arrives) and delivers 0 bytes to the remote listeners (IP and mapped name)', (t) => {
   if (!chrome) return blocked(b('start', '--local-only'));
   assert.equal(ok(b('status')).localOnly, true);
-  const paths = {
-    'Service Worker': () => run('sw'),
-    SharedWorker: () => run('shared'),
-    'another local document (sessionStorage)': () => run('nav-storage'),
-    'another local document (?query)': () => run('nav-query'),
-    'WebSocket': () => run('ws'),
-    'WebRTC TURN/STUN (UDP)': () => run('webrtc'),
-    'pagehide beacon + keepalive on closetab': () => run('pagehide', () => {
-      const holder = ok(b('tabs')).find((t) => t.active).id;
-      ok(b('newtab', `${base}/next`)); ok(b('closetab', String(holder)));
-    }),
-  };
-  for (let i = 0; i < 3; i++) paths[`pagehide keepalive on goto (race, try ${i + 1})`] = () => run('pagehide', () => b('goto', `${base}/next`));
-  for (const [name, attempt] of Object.entries(paths)) {
-    reset();
-    attempt();
-    assert.deepEqual(received(), [], `${name}: nothing may reach the remote listeners`);
+  for (const p of PATHS) {
+    const got = attempt(p, false);
+    pause(1500); // late sends (keepalive, retries) get time to arrive too
+    const r = got();
+    t.diagnostic(`local-only ${p[0]}: ${r.length} packets/chunks, ${r.reduce((n, g) => n + g.bytes, 0)} bytes`);
+    assert.deepEqual(r, [], `${p[0]}: nothing may reach the remote listeners`);
   }
 });
 
@@ -118,26 +121,20 @@ test('local-only: upload needs no confirmation; connect is refused; handoff/resu
   ok(b('closetab'));
 });
 
-test('normal browser (control): plain upload is refused, and the same harness measures the leak a page script makes after upload --remote', () => {
+test('normal browser (control): plain upload is refused, and the same harness measures every path leaking after upload --remote', (t) => {
   if (!chrome) return blocked(b('start'));
   const s = ok(b('start'));
   assert.equal(s.localOnly, false);
   assert.doesNotMatch(chromeCmd(), /--proxy-server/);
   ok(b('goto', `${base}/attack?kind=none`));
   failed(b('upload', '#f', secret), /local-only[\s\S]*--remote/);
-  for (const [kind, want] of [['sw', /tcp/], ['webrtc', /udp/]]) {
-    reset();
-    ok(b('newtab', attack(kind)));
-    if (kind === 'sw') ok(b('wait', '--load'));
-    ok(b('upload', '#f', secret, '--remote'));
-    b('click', '#go');
-    pause(2500);
-    const got = received();
-    assert.ok(got.some((g) => want.test(g.proto) && g.bytes > 0), `${kind}: the control run reaches the listener: ${JSON.stringify(got)}`);
-    if (kind === 'sw') {
-      assert.ok(got.some((g) => /POST \/worker/.test(g.head)), JSON.stringify(got));
-      assert.equal(got.filter((g) => /POST \/worker/.test(g.head)).length, 2, 'both the IP and the mapped name were reached');
-    }
+  for (const p of PATHS) {
+    const got = attempt(p, true);
+    // WebRTC goes by UDP; every other path by TCP to the IP and to the mapped name (a race may deliver only one of them)
+    const want = (g) => g.proto === (p[1] === 'webrtc' ? 'udp' : 'tcp');
+    const r = until(() => { const x = got(); return x.some(want) && x; }, `${p[0]}: the control run reaches the listener`);
+    t.diagnostic(`normal ${p[0]}: ${r.length} packets/chunks, ${r.reduce((n, g) => n + g.bytes, 0)} bytes; ${r.map((g) => g.proto === 'udp' ? `udp ${g.bytes}B` : g.head).join(' | ')}`);
+    if (p[1] === 'sw') until(() => got().filter((g) => /POST \/worker/.test(g.head)).length === 2, 'both the IP and the mapped name to be reached');
   }
   ok(b('stop'));
 });
