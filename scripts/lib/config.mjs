@@ -21,7 +21,7 @@ function unknownKeys(obj, allowed, prefix, errs) {
 export function validateConfig(cfg) {
   const errs = [];
   if (!isObj(cfg)) return ['config must be an object'];
-  unknownKeys(cfg, ['version', 'checks', 'required', 'limits', 'dependencyManifests', 'interview'], '', errs);
+  unknownKeys(cfg, ['version', 'checks', 'required', 'limits', 'dependencyManifests', 'interview', 'layout'], '', errs);
   if (cfg.version !== 1) errs.push('version must be 1');
   if (!isObj(cfg.checks) || !Object.keys(cfg.checks).length) errs.push('checks must define at least one check');
   else for (const [name, c] of Object.entries(cfg.checks)) {
@@ -57,7 +57,32 @@ export function validateConfig(cfg) {
       if (cfg.interview.threshold !== undefined && !LEVELS.includes(cfg.interview.threshold)) errs.push('interview.threshold must be HIGH|MED|LOW');
     }
   }
+  if (cfg.layout !== undefined) validateLayout(cfg.layout, errs);
   return errs;
+}
+
+/** Optional project layout (user decision 2026-10-22): allowed path globs, their purposes, human/AI doc folders. */
+function validateLayout(l, errs) {
+  if (!isObj(l)) { errs.push('layout must be an object'); return; }
+  unknownKeys(l, ['paths', 'purposes', 'docs'], 'layout.', errs);
+  if (!isStrArr(l.paths) || !l.paths.length) errs.push('layout.paths must be a non-empty string array of path globs');
+  if (l.purposes !== undefined) {
+    if (!isObj(l.purposes)) errs.push('layout.purposes must be an object {glob: purpose}');
+    else for (const [g, v] of Object.entries(l.purposes)) {
+      if (!isStrArr(l.paths) || !l.paths.includes(g)) errs.push(`layout.purposes: "${g}" is not in layout.paths`);
+      if (typeof v !== 'string' || !v) errs.push(`layout.purposes["${g}"] must be a non-empty string`);
+    }
+  }
+  if (l.docs !== undefined) {
+    if (!isObj(l.docs)) { errs.push('layout.docs must be an object'); return; }
+    unknownKeys(l.docs, ['human', 'ai', 'languages'], 'layout.docs.', errs);
+    for (const k of ['human', 'ai']) if (l.docs[k] !== undefined && !(typeof l.docs[k] === 'string' && /^[^/*?]+(\/[^/*?]+)*$/.test(l.docs[k]))) errs.push(`layout.docs.${k} must be a folder path like "docs" (no globs, no trailing slash)`);
+    const langs = l.docs.languages;
+    if (langs !== undefined) {
+      if (!isStrArr(langs) || !langs.every((x) => /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(x))) errs.push('layout.docs.languages must be language codes like ["en", "ko"]');
+      else if (!langs.includes('en')) errs.push('layout.docs.languages must include "en" (the file without a language suffix)');
+    }
+  }
 }
 
 export function normalizeConfig(cfg) {
@@ -70,6 +95,7 @@ export function normalizeConfig(cfg) {
     limits: { maxAttemptsPerTask: 2, maxRuntimeMinutes: 120, ...cfg.limits },
     dependencyManifests: cfg.dependencyManifests ?? DEFAULT_MANIFESTS,
     interview: { threshold: cfg.interview?.threshold ?? 'HIGH' },
+    ...(cfg.layout ? { layout: cfg.layout } : {}),
   };
 }
 
