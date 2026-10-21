@@ -16,6 +16,8 @@ test('MCP server: initialize, tools/list with schemas, unknown tool and method e
     const bad = await s.call('no_such_tool');
     assert.equal(bad.isError, true);
     assert.equal((await s.rpc('no/such/method')).error.code, -32601);
+    const init = await s.rpc('initialize', { protocolVersion: '2025-06-18' });
+    assert.equal(init.result.serverInfo.version, JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version, 'server version follows plugin.json');
   } finally { s.close(); }
 });
 

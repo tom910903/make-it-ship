@@ -2,9 +2,11 @@
 // Make It Ship MCP server (M7): stdio JSON-RPC (newline-delimited) exposing the tool modules listed in registry.mjs.
 // Registered by the plugin's .mcp.json as server "mis" → tools appear as mcp__plugin_make-it-ship_mis__<name>.
 import { createInterface } from 'node:readline';
+import { readFileSync } from 'node:fs';
 import { loadTools } from './registry.mjs';
 
 const tools = await loadTools();
+const VERSION = JSON.parse(readFileSync(new URL('../../.claude-plugin/plugin.json', import.meta.url), 'utf8')).version;
 const byName = new Map(tools.map((t) => [t.name, t]));
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\n');
 const ctx = () => ({ cwd: process.env.CLAUDE_PROJECT_DIR || process.cwd() });
@@ -14,7 +16,7 @@ export const toText = (v) => typeof v === 'string' ? v : JSON.stringify(v, null,
 async function handle(m) {
   switch (m.method) {
     case 'initialize':
-      return { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'make-it-ship', version: '0.2.0' } };
+      return { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'make-it-ship', version: VERSION } };
     case 'ping': return {};
     case 'tools/list':
       return { tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };

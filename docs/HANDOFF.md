@@ -62,14 +62,13 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기, NH-7·8 외부 모델은 "추후 확인 필요". 절차는 `docs/milestones/NEEDS_HUMAN.md`.
 2. **master 전환**(사용자 결정 후)
    - master를 만들고 **GitHub 기본 브랜치를 master로 바꾼다**(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
-   - `plugin.json` version을 올린다(지금 0.1.0). 올리지 않으면 이미 설치한 사용자가 `plugin update`로 새 커밋을 받지 못한다(실측).
-   - MCP 서버가 보고하는 버전(`scripts/mcp/server.mjs`의 `0.2.0`)을 `plugin.json`과 맞춘다.
+   - version은 2026-10-22에 0.2.0으로 올렸다(사용자 결정). MCP 서버는 이제 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
+   - 전환 시점: **사람 확인(NH) 뒤**(사용자 결정, 2026-10-22).
 3. **선택 개선(PROGRESS PROPOSALS)**: 모델이 review 전에 `mis report`를 실행하면 리뷰를 다시 기록할 수 없다. (a) 안내 문구 추가 또는 (b) Spec 상태 전이 변경(사용자 결정).
 
 ## 4. 열린 결정
 
-- version 번호와 master 전환 시점
-- MCP 서버 버전 표기(0.2.0)와 plugin.json(0.1.0) 중 어느 쪽에 맞출지
+- (결정됨, 2026-10-22) version 0.2.0. master 전환은 NH 사람 확인 뒤.
 - PROPOSALS의 (a)/(b)
 - NH-6~8: 실기기와 사내 정책이 준비되면 유지·닫기·제거 결정
 - (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에는 M8·M9·M10 결과까지 들어 있다.
