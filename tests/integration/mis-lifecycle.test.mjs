@@ -166,6 +166,20 @@ test('A6 uninstall: dry run lists what would go and changes nothing; --yes remov
   assert.ok(existsSync(h.claude));
 });
 
+test('A6 setup -> uninstall round trip restores a status line the user already had, whatever the checkout directory is called (M9 r3 N1)', () => {
+  const h = fakeHome();
+  const routing = '# Proj\n\n## Skill routing\n\n- review → /make-it-ship:review\n';
+  const dir = makeRepo({ 'CLAUDE.md': routing });
+  writeFileSync(join(h.claude, 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'echo old' } }));
+  ok(mis(dir, ['setup', '--write'], { env: h.env }));
+  assert.notEqual(JSON.parse(readFileSync(join(h.claude, 'settings.json'), 'utf8')).statusLine.command, 'echo old');
+  // the project CLAUDE.md routing section is the user's to remove: named, never deleted
+  assert.match(ok(mis(dir, ['uninstall', '--dry-run'], { env: h.env })).routingNote, /CLAUDE\.md.*## Skill routing.*left in place/);
+  assert.match(ok(mis(dir, ['uninstall', '--yes'], { env: h.env })).routingNote, /left in place/);
+  assert.equal(JSON.parse(readFileSync(join(h.claude, 'settings.json'), 'utf8')).statusLine.command, 'echo old');
+  assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), routing);
+});
+
 test('A7 SessionStart maintenance: old finished runs, ended teams and dead browse dirs go; active run, loop and recent state stay; once a day', () => {
   const h = fakeHome();
   const dir = makeRepo();

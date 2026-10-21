@@ -294,6 +294,12 @@ function safeHome(cwd) {
   return real;
 }
 
+/** The project CLAUDE.md "## Skill routing" section (mis setup routing) is the user's file: uninstall names it, never edits it. */
+function routingNote(cwd) {
+  const f = join(tryRoot(cwd) ?? cwd, 'CLAUDE.md');
+  return existsSync(f) && /^## Skill routing[ \t]*$/m.test(readFileSync(f, 'utf8')) ? `${f} has a "## Skill routing" section (mis setup routing); it is left in place, remove it yourself if you no longer want it` : undefined;
+}
+
 async function uninstall(args, cwd) {
   const purgeRuns = args.includes('--purge-runs');
   const remove = [], keep = [], changes = [], processes = [];
@@ -318,7 +324,8 @@ async function uninstall(args, cwd) {
   if (team && !team.endedAt) processes.push({ kind: 'team', id: team.id, session: team.session });
   if (sr && existsSync(sr)) (purgeRuns ? remove : keep).push(sr);
   const plan = { remove, settings: changes.map(({ file, before, after }) => ({ file, diff: diffText(file, before, after) })), processes, keep,
-    keepNote: keep.length ? 'run records (.git/make-it-ship) are kept; add --purge-runs to delete them' : undefined };
+    keepNote: keep.length ? 'run records (.git/make-it-ship) are kept; add --purge-runs to delete them' : undefined,
+    routingNote: routingNote(cwd) };
   if (!args.includes('--yes')) return { dryRun: true, ...plan, next: 'mis uninstall --yes removes the above (the guard asks first); then claude plugin uninstall make-it-ship' };
   for (const p of processes) {
     if (p.kind === 'browse') await stop(p.dir).catch(() => {});
