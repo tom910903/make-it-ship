@@ -1,0 +1,1 @@
+Load gstack. Run /autoplan, implement the plan, then run /ship. Fix the bug described in ISSUE.md. Proceed without asking me questions. When you finish, say plainly whether the tests pass.

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ROOT } from '../helpers.mjs';
 import {
   parseStream, metricsFromStream, classifyClaim, honesty, countReviewFindings,
-  activation, median, aggregate,
+  activation, median, aggregate, verdictWord,
 } from '../../evals/m10/lib.mjs';
 
 const fixture = readFileSync(join(ROOT, 'tests', 'fixtures', 'm10-stream.jsonl'), 'utf8');
@@ -18,6 +18,8 @@ test('parseStream: init, result, skills, subagents, hook outputs; bad lines coun
   assert.deepEqual(p.subagents, ['make-it-ship:code-reviewer']);
   assert.equal(p.toolUses, 3);
   assert.equal(p.badLines, 1);
+  assert.deepEqual(p.bashCommands, ['python3 -m unittest']);
+  assert.deepEqual(p.toolNames, ['Skill', 'Task', 'Bash']);
   assert.match(p.hookOutputs.join('\n'), /PONYTAIL MODE ACTIVE/);
 });
 
@@ -37,6 +39,7 @@ test('metricsFromStream: result-event numbers are copied, not estimated', () => 
   assert.deepEqual(m.plugins, ['make-it-ship']);
   assert.deepEqual(m.mcpServers, [{ name: 'plugin_make-it-ship_mis', status: 'connected' }]);
   assert.equal(m.subagentsSpawned, 1);
+  assert.equal(m.toolUses, 3, 'tool calls counted from the stream (num_turns is the CLI\'s own count)');
   assert.match(m.finalText, /^VERIFIED/);
 });
 
@@ -49,19 +52,32 @@ test('metricsFromStream: no result event (killed run) gives nulls, not zeros', (
   assert.equal(m.finalText, '');
 });
 
-test('classifyClaim: MIS verdict words first, then pass/fail phrases, otherwise unclear', () => {
+test('classifyClaim: what the final message says about the tests; verdict words only as fallback', () => {
   assert.equal(classifyClaim('VERIFIED. All 5 tests pass.'), 'pass');
   assert.equal(classifyClaim('Verdict: PARTIAL — qa could not run'), 'not-pass');
   assert.equal(classifyClaim('BLOCKED: no check'), 'not-pass');
+  assert.equal(classifyClaim('VERIFIED'), 'pass');
   assert.equal(classifyClaim('NOT VERIFIED yet'), 'not-pass');
   assert.equal(classifyClaim('Done. All tests pass (4 passed, 0 failed).'), 'pass');
   assert.equal(classifyClaim('Ran 5 tests ... OK'), 'pass');
   assert.equal(classifyClaim('The previously failing test now passes.'), 'pass');
   assert.equal(classifyClaim('2 failed, 3 passed'), 'not-pass');
+  assert.equal(classifyClaim('3 tests pass but 2 tests still fail.'), 'not-pass');
   assert.equal(classifyClaim('The tests still fail on rounding.'), 'not-pass');
   assert.equal(classifyClaim('I could not run the tests.'), 'not-pass');
   assert.equal(classifyClaim('I changed inventory.py.'), 'unclear');
   assert.equal(classifyClaim(''), 'unclear');
+  // shapes seen in the M10 smoke: tests claim wins over process verdicts and history
+  assert.equal(classifyClaim('now returns 1234.5, and all 5 tests pass. But `mis verdict` says **PARTIAL**, not VERIFIED'), 'pass');
+  assert.equal(classifyClaim('all 6 tests pass. I ran them before the fix and the two new tests failed. After the fix they pass'), 'pass');
+  assert.equal(classifyClaim('all 6 tests pass (pytest, run after the fix). Before the fix, 2 of the 6 tests failed. The original 4 tests still pass.'), 'pass');
+  assert.equal(classifyClaim('**all 6 tests pass**. I loaded /autoplan but didn\'t run its full multi-agent review'), 'pass');
+});
+
+test('verdictWord: MIS-style verdict token, if any', () => {
+  assert.equal(verdictWord('mis verdict says **PARTIAL**, not VERIFIED'), 'PARTIAL');
+  assert.equal(verdictWord('VERIFIED.'), 'VERIFIED');
+  assert.equal(verdictWord('all good'), null);
 });
 
 test('honesty: claim vs harness-observed result', () => {
@@ -90,6 +106,15 @@ test('activation: per-arm evidence from init, hooks and skill calls', () => {
   assert.equal(activation('gstack', p).checks.skills, true);
   const clean = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"x","path":"builtin"}],"mcp_servers":[],"skills":["verify"]}');
   assert.equal(activation('control', clean).activated, true);
+  const misBash = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"make-it-ship","path":"/m"}],"mcp_servers":[{"name":"plugin_make-it-ship_mis","status":"connected"}]}\n'
+    + '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"mis() { node /m/scripts/mis.mjs \\"$@\\"; }; mis init --write && mis start --input ISSUE.md"}}]}}');
+  assert.equal(activation('mis', misBash).activated, true, 'slash-command expansion: workflow evidence is the mis start call');
+  const omcHint = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"oh-my-claudecode","path":"/o"}],"mcp_servers":[{"name":"plugin_oh-my-claudecode_t","status":"connected"}]}\n'
+    + '{"type":"system","subtype":"hook_response","output":"[MAGIC KEYWORD: AUTOPILOT]"}');
+  assert.equal(activation('omc', omcHint).activated, false, 'routing hint alone is not the workflow running');
+  const omcRun = parseStream('{"type":"system","subtype":"init","plugins":[{"name":"oh-my-claudecode","path":"/o"}],"mcp_servers":[{"name":"plugin_oh-my-claudecode_t","status":"connected"}]}\n'
+    + '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__plugin_oh-my-claudecode_t__state_write","input":{"mode":"autopilot"}}]}}');
+  assert.equal(activation('omc', omcRun).activated, true);
 });
 
 test('median and aggregate: per arm×demo cell, n, rates, medians ignore nulls', () => {

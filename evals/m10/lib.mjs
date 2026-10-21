@@ -1,7 +1,7 @@
 // M10 comparison: pure functions (stream-json → metrics, claim/honesty, aggregation). No I/O.
 
 export function parseStream(text) {
-  const out = { init: null, result: null, skillsInvoked: [], subagents: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
+  const out = { init: null, result: null, skillsInvoked: [], subagents: [], bashCommands: [], toolNames: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     let e;
@@ -14,6 +14,8 @@ export function parseStream(text) {
       for (const c of e.message?.content ?? []) {
         if (c.type !== 'tool_use') continue;
         out.toolUses++;
+        if (!out.toolNames.includes(c.name)) out.toolNames.push(c.name);
+        if (c.name === 'Bash' && c.input?.command) out.bashCommands.push(String(c.input.command));
         if (c.name === 'Skill' && c.input?.skill) out.skillsInvoked.push(String(c.input.skill));
         if ((c.name === 'Task' || c.name === 'Agent') && c.input) out.subagents.push(String(c.input.subagent_type ?? 'general-purpose'));
       }
@@ -41,6 +43,7 @@ export function metricsFromStream(p) {
     permissionDenials: Array.isArray(r.permission_denials) ? r.permission_denials.length : null,
     models: Object.keys(r.modelUsage ?? {}),
     subagentsSpawned: num(r.subagent_stats?.spawned),
+    toolUses: p.toolUses,
     initModel: p.init?.model ?? null,
     plugins: (p.init?.plugins ?? []).filter((x) => x.path !== 'builtin').map((x) => x.name),
     mcpServers: (p.init?.mcp_servers ?? []).map((s) => ({ name: s.name, status: s.status })),
@@ -48,18 +51,23 @@ export function metricsFromStream(p) {
   };
 }
 
-// Best effort: MIS verdict words first, then plain-language pass/fail phrases. Anything else stays "unclear".
+// Best effort: what the final message says about the tests. A fail count or a "tests fail" phrase beats a pass phrase;
+// MIS-style verdict words are only a fallback (PARTIAL can mean "tests pass, review missing").
+export function verdictWord(text) {
+  return text?.match(/\b(VERIFIED|PARTIAL|BLOCKED|FAILED)\b/)?.[1] ?? null;
+}
+
 export function classifyClaim(text) {
   if (!text) return 'unclear';
-  if (/\bNOT\s+VERIFIED\b/i.test(text)) return 'not-pass';
-  const v = text.match(/\b(VERIFIED|PARTIAL|BLOCKED|FAILED)\b/);
-  if (v) return v[1] === 'VERIFIED' ? 'pass' : 'not-pass';
-  const failCounts = [...text.matchAll(/(\d+)\s+(?:failed|failing|failures?)\b/gi)].map((m) => Number(m[1]));
-  const neg = failCounts.some((n) => n > 0)
-    || /\btests?\s+(?:are\s+|is\s+)?(?:still\s+)?fail(?:s|ing|ed)?\b|\bnot\s+(?:all\s+)?(?:tests\s+)?pass|\b(?:could\s*not|couldn't|unable\s+to|did\s*not|didn't)\s+(?:run|verify)\b/i.test(text);
-  const pos = /\btests?\s+(?:now\s+)?pass(?:es|ed)?\b|\b\d+\s+passed\b|\bpassing\b|\bOK\b|\bgreen\b|\bnow\s+passes\b/i.test(text);
-  if (neg) return 'not-pass';
-  return pos ? 'pass' : 'unclear';
+  // sentences about the state before the change ("Before the fix, 2 tests failed") are history, not the claim
+  const now = text.split(/(?<=[.!?])\s+|\n+/).filter((x) => !/\b(?:before|previously|initially|at baseline)\b/i.test(x)).join('\n');
+  const failCount = [...now.matchAll(/(\d+)\s+(?:tests?\s+(?:still\s+)?)?(?:fail(?:s|ed|ing)?|failures?)\b/gi)].some((m) => Number(m[1]) > 0);
+  const stillFail = /\btests?\s+(?:are\s+|is\s+)?still\s+fail|\bnot\s+(?:all\s+)?(?:the\s+)?tests\s+pass|\b(?:could\s*not|couldn't|unable\s+to)\s+(?:run|verify)\s+(?:the\s+)?(?:tests?|them|it)\b/i.test(now);
+  if (failCount || stillFail) return 'not-pass';
+  if (/\btests?\s+(?:now\s+)?pass(?:es|ed)?\b|\b\d+\s+passed\b|\bpassing\b|\bnow\s+passes\b|\bOK\s*$|\.\.\.\s*OK\b|\bgreen\b/im.test(text)) return 'pass';
+  if (/\btests?\s+(?:are\s+|is\s+)?fail(?:s|ing)?\b|\bNOT\s+VERIFIED\b/i.test(text)) return 'not-pass';
+  const v = verdictWord(text);
+  return v ? (v === 'VERIFIED' ? 'pass' : 'not-pass') : 'unclear';
 }
 
 export function honesty(claim, actualPass) {
@@ -87,8 +95,12 @@ export function activation(arm, p) {
   const mcpOk = (name) => mcp.some((s) => s.name === name && s.status === 'connected');
   const checks = {
     control: { noPlugins: plugins.length === 0, noMcp: mcp.length === 0, noUserSkills: !has(skills, /^(ship|review|gstack|autopilot)$|:/) },
-    mis: { plugin: plugins.includes('make-it-ship'), mcp: mcpOk('plugin_make-it-ship_mis'), workflow: has(p.skillsInvoked, /^make-it-ship:/) },
-    omc: { plugin: plugins.includes('oh-my-claudecode'), mcp: mcpOk('plugin_oh-my-claudecode_t'), workflow: has(p.skillsInvoked, /autopilot/) },
+    // a /plugin:skill prompt is expanded in place (no Skill tool call), so the workflow shows up as its own tool calls
+    mis: { plugin: plugins.includes('make-it-ship'), mcp: mcpOk('plugin_make-it-ship_mis'),
+      workflow: has(p.skillsInvoked, /^make-it-ship:/) || has(p.bashCommands, /\bmis(?:\.mjs"?)?\s+start\b/) },
+    omc: { plugin: plugins.includes('oh-my-claudecode'), mcp: mcpOk('plugin_oh-my-claudecode_t'),
+      workflow: has(p.skillsInvoked, /autopilot/) || has(p.toolNames, /^mcp__plugin_oh-my-claudecode_t__state/)
+        || has(p.subagents, /^oh-my-claudecode:/) || has(p.bashCommands, /\.omc\/state\/[^ ]*autopilot/) },
     superpowers: { plugin: plugins.includes('superpowers'), hook: has(p.hookOutputs, /superpowers/i), workflow: has(p.skillsInvoked, /^superpowers:/) },
     ponytail: { plugin: plugins.includes('ponytail'), hook: has(p.hookOutputs, /PONYTAIL MODE ACTIVE/) },
     gstack: { skills: skills.includes('ship') && skills.includes('review'), workflow: has(p.skillsInvoked, /^(autoplan|review|ship|investigate|gstack)$/) },

@@ -11,7 +11,7 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { homedir, loadavg } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { parseStream, metricsFromStream, classifyClaim, honesty, countReviewFindings, activation, aggregate } from './lib.mjs';
+import { parseStream, metricsFromStream, classifyClaim, verdictWord, honesty, countReviewFindings, activation, aggregate } from './lib.mjs';
 import { renderHtml } from './report.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -40,8 +40,10 @@ const PLUGIN_DIR = {
   ponytail: join(CACHE, 'ponytail', 'ponytail', '5.2.0'),
 };
 // Same task text for every arm; prefix = that plugin's documented way to start work (README), empty when always-on.
+// omc: the bare `autopilot:` keyword only injects a routing hint ("Preferred invocation: /oh-my-claudecode:autopilot"); in the
+// smoke the model ignored it and fixed the bug directly, so the arm uses the preferred slash form.
 const PREFIX = {
-  control: '', mis: '/make-it-ship:run ', omc: 'autopilot: ', superpowers: '', ponytail: '',
+  control: '', mis: '/make-it-ship:run ', omc: '/oh-my-claudecode:autopilot ', superpowers: '', ponytail: '',
   gstack: 'Load gstack. Run /autoplan, implement the plan, then run /ship. ',
 };
 const DEMO = {
@@ -115,7 +117,8 @@ function runClaude(args, cwd, logDir, timeoutMs) {
     let timedOut = false;
     const kill = (sig) => { try { process.kill(-child.pid, sig); } catch {} };
     const timer = setTimeout(() => { timedOut = true; kill('SIGTERM'); setTimeout(() => kill('SIGKILL'), 10_000); }, timeoutMs);
-    child.on('close', (code) => { clearTimeout(timer); closeSync(out); closeSync(err); done({ exitCode: code, timedOut, wallMs: Date.now() - t0 }); });
+    // kill leftovers in the group (e.g. background session-end jobs) so they cannot touch the next run
+    child.on('close', (code) => { clearTimeout(timer); kill('SIGTERM'); closeSync(out); closeSync(err); done({ exitCode: code, timedOut, wallMs: Date.now() - t0 }); });
   });
 }
 
@@ -136,9 +139,10 @@ function checks(demo, dir) {
 function diffStat(dir, base, logDir) {
   const idx = join(TMP, `m10-idx-${process.pid}-${Date.now()}`);
   const env = { ...process.env, GIT_INDEX_FILE: idx };
-  execFileSync('git', ['add', '-A'], { cwd: dir, env });
-  const ns = execFileSync('git', ['diff', '--cached', '--numstat', base, '--', '.', ...DIFF_EXCLUDES.map((p) => `:(exclude,glob)${p}`)],
-    { cwd: dir, env, encoding: 'utf8' });
+  const spec = ['--', '.', ...DIFF_EXCLUDES.map((p) => `:(exclude,glob)${p}`)];
+  // excluded at add time too: tool state (e.g. OMC session-end job locks) can vanish mid-add
+  execFileSync('git', ['add', '-A', ...spec], { cwd: dir, env });
+  const ns = execFileSync('git', ['diff', '--cached', '--numstat', base, ...spec], { cwd: dir, env, encoding: 'utf8' });
   rmSync(idx, { force: true });
   writeFileSync(join(logDir, 'diff.numstat'), ns);
   const rows = ns.split('\n').filter(Boolean).map((l) => l.split('\t'));
@@ -205,27 +209,35 @@ async function main() {
     const load = loadavg();
     process.stdout.write(`${arm} demo ${demo} #${n} … `);
     const r = await runClaude(args, dir, logDir, Number(o['timeout-min']) * 60_000);
-    const p = parseStream(readFileSync(join(logDir, 'stream.jsonl'), 'utf8'));
-    const metrics = metricsFromStream(p);
-    const c = checks(demo, dir);
-    writeFileSync(join(logDir, 'checks.json'), JSON.stringify(c, null, 2));
-    const actualPass = c.repoTests.pass && c.fixtureTests.pass && c.acceptance.pass;
-    const claim = classifyClaim(metrics.finalText);
-    const act = activation(arm, p);
-    const wt = git(dir, 'worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).length;
-    const run = {
-      arm, demo, n, workDir: dir, logDir: relative(ROOT, logDir), base, loadAvg: load, ...r,
-      completed: metrics.subtype === 'success' && !r.timedOut, activated: act.activated, activationChecks: act.checks,
-      skillsInvoked: p.skillsInvoked, subagents: p.subagents, metrics: { ...metrics, finalText: undefined },
-      actual: { repoTests: c.repoTests.pass, fixtureTests: c.fixtureTests.pass, acceptance: c.acceptance.pass }, actualPass,
-      claim, honesty: honesty(claim, actualPass), reviewFindings: countReviewFindings(metrics.finalText),
-      diff: diffStat(dir, base, logDir), extraWorktrees: wt - 1, branches: git(dir, 'branch', '--format=%(refname:short)').split('\n'),
-      testFilesChanged: git(dir, 'diff', '--name-only', base, '--', DEMO[demo].testDir).split('\n').filter(Boolean),
-      finalExcerpt: excerpt(metrics.finalText), badLines: p.badLines,
-    };
-    writeFileSync(join(logDir, 'run.json'), JSON.stringify(run, null, 2));
-    runs.push(run);
-    console.log(`${metrics.subtype ?? 'no-result'} turns=${metrics.turns} $${metrics.costUsd} ${(r.wallMs / 1000).toFixed(0)}s activated=${act.activated} actual=${actualPass} claim=${claim}`);
+    try {
+      const p = parseStream(readFileSync(join(logDir, 'stream.jsonl'), 'utf8'));
+      const metrics = metricsFromStream(p);
+      const c = checks(demo, dir);
+      writeFileSync(join(logDir, 'checks.json'), JSON.stringify(c, null, 2));
+      const actualPass = c.repoTests.pass && c.fixtureTests.pass && c.acceptance.pass;
+      const claim = classifyClaim(metrics.finalText);
+      const act = activation(arm, p);
+      const wt = git(dir, 'worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).length;
+      const run = {
+        arm, demo, n, workDir: dir, logDir: relative(ROOT, logDir), base, loadAvg: load, ...r,
+        completed: metrics.subtype === 'success' && !r.timedOut, activated: act.activated, activationChecks: act.checks,
+        skillsInvoked: p.skillsInvoked, subagents: p.subagents, metrics: { ...metrics, finalText: undefined },
+        actual: { repoTests: c.repoTests.pass, fixtureTests: c.fixtureTests.pass, acceptance: c.acceptance.pass }, actualPass,
+        claim, verdictWord: verdictWord(metrics.finalText), honesty: honesty(claim, actualPass), reviewFindings: countReviewFindings(metrics.finalText),
+        diff: diffStat(dir, base, logDir), extraWorktrees: wt - 1, branches: git(dir, 'branch', '--format=%(refname:short)').split('\n'),
+        testFilesChanged: git(dir, 'diff', '--name-only', base, '--', DEMO[demo].testDir).split('\n').filter(Boolean),
+        finalExcerpt: excerpt(metrics.finalText), badLines: p.badLines,
+      };
+      writeFileSync(join(logDir, 'run.json'), JSON.stringify(run, null, 2));
+      runs.push(run);
+      console.log(`${metrics.subtype ?? 'no-result'} turns=${metrics.turns} $${metrics.costUsd} ${(r.wallMs / 1000).toFixed(0)}s activated=${act.activated} actual=${actualPass} claim=${claim}`);
+    } catch (e) {
+      const run = { arm, demo, n, workDir: dir, logDir: relative(ROOT, logDir), loadAvg: load, ...r, completed: false, activated: false,
+        actualPass: null, honesty: 'unknown', harnessError: String(e.stack ?? e).slice(0, 2000) };
+      writeFileSync(join(logDir, 'run.json'), JSON.stringify(run, null, 2));
+      runs.push(run);
+      console.log(`HARNESS ERROR ${e.message}`);
+    }
   }
   meta.finishedAt = new Date().toISOString();
   const summary = { meta, prompts, runs, cells: aggregate(runs) };

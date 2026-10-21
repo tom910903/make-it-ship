@@ -1,0 +1,17 @@
+{
+  "repoTests": {
+    "pass": true,
+    "status": 0,
+    "out": "test_decimal_comma (test_inventory.ParsePriceTest) ... ok\ntest_dollar (test_inventory.ParsePriceTest) ... ok\ntest_plain (test_inventory.ParsePriceTest) ... ok\ntest_thousands_separator (test_inventory.ParsePriceTest) ... ok\ntest_total (test_inventory.TotalValueTest) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.001s\n\nOK\n"
+  },
+  "fixtureTests": {
+    "pass": true,
+    "status": 0,
+    "out": "test_decimal_comma (test_inventory.ParsePriceTest) ... ok\ntest_dollar (test_inventory.ParsePriceTest) ... ok\ntest_plain (test_inventory.ParsePriceTest) ... ok\ntest_total (test_inventory.TotalValueTest) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.005s\n\nOK\n"
+  },
+  "acceptance": {
+    "pass": true,
+    "status": 0,
+    "out": ""
+  }
+}
