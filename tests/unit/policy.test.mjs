@@ -347,7 +347,11 @@ test('M8 R3-1: an upload without --remote asks unless this workspace runs the lo
   for (const c of uploads) assert.equal(at(c).decision, 'ask', `normal daemon: ${c}`);
   state({ pid: process.pid, port: 1, localOnly: true });
   for (const c of uploads) assert.equal(at(c).decision, 'allow', `local-only daemon: ${c}`);
-  assert.equal(at(`${P} upload '#f' a.txt --remote`).decision, 'ask', '--remote still asks');
+  for (const c of uploads.map((u) => `${u} --remote`)) {
+    const r = at(c);
+    assert.equal(r.decision, 'ask', `--remote still asks: ${c}`);
+    assert.match(r.reason, /uploads local files[\s\S]*page script can send the file anywhere/, c);
+  }
   state({ pid: 2 ** 22 + 7, port: 1, localOnly: true });
   assert.equal(at(uploads[0]).decision, 'ask', 'a dead daemon (stale state) is not local-only');
   rmSync(repo, { recursive: true, force: true });

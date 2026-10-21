@@ -193,8 +193,8 @@ function careful(ws, ctx, dir, functions) {
     if (hit) return ask(`mis browse ${hit} ${BROWSE_ALWAYS_ASK.get(hit)} — credential access needs your approval every time`);
     if (browse.includes('--remote')) {
       const sub = browse.find((w) => !w.startsWith('-') && w !== 'browse') ?? '';
-      if (sub === 'upload' || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
-        return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services)`);
+      if (sub === 'upload' || uploadsIn(browse.slice(1)) || (sub === 'chain' && /upload/.test(browse.join(' ')))) {
+        return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services), and a page script can send the file anywhere, not only where the form posts`);
       }
       return ask(`mis browse ${sub} --remote reads or changes cookies/storage, runs JavaScript, or browses with imported credentials (logged-in cookies) on a non-local site`);
     }
