@@ -37,6 +37,7 @@ test('mis help lists every command, skill, agent, keyword, MCP tool, hook event 
   for (const l of STYLE_LEVELS) assert.ok(r.out.includes(l));
   assert.match(r.out, /ralph/i);
   assert.match(r.out, /\(\?:ralph\|랄프\|ラルフ\)/, 'the ralph prefix rule is printed from the live regex');
+  assert.match(r.out, /`cancel` — .*cancelomc.*stopomc/, 'cancelomc/stopomc anywhere in the prompt cancel, and help says so');
   assert.match(r.out, /loop-hint/);
 });
 

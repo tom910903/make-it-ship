@@ -127,7 +127,7 @@ export function detectKeywords(prompt, { disabled = [] } = {}) {
 const RULES = {
   loop: `only a prompt that starts with a ralph prefix (/${PREFIX.source}/) and has no off word after it starts the loop`,
   'loop-hint': 'any other mention of ralph (names, questions, "don\'t use ralph"): a hint the model judges in context',
-  cancel: 'a prompt made only of ralph words, filler and a closed list of off words ("turn off ralph", "ralph: stop", "랄프 꺼줘")',
+  cancel: '`cancelomc` or `stopomc` anywhere in the prompt, or a prompt made only of ralph words, filler and a closed list of off words ("turn off ralph", "ralph: stop", "랄프 꺼줘")',
   clarify: `an execution request with no goal or scope: /${VAGUE_EXEC.source}/`,
   simplify: `/${SLOP_EXPLICIT.source}/, or /${SLOP_ACTION.source}/ together with /${SLOP_SMELL.source}/`,
 };
