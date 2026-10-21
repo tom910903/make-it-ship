@@ -1,4 +1,4 @@
-# NH-1~NH-4 자동 확인 (tmux 대화형 세션) — 2026-10-20
+# NH-1~NH-5 자동 확인 (tmux 대화형 세션) — 2026-10-20
 
 사람이 아니라 Claude가 tmux 안의 **대화형** `claude`(v2.1.292)를 키 입력으로 조작해 확인했다. 확인 창이 실제 TUI에 뜨는지, 승인·거절 결과가 기대대로인지는 확인했다. 그래도 **사람이 확인한 PASS는 아니다.** 그래서 `NEEDS_HUMAN.md` 결과 칸에는 "AUTO(tmux)"로 적고, 사람 확인란은 비워 둔다.
 
@@ -82,3 +82,28 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
 - 그래서 T1 **소유 파일도** 범위 밖으로 판정해 ask를 낸다.
 - worktree 안에서 실행되는 implementer(cwd가 worktree)는 정상이다. `src/text.js`는 허용되고 `src/math.js`는 ask다.
 - 허용해야 할 편집을 묻는 것뿐이고 막아야 할 편집을 통과시키지는 않는다. → 같은 날 수정함: 파일 편집은 파일이 있는 worktree 기준으로 범위를 판정한다(`scripts/guard.mjs`, 회귀 테스트 추가).
+
+## NH-5 마켓플레이스 설치 경로 — AUTO PASS (2026-10-21, 사용자 승인 후 진행)
+
+`NEEDS_HUMAN.md` NH-5 절차대로 진행했다. 경로만 `/tmp` 대신 세션 scratchpad를 썼다. 권한 모드는 **manual**로 바꿔서 확인했다.
+
+1. 로컬 마켓플레이스 `mis-local`을 만들었다. 커밋 `8052bd1`을 clone했다.
+2. 데모 b에서 `marketplace add --scope project`와 `install --scope project`를 실행했다.
+   - `claude plugin list`: `make-it-ship@mis-local`, Scope project, **enabled**, Read from = 마켓플레이스 경로
+3. 대화형 `claude`(`--plugin-dir` 없음)에서 `/make-it-ship:run Fix the bug described in ISSUE.md`를 실행했다.
+   - 스킬이 마켓플레이스 설치 경로에서 로드됐다.
+   - Quick 모드로 진행됐다: init(설정 쓰기 확인) → TDD → check → quality 리뷰.
+   - 리뷰의 MAJOR 지적은 테스트를 먼저 쓰고 수정했다. 재리뷰 후 보고서를 생성했다.
+   - 보고서와 events의 판정: **VERIFIED**. 데모 테스트 7/7 통과.
+4. guard 확인: `git push origin HEAD` 실행을 요청했다.
+   - Bash가 allow 목록에 있는데도 확인 창이 떴다: `Hook PreToolUse:Bash requires confirmation … make-it-ship: remote write (git push) needs your approval`
+   - **거절**했고, 실행되지 않았다.
+5. 정리:
+   - `uninstall --scope project`와 `marketplace remove`를 실행했다.
+   - 다음 세 파일은 설치 전 백업과 diff가 없다(`lastUpdated` 제외).
+     - `~/.claude/settings.json`
+     - `~/.claude/plugins/known_marketplaces.json`
+     - `~/.claude/plugins/installed_plugins.json`
+   - uninstall 뒤에도 `~/.claude/plugins/cache/mis-local`(1.4MB)이 남아 있어서 직접 지웠다.
+   - 참고: 설치 중에는 `known_marketplaces.json`에 `mis-local`이 잠시 추가된다. `--scope project`여도 마찬가지다.
+   - 참고: uninstall이 데모의 `.claude/settings.json`을 바꾸므로, 이후 `mis verdict`는 STALE(PARTIAL)로 바뀐다. 검증 후 저장소가 바뀌면 STALE이 되는 것은 의도된 동작이다.
