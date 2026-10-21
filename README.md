@@ -29,7 +29,9 @@ Then start `claude` with no flags. The commands below are now available.
 ```sh
 claude plugin uninstall make-it-ship@make-it-ship
 claude plugin marketplace remove make-it-ship
+rm -rf ~/.claude/plugins/cache/make-it-ship    # uninstall leaves this cached copy behind
 ```
+Claude checked Option A from GitHub on 2026-10-21 (`docs/milestones/NH-auto-check.md`). A person has not yet checked it.
 
 ### Option B: load a clone for one session
 ```sh

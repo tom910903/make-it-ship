@@ -108,3 +108,20 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
    - 참고: 설치 중에는 `known_marketplaces.json`에 `mis-local`이 잠시 추가된다. `--scope project`여도 마찬가지다.
    - 참고: 이 확인은 `8052bd1`에서 했다. 이후 `9aaf3b1`의 guard 수정은 `file_path`가 있는 편집 경로만 바꿨다. 여기서 확인한 `git push`(Bash) 경로는 그 수정과 무관하다.
    - 참고: uninstall이 데모의 `.claude/settings.json`을 바꾸므로, 이후 `mis verdict`는 STALE(PARTIAL)로 바뀐다. 검증 후 저장소가 바뀌면 STALE이 되는 것은 의도된 동작이다.
+
+## NH-5 보충: GitHub 저장소 마켓플레이스 — AUTO PASS (2026-10-21, 사용자 승인 후 진행)
+
+저장소에 `.claude-plugin/marketplace.json`(플러그인 `source: "."`)을 추가하고 `0726914`로 push했다. 그다음 README Option A 명령을 그대로 실행했다(user 범위).
+1. `claude plugin marketplace add tom910903/make-it-ship` → `claude plugin install make-it-ship@make-it-ship`
+   - `claude plugin list`: enabled
+   - `installed_plugins.json`의 `gitCommitSha`: `0726914`(push한 커밋)
+2. 데모 b에서 `claude -p "/make-it-ship:status"`를 실행했다.
+   - 설치 경로의 스킬이 실행됐다.
+   - 출력: `mis status: no active run`
+   - guard 확인 창은 NH-5 본 절(로컬 마켓플레이스)에서 확인했으므로 여기서는 반복하지 않았다.
+3. README의 제거 명령을 실행했다(`uninstall`, `marketplace remove`).
+   - 다음 세 파일은 백업과 diff가 없다(`lastUpdated` 제외).
+     - `~/.claude/settings.json`
+     - `known_marketplaces.json`
+     - `installed_plugins.json`
+   - `~/.claude/plugins/cache/make-it-ship`(1.5MB)이 남아 있어 지웠다. README 제거 절차에 이 줄을 넣었다.
