@@ -2,321 +2,258 @@ English | [한국어](README.ko.md)
 
 # Make It Ship
 
-A Claude Code plugin that takes an idea, a requirements `.md`, or an issue in your git repo, and runs it through planning, implementation, **real** verification, and review. It ends with an honest verdict: `VERIFIED`, `PARTIAL`, `BLOCKED`, or `FAILED`.
+**From an idea to verified code, with a verdict you can trust.**
 
-It makes two promises:
-- **Nothing is called done without evidence.** Only `mis check` runs your project's test and build commands and records the exit code and log for the exact code state. Only `mis verdict` decides the result, using fixed rules. If the code or config changes later, that evidence is marked `STALE`.
-- **Risky actions need your approval.** A PreToolUse hook asks you before plan approval, `git push`, PR creation, package installs, config changes, and external MCP writes while a run is active. Destructive commands (`git reset --hard`, `git clean -f`, `git checkout .`, force push, recursive delete outside the repo, database `DROP`/`TRUNCATE`, `kubectl delete`, `docker system prune`) and calls to other model services are asked about **at any time**, run or not. Force-pushing to `main`/`master` and editing run state by hand are always denied.
+![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
-## Requirements
-- Claude Code with plugin support, macOS or Linux
-- Node.js 22 or newer
-- A git repository
+Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
-There are no runtime dependencies and no build step.
+```
+plan ──▶ approve ──▶ implement ──▶ verify ──▶ review ──▶ verdict + report
+(questions,  (you)      (test-first)   (mis check)  (read-only     (mis verdict,
+ mode, critic)                                       reviewers)     fixed rules)
+```
 
-## Install
-This repository is also its own plugin marketplace (`.claude-plugin/marketplace.json`). It is private, so your machine needs git access to `github.com/tom910903/make-it-ship`: an SSH key, or HTTPS through `gh auth setup-git`.
+## Quick start
 
-### Option A: install from the marketplace (recommended)
+Requirements: Claude Code with plugin support (macOS or Linux), Node.js 22+, a git repository. No runtime dependencies, no build step.
+
 ```sh
 claude plugin marketplace add tom910903/make-it-ship
 claude plugin install make-it-ship@make-it-ship
-claude plugin list    # make-it-ship@make-it-ship should show as enabled
 ```
-Then start `claude` with no flags. The commands below are now available.
-- To install for one repository only, run both commands from inside that repository with `--scope project` added.
-- To update, run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart Claude Code. Running `plugin update` alone does not see a new release. A new release reaches users only when `version` in `.claude-plugin/plugin.json` changes; new commits without a version bump are not installed.
-- To remove the plugin:
-```sh
-claude plugin uninstall make-it-ship@make-it-ship
-claude plugin marketplace remove make-it-ship
-rm -rf ~/.claude/plugins/cache/make-it-ship    # uninstall leaves this cached copy behind
-```
-Claude checked Option A from GitHub on 2026-10-21 (`docs/milestones/NH-auto-check.md`). A person has not yet checked it.
 
-### Option B: load a clone for one session
-```sh
-git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship
-cd /path/to/your/repo
-claude --plugin-dir ~/make-it-ship
-```
-To update the clone, run `git -C ~/make-it-ship pull`.
+The repository is private, so your machine needs git access to `github.com/tom910903/make-it-ship` (an SSH key, or HTTPS through `gh auth setup-git`). Then start `claude` inside your repository and hand it one sentence:
 
-## Quick start (5 minutes)
-1. Run `claude` inside the repository you want to work on.
-2. Check the environment: `/make-it-ship:setup doctor` (plugin, hooks, MCP server, status line).
-3. Hand it one sentence: `/make-it-ship:run Fix the bug where a failed login shows no error message`.
-4. On the first run it detects your test and build commands and shows a draft `.make-it-ship.json`. Confirm it if it is right; this file decides what has to pass before anything counts as verified.
-5. Check progress at any time with `/make-it-ship:status`.
-6. At the end you get the verdict and the report path (`docs/make-it-ship/<run>/report.md`).
+```
+/make-it-ship:run Fix the bug where a failed login shows no error message
+```
 
-Forgot a command? `/make-it-ship:help` lists the commands, skills, agents and keywords, read from the code.
+On the first run it detects your test and build commands and shows a draft `.make-it-ship.json`; confirm it, because this file decides what must pass. `/make-it-ship:setup doctor` checks the installation, `/make-it-ship:status` shows progress, and `/make-it-ship:help` lists everything.
 
-## How to use
-Common situations, each with what to type and what happens next. Claude runs the `mis …` commands for you.
+- **One repository only:** add `--scope project` to both commands, run inside that repository.
+- **Update:** `claude plugin marketplace update make-it-ship`, then `claude plugin update make-it-ship@make-it-ship`, then restart. A release reaches users only when `version` in `.claude-plugin/plugin.json` changes.
+- **Remove:** `claude plugin uninstall make-it-ship@make-it-ship`, `claude plugin marketplace remove make-it-ship`, then `rm -rf ~/.claude/plugins/cache/make-it-ship` (uninstall leaves this copy behind).
+- **Try a clone for one session:** `claude --plugin-dir ~/make-it-ship` after `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship`.
 
-### 1. Fix a bug
-```
-/make-it-ship:run Setting a cart quantity to 0 makes the total NaN. Fix it.
-```
-- It reads the repository and finds the code involved first.
-- A small, low-risk fix gets **Quick** mode, with a one-line reason. Quick with no risk flags skips plan approval.
-- It writes a failing test that reproduces the bug before changing code, and records the root cause before the fix.
-- `mis check` runs the tests and a quality reviewer reads the change. You get a verdict such as `VERIFIED` with its reasons.
-- Code touching auth, payment, personal data, migrations or security is raised to Standard or higher, and a security review is added.
+## See it work
 
-### 2. Add a feature (Standard, with approval)
-```
-/make-it-ship:run Implement docs/feature-request.md
-```
-- It reads the request and the code, then asks **only the questions the code cannot answer, one at a time**.
-- It writes a plan, picks a mode (usually **Standard**) and says why. The critic agent reviews the plan.
-- **You are asked to approve.** You see the goal, the tasks with acceptance criteria and the required checks, then a confirmation prompt. Nothing is built before you approve; declining stops there.
-- Each task is test-first. With 3+ tasks, each gets a fresh subagent and a spec review followed by a quality review.
-- Verify, review and report follow. Add "and prepare a PR" if you want it shipped; push and PR creation still ask.
-- To plan now and build later, use `/make-it-ship:plan`. The plan is saved to `docs/make-it-ship/plans/<slug>.md` and a later run can start from it.
+Real output from the demo repository in `evals/demos/a` (a "add `slugify`" request): the plan was set, the `unit` check passed, but the task was not marked done and no reviews were recorded yet. `mis verdict` refuses to call that done:
 
-### 3. You only have an idea (interview)
+```json
+{
+  "verdict": "PARTIAL",
+  "reasons": [
+    "task T1 is TODO",
+    "spec review missing for current code",
+    "quality review missing for current code"
+  ],
+  "checks": { "unit": "PASS" },
+  "treeHash": "13ab940ff8af4b782357ffb43463943d9727b283",
+  "changedManifests": [],
+  "state": "AWAITING_APPROVAL"
+}
 ```
-/make-it-ship:interview I want a tool that summarizes our meeting notes and posts them to Slack
-```
-- No code changes. One question at a time, each with a one-line restatement, a recommendation and 2-4 options.
-- It picks office hours (startup or builder), spec, or brainstorming to fit the situation.
-- You get a document in `docs/make-it-ship/specs/` with goal, constraints, non-goals, testable acceptance criteria, assumptions and open questions, and an offer to build it with `/make-it-ship:run`.
-- A bare "just build it" with no goal starts this interview instead of building.
 
-### 4. Review only
-```
-/make-it-ship:review
-```
-- Read-only reviewers check the current working-tree changes: spec and quality when there are requirements, quality only when there are none.
-- Each finding has a severity and evidence. Nothing is fixed unless you ask.
-- "audit the whole repo" or `cso` reviews the whole repository, report only. "security review" adds the security reviewer.
+The report goes to `docs/make-it-ship/<run>/report.md`. Its template (`templates/report.md`) is written in Korean; the same run produced:
 
-### 5. Resume interrupted work, check status
 ```
-/make-it-ship:resume
-```
-- It summarizes where the run stopped, files changed since, checks that are now `STALE`, tasks in progress, and decisions waiting for you. You do not have to explain the task again.
-- A run BLOCKED by its runtime or retry limit asks you whether to continue; only you can lift a limit.
-- `/make-it-ship:status` shows the phase, tasks, required checks (PASS/FAIL/STALE/BLOCKED/MISSING), reviews, open questions and the current verdict.
+> **판정: PARTIAL** — 배포 준비 완료 아님
+> 판정은 `mis verdict`가 규칙(Spec §6)으로 계산했다. 모델이 정한 값이 아니다.
 
-### 6. Browser QA of a web page (local-only mode)
-```
-/make-it-ship:qa Check the sign-up page at http://localhost:3000 in local-only mode, including the profile photo upload
-```
-- No Playwright needed: it drives the Chrome, Chromium or Edge already installed, headless, and checks screenshots and console errors. With no browser it reports `BLOCKED`.
-- **File upload** without asking runs only in the local-only browser; with "local-only mode" in the prompt, Claude starts it with `mis browse start --local-only`: nothing but this machine (localhost, `127.0.0.1`, …) is reachable. In a normal browser an upload always asks, because the file can leave the machine. `mis browse status` shows `localOnly`; switching modes restarts the browser.
-- Credential commands (cookies, headers, downloads, …) always ask, run or not.
+## 4. 수행한 검증과 실제 결과 (기계 검증)
+| ID | check | 명령(argv) | exit | 기록 당시 | 현재 코드 기준 | 종료 시각 |
+| E1 | unit | `npm test` | 0 | PASS | PASS | 2026-10-21T23:31:30.085Z |
 
-## Reading the verdict
-`mis verdict` applies these rules; the first one that matches wins.
+## 6. 검증하지 못한 영역과 이유
+- task T1 is TODO
+- spec review missing for current code
+```
+
+The report's ten sections cover the goal, task status, changed files, real check results, reviews, what could not be verified and why, evidence invalidated by later changes, decisions left to you, how to run the result, and intentional shortcuts. Each section says whether it is machine-verified or model judgment.
+
+## How it works
+
+**Verdict rules.** `mis verdict` applies these in order; the first match wins.
 
 | Verdict | Meaning | Common reasons | What to do |
 |---|---|---|---|
-| `BLOCKED` | could not verify | the run is blocked (limit, missing tool or credentials), or a required check could not run (missing command, timeout) and none failed | fix the reason, then `/make-it-ship:resume` |
+| `BLOCKED` | could not verify | the run is blocked (limit, missing tool or credentials), or a required check could not run and none failed | fix the reason, then `/make-it-ship:resume` |
 | `FAILED` | verified, and it fails | a required check failed, or a review has blocking issues | read the failure log in the report |
-| `PARTIAL` | nothing failed, but evidence is missing | stale or missing checks, a missing review, unfinished tasks or unmerged task worktrees, an unanswered HIGH question, a dependency change without `mis note dep`, `.make-it-ship.json` changed without approval, no required checks defined | work through the reasons listed in the report |
+| `PARTIAL` | nothing failed, but evidence is missing | stale or missing checks, a missing review, unfinished tasks, an unanswered HIGH question, a dependency change without `mis note dep`, an unapproved config change | work through the reasons in the report |
 | `VERIFIED` | required checks pass, required reviews exist, every task is done | — | run it as the report describes |
 
-Required checks: Quick uses `required.quick`; Standard and Full use `required.standard` plus every `qa-*` check. Required reviews: quality (Quick), spec and quality (Standard, Full), plus security with risk flags.
+Quick mode requires `required.quick`; Standard and Full require `required.standard` plus every `qa-*` check. Reviews: quality (Quick), spec and quality (Standard, Full), plus security when risk flags (auth, payment, PII, migration, security) are set. Evidence recorded before the code or config changed becomes `STALE`. Run state lives in `.git/make-it-ship/`, so it is never committed.
 
-## What a run does
+**The guard.** While a run is active it asks before plan approval, `git push`, PR creation, package installs, config changes and external MCP writes. Destructive commands (`git reset --hard`, `git clean -f`, `git checkout .`, force push, recursive delete outside the repo, database `DROP`/`TRUNCATE`, `kubectl delete`, `docker system prune`) and calls to other model services are asked about **at any time**, run or not. Force-pushing to `main`/`master` and editing run state by hand are always denied. It protects against careless mistakes, not against a model deliberately obfuscating commands.
+
+**MCP tools.** A bundled MCP server adds memory (`notepad_*`, `project_memory_*`, `state_*`), knowledge (`wiki_*`, `session_search`, `trace_timeline`), code intelligence (`lsp_*`, `ast_grep_*`, `python_repl`, using tools already installed) and skill loading. They appear as `mcp__plugin_make-it-ship_mis__<name>`.
+
+**Built-in browser.** `mis browse` drives a Chrome, Chromium or Edge already on the machine, headless, through the DevTools Protocol. No Playwright, nothing installed; with no browser it reports `BLOCKED`. `mis browse start --local-only` starts a browser that can reach only this machine (localhost, `127.0.0.1`, `[::1]`); file uploads run without asking only there. Credential commands (cookies, headers, downloads, …) always ask.
+
+All details: [docs/reference.md](docs/reference.md).
+
+## How to use
+
+Claude runs the `mis …` commands for you; you type the prompt.
+
+**1. Fix a bug**
+```
+/make-it-ship:run Setting a cart quantity to 0 makes the total NaN. Fix it.
+```
+It finds the code involved and picks **Quick** mode for a small low-risk fix (no plan approval without risk flags). It writes a failing test first and records the root cause before the fix. Code touching auth, payment, personal data, migrations or security is raised to Standard and gets a security review.
+
+**2. Add a feature (Standard, with approval)**
 ```
 /make-it-ship:run Implement docs/feature-request.md
-/make-it-ship:run Fix the bug described in ISSUE.md
-/make-it-ship:status
 ```
-Optional single-phase commands: `/make-it-ship:plan` (write a plan, build later), `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. Skills: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
+It asks only the questions the code cannot answer, one at a time, then writes a plan that the critic agent reviews. **You approve** the goal, tasks, acceptance criteria and required checks; nothing is built before that. Each task is test-first; with 3+ tasks each gets a fresh subagent, a spec review and a quality review. Add "and prepare a PR" to ship; push and PR creation still ask. `/make-it-ship:plan` plans now and builds later.
 
-What happens:
-1. **Setup.** `mis doctor` checks the environment. `mis init` proposes `.make-it-ship.json`, which holds the check commands (detected from `package.json`, Python tests, a `Makefile`, Cargo, Go, or SwiftPM). You confirm it before it is written.
-2. **Discover and interview.** The plugin reads the repo first and asks only the high-impact questions, one at a time.
-3. **Plan and choose a mode.** The mode is Quick, Standard, or Full, and the plugin gives a reason for its choice. Risk flags (auth, payment, PII, migration, security) force Standard or higher.
-4. **Plan critique and your approval.** These happen in Standard and Full. A Quick change with no risk flags skips approval.
-5. **Implement.** Work is test-first and uses the smallest complete change.
-6. **Verify and QA.** `mis check` runs the checks, including real-use QA checks (`qa-*`) for a CLI, API, web UI, or iOS simulator surface that `mis qa detect` finds. Read-only reviewer agents (spec and quality, plus security for risky changes) review the change.
-7. **Report.** The report goes to `docs/make-it-ship/<run>/report.md`. It covers the goal, task status, changed files, real check results, what could not be verified and why, invalidated evidence, decisions left to you, and how to run the result.
-8. **Ship (on request, or Full).** Doc and changelog edits happen before verify. After the report, `mis ship` writes a PR draft, a changelog draft and a release checklist (`NOT READY` unless VERIFIED). Push or PR happens only after your approval.
-
-More tools:
-- `mis bench <check> --runs N` measures performance. It flags +20% as WARN and +50% as REGRESSION.
-- `mis retro` aggregates metrics across runs.
-- `mis learn add|list` records project learnings.
-- For a second opinion from another model, `mis second-opinion detect` finds codex/gemini CLIs. Calling them sends code to an external service, so it happens only with your approval.
-- iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`. `mis ios devices` lists devices and `mis ios bridge-scan` finds leftover bridge code.
-- Codex users: see `adapters/codex/AGENTS.md`. Its flow is the same, but no guard enforces it.
-
-Run state lives in `.git/make-it-ship/`, so it is never committed and never affects the code hash.
-
-## Planning, review, design, docs and release inside the flow
-These are not separate commands to remember. `/make-it-ship:run` uses each one at the phase where it fits, depending on the mode, whether there is UI, whether the work is new or a change, the risk flags, and whether you want a release. The run skill's "Situational steps" table lists every trigger. When you ask in plain words outside a run, the existing skills reach the same step:
-- **Plan and spec:** a vague "build it" gets the interview first. Ideas go through office hours (startup or builder mode), open designs through brainstorming, and vague intent becomes a spec. Plans that must outlive the session are written to `docs/make-it-ship/plans/<slug>.md` (`mis plan check`) and executed later with `mis start --plan`. Several goals go into a ledger (`mis goal add|done`, which prints a `/goal` handoff). The interview remembers how you answer (`mis question log`, `mis profile`); `mis question pref set <id> skip` skips a question you are tired of, but never a HIGH-impact one.
-- **Plan reviews:** Full mode runs the CEO, design (UI), DX (developer-facing) and eng lenses, and autoplan when you ask. Auto-decisions go to the decision log (`mis decision add|search|supersede`).
-- **Design:** `mis taste show` steers the variants, `mis design-board design` builds a comparison board you click through `mis companion`, and `mis diagram x.mmd` writes `.excalidraw` + `.svg` (+ PNG through `mis browse`).
-- **Implement and debug:** with 3+ tasks, a fresh subagent works on each task, and every task gets a spec review and then a quality review. Competing hypotheses go to parallel tracers, and the trace file feeds the interview when a bug is really a missing requirement.
-- **Audit and health (report only):** "audit the whole repo" / `cso` / devex review, `mis redact scan --history` (secrets in the tree and in git history, values never shown; `--pii --legal` adds personal data such as emails, phone numbers, resident registration numbers and Luhn-valid cards, plus confidentiality markers; `mis redact file <path> --apply` replaces them in one file, and the guard asks), `mis debt`, and `mis health` (weighted check score with a trend).
-- **Release:** `mis diff-scope`, `mis repo-mode`, `mis next-version`, `mis version-bump patch|minor|major` (VERSION, package.json, CHANGELOG). The PR title starts with `v<version>`. Before every `git push` the guard scans the unpushed commits for secrets and puts the result in its question. Creating a tag also asks. Finishing a branch works without a run.
-- **Memory:** `mis retro --git --since 7d` (hotspots, per-author activity, reviewer hit rates), `mis learn search|distill` (proposals unless `--yes`), `mis jsonl-merge install` (union merge for the shared ledgers), and `mis context save|restore|sessions` outside a run.
-
-## Always on (every conversation, not only inside a run)
-Installing the plugin is enough; nothing else needs to be installed for these.
-- **Session start:** the skill list and the working discipline (ask before building when unclear, test first, root cause before fixes, verify before claiming done, questions as one-line restatement + recommendation + 2-4 options, a one-line next-skill suggestion; `mis config set proactive false` turns the suggestion off), the coding style at the current level, an active-run notice, and a short map of the codebase's top-level functions.
-- **Coding style:** `/make-it-ship:style off|lite|full|ultra` sets the level for the current session (`mis style <level>` inside a session); `mis style default <level>` sets what new sessions start with. The rules also reach subagents; set `subagentMatcher` in `~/.make-it-ship/config.json` to limit which ones. A prompt that is just "normal mode" turns it off for the session.
-- **Keywords in your prompt:** `ralph` (persistent loop), `autopilot` / "build me an app…" (full run), `ulw` (parallel), `ralplan` (plan until the critic accepts), `deep interview`, `deslop`, `tdd`, `code review`, `security review`, `ultrathink`, `deepsearch`, `deep-analyze`, `ccg` (other models, asks first), `ultragoal` (goal ledger), `ralphthon` (interview → loop → harden), `deepinit`, `autoplan`, `office hours`, `cso` / `ponytail-audit` / "audit the whole repo" (report-only audit), `cancelomc`. A bare "build it" / "그냥 만들어줘" with no goal gets the interview first. Korean and Japanese forms work too (랄프, 울트라워크, 코드 리뷰, ラルフ, コードレビュー, …). Mentions inside code, quotes, URLs, paths or questions about a keyword do not trigger; `ralph` starts a loop only as a prefix ("ralph: …", "/ralph …", "ralph mode: …", "랄프: …", "ラルフ: …") whose task has no stop word; a short prompt made only of ralph, filler and a stop word from a fixed list ("turn off ralph", "ralph: please stop", "랄프 모드를 꺼줘", "ラルフを止めてください") cancels it; everything else mentioning ralph only adds a note asking the model to decide (start, cancel with `mis loop cancel`, or ignore). Disable any with `keywords.disabled` in `~/.make-it-ship/config.json`; check a prompt with `mis test-prompt "<text>"`.
-- **Persistent loop:** `/make-it-ship:loop` (`mis loop start|status|cancel`). It holds only the session that started it. That session cannot stop until a run reported after the loop started has verdict VERIFIED, the run is BLOCKED or awaiting your approval, the iteration limit is reached, or three continues make no progress. `mis cancel` also ends it.
-- **Freeze:** `mis freeze <dir>` denies edits outside one directory of the current repository (other repositories are not affected; symlinks are followed); `mis unfreeze` lifts it.
-- **After tool calls:** matching `.cursor/rules` and `.github/instructions` files are shown once per session (Claude Code already loads `.claude/rules`), a reminder to run tests after many edits, and a root-cause hint after the same call fails three times.
-- **Status line:** `MIS ▸ idle · style full · frozen src · agents 2 (1 stale) · todo 1/3 · main · <model> · ctx 42%` (agents = running subagents of this session, stale after 5 minutes; todo from the todo list), or the run progress when a run exists (register it from `mis init`'s `hud.statusLine`). To keep a status line you already had, put its command in `statusLine.chain` in `~/.make-it-ship/config.json`; its first line is appended after ` | `.
-- **Memory across sessions:** `<remember>…</remember>` in a subagent result or your last answer is kept for 7 days, `<remember priority>…</remember>` permanently; priority notes, project directives and the wiki index are injected at session start and again after compaction.
-- **Subagents:** when a subagent stops, files it says it created or wrote but that do not exist make it continue once to create them or correct its report. Before an Agent call you are reminded to name the expected files, and to wait when 4+ are running; before `git commit`, open todos are mentioned.
-- **Read-only Bash without prompts:** a single plain read-only command (`ls`, `cat`, `grep`, `rg`, `find` without `-exec`/`-delete`, `git status|log|diff|show|branch`, …) is auto-allowed at the permission prompt, but only when the guard allows it, no `permissions.ask` rule of yours covers it, every path it names stays inside the repository (symlinks resolved), and none looks like a secret (`.env*`, `*.pem`, `*.key`, `id_*`, `.ssh`, `.aws`, `.netrc`, `credentials`, keychains, …). Pipes, redirects, `$`, heredocs, `;`/`&&`, wrappers (`sudo`, `env`, `xargs`, `sh -c`) always get the normal prompt.
-- **Stop checks:** a session that edited code while a run is EXECUTING is asked (twice at most) to run `mis check` before stopping. Opt in with `mis config set simplifier.enabled true` (`simplifier.maxFiles`, default 10) to be asked once per set of edited files for a `code-simplifier` pass. An active loop always decides first, then the check reminder, then the simplifier.
-- **Debug scope:** `mis debug scope <file|dir…>` makes the guard ask before edits outside the hypothesis' files (`--clear` lifts it); the debug phase sets it once the root cause is located.
-- **Session records:** session end writes a summary (edited files, open todos, run, most-read files) to `.git/make-it-ship/session-summaries/`, and the most-read files become project memory (`often read`). Open todos are kept across compaction. Sessions (with their kind: interactive, headless, team worker), subagents and skills go to the project timeline: `mis timeline`, `mis timeline log <event> [k=v…]`, and the `trace_timeline` tool. A prompt that sounds like a lasting rule ("always use pnpm") is offered as a project directive, never saved without you.
-- **Project CLAUDE.md routing:** `mis setup routing` shows the `## Skill routing` section it would write (replacing an existing one, e.g. gstack's); `mis setup routing --write` applies it after the guard asks you.
-- Per-user state lives in `~/.make-it-ship/` (`MIS_STATE_HOME` overrides it). These hooks never block a session on their own errors; only the guard fails closed.
-
-## Setup and maintenance
-Commands that change files outside your repository print what they would do first; the executing flag makes the guard ask you.
-- `mis setup` shows a diff for `~/.claude/settings.json` (the status line; a status line you already had is kept via `statusLine.chain`) and `~/.claude/CLAUDE.md` (a Make It Ship block replaces the oh-my-claudecode blocks; other text is kept as is). It also lists lines in CLAUDE.md and `~/.claude/rules/` that still mention the replaced plugins; it never rewrites those. `mis setup --write` applies the diff and keeps a backup next to each file. `mis setup team [--write]` drafts `.make-it-ship.json` and `.gitignore` for a shared repository. Until a status line is set, session start mentions it once a day.
-- `mis doctor [--json]` checks the plugin, `hooks.json`, the MCP server (`tools/list`), the status line, the state directories and which coding agents are on PATH. `mis doctor --fix` repairs a status line that points at an old plugin path, stale run locks and broken mode state files. `mis doctor session` shows the active run, loop, team, freeze, merge-readiness sessions and recent hook errors in one place.
-- `mis mcp-setup list` shows known MCP servers (context7, github, filesystem, exa) and where each one is registered. `mis mcp-setup add <name>` prints the `claude mcp add` command, and `--write` runs it.
-- `mis config get [key]` and `mis config set <key> <value>` edit `~/.make-it-ship/config.json`; `mis config get` lists every key with a one-line doc. Unknown keys and bad values are rejected. Keys whose value Make It Ship runs or contacts (`statusLine.chain`, `update.source`, `telemetry.endpoint`) are `sensitive`: the guard asks before `mis config set` changes them. The guard also asks before other lasting changes outside the repository: user-scope skills (`mis skill add|edit --scope user`), `mis skill trust`, `claude mcp add|remove`, `claude plugin install|uninstall|update|enable|disable|marketplace …`, `mis launch` without permission prompts, and writes to `~/.claude/settings*.json`, `~/.claude/CLAUDE.md`, `~/.claude.json`, any `.claude/settings*.json`, a CLAUDE.md outside the repository, and `~/.make-it-ship/config.json` or `skills/`. `mis version` prints the plugin version, Node version and commit.
-- Updates: session start mentions a newer version in one line. The result is cached for 24 hours. A stale cache is refreshed in the background, so session start never waits on the network. The check reads only the plugin's own marketplace copy or git remote, sends no repository data, and stays silent on failure. Turn it off with `mis config set update.check false`. `mis update-check [--force]` runs the check directly. `mis upgrade` prints the update command, and `mis upgrade --yes` runs it.
-- Cleanup: once a day, session start removes finished runs, ended teams and dead browser state older than `maintenance.retainDays` (default 90; 0 turns it off). Active runs and loops are never removed. Session start also warns in one line when `.make-it-ship.json` is invalid.
-- `mis cancel --all` ends the loop, the team and any merge-readiness sessions. It cancels the run only with `--run`. `mis launch [claude args]` starts Claude Code in a new tmux session and prints the attach command.
-- `mis uninstall` lists what it would remove: `~/.make-it-ship`, the status line entry, the CLAUDE.md block, and running browser and team processes. `mis uninstall --yes` removes them. Run records in `.git/make-it-ship` are deleted only with `--purge-runs`. After that, run `claude plugin uninstall make-it-ship`.
-- `/make-it-ship:setup` sends setup, doctor, MCP, update and uninstall requests to the right command.
-- Help and reference: `mis help [topic]` lists every `mis` command by group, skill, agent, keyword (with the ralph prefix rule), style level, MCP tool and hook; topics are `commands`, `skills`, `agents`, `keywords`, `styles`, `mcp` and `hooks`. The lists are read from the code, so they cannot go stale. `/make-it-ship:help` shows them, and `/make-it-ship:reference` is the agent, tool and keyword reference to load before delegating or committing.
-- `mis info` prints the plugin version, Node version, commit, command and skill counts, agents, the MCP tool count from the tool registry and the hook events.
-- `mis capabilities` compares the current commands, skills, agents, MCP tools and hook events with `.make-it-ship/capabilities.lock.json` in the repository. `mis capabilities --write` records them; `mis capabilities --check` exits 1 and lists what was added or removed when they drift. This repository commits its lockfile and the test suite checks it. This lockfile is the only file these four commands write.
-- `mis gain [--json]` shows measured results from this repository only: run verdict counts, check pass rates (overall and per check), failures later fixed, `mis bench` medians against their baselines, and shortcut debt. It does not estimate savings. The comparison with the original plugins prints `BLOCKED: no benchmark results` while `evals/benchmarks/*.json` has no results; the M10 comparison harness (`evals/m10/run.mjs`) keeps its own results in `evals/m10/` and has produced only a smoke run so far.
-
-## Teams and sessions
-- **Team pipeline:** `/make-it-ship:team [N[:claude|codex|gemini]] <task>` runs plan → exec → verify → fix (at most 3 rounds) on top of a normal run, so approval, `mis check` and `mis verdict` still decide. Only on explicit request; the word "team" in a prompt does nothing.
-- **tmux workers:** `mis team start <N> "<task>" [--tasks <json|->] [--worker claude|codex|gemini]` opens a tmux session with N panes, each on its own worktree and branch (`mis/team/<id>/wN`), claiming tasks from a shared file task list (atomic, no double claims) with a heartbeat and log per worker. `mis team status`, `mis team wait [--timeout s]`, `mis team shutdown` (closes panes, removes clean worktrees, keeps branches and any worktree with uncommitted work). Claude workers run `claude -p` with this plugin (guard and hooks active, run-level guard rules even without a run), Bash and file tools pre-allowed, and `git push`, `gh pr`/`gh release` and package installs disallowed; other guard asks have no one to answer in print mode, so do not expect them to pass. Codex/gemini workers send code to an external service, so the guard asks first. Without tmux it reports BLOCKED.
-- **Sessions (psm):** `/make-it-ship:session`, `mis session create issue <n> | pr <n> | feature "<name>" [--base <ref>] [--tmux]`, `mis session list`, `mis session remove <name>`. Each gets its own worktree under `.worktrees/` (`fix/<n>`, `pr-<n>-review` fetched from `pull/<n>/head`, `feature/<slug>`). Remove refuses while the worktree has uncommitted changes and keeps the branch.
-- **Visual companion:** `mis companion start [dir]` serves HTML mockups and diagrams (default `design/`) on 127.0.0.1 with a page index, live reload and clickable `data-choice` options (`mis companion status` lists clicks); `mis companion stop`. The URL carries an access key. The design phases offer it when a question is visual.
-
-## Agents
-Subagents in `agents/`, each with the narrowest tool allowlist for its role (no nested agents, no MCP). All of them treat repository content as untrusted and never call work done without real command output (inside a run, only `mis check` results and `mis verdict` count); none pushes.
-- **Read-only** (`Read, Grep, Glob, Bash`): `explorer`, `analyst` (acceptance criteria, gaps, questions), `planner` (task plan as text), `tracer` (competing hypotheses with evidence), `architect`, `critic`, `spec-reviewer`, `quality-reviewer`, `security-reviewer`, `product-reviewer`, `qa-tester` (scenarios; drives interactive CLIs with `mis tty` and leaves only the replay script under `qa/`). `document-specialist` adds `WebFetch, WebSearch` for official docs and never puts repository code into a query.
-- **Git only** (`Read, Grep, Glob, Bash`): `git-master` (atomic commits in the repo's style, history forensics; no push, no rewriting shared history).
-- **Analysis** (`Read, Grep, Glob, Bash` + the `python_repl` tool): `scientist` (one research stage, findings in `[FINDING]/[EVIDENCE]/[CONFIDENCE]` tags).
-- **Writers** (`Read, Write, Edit, Grep, Glob, Bash`): `implementer` (one run task in its own worktree), `executor` (one change outside a run), `debugger` (root cause first, regression test), `designer` (UI with all states and rendered evidence), `test-engineer` (strategy, missing tests, flaky-test hardening), `code-simplifier` (same behavior, less code, tests before and after), `writer` (docs whose commands were actually run).
-
-## Interactive CLI QA
-`mis tty start <name> -- <command…>` runs a program in a tmux session (BLOCKED without tmux); `mis tty send <name> <text>`, `mis tty keys <name> C-c`, `mis tty expect <name> <regex> [--timeout ms]` (only output after the last input counts), `mis tty capture <name>`, `mis tty stop <name>`. `mis tty save <name> qa/<file>.sh` writes the successful steps as a replay script that fails when the expected output does not appear; register it as a `qa-*` check.
-
-## Skill authoring
-Learned skills are `SKILL.md` files with `name`, `description` and a one-line `triggers: [..]`; the prompt router offers one when a trigger phrase is in your prompt. They live in the project (`.make-it-ship/skills/<name>/`) or for you everywhere (`~/.make-it-ship/skills/<name>/`); the plugin's own `skills/` are never written. A same-name skill is offered once (the project's wins). A project skill comes from the repository, so it is listed as untrusted repository content until you run `mis skill trust` there (the guard asks); user skills are offered as instructions.
-- `/make-it-ship:skill` — `mis skill list | search <text> | add <file|-> [--scope project|user] | edit <name> [<file|->] | remove <name> | lint [<name>]`. `add` and `edit` lint first and write nothing on an error.
-- `/make-it-ship:skillify` (also "learner") — turns a repeatable workflow or a hard-won fix from the session into a skill draft and saves it with `mis skill add`.
-- `/make-it-ship:writing-skills` — test-first authoring: `mis skill test <name> <scenarios.json>` runs each scenario through a fresh subagent without and with the skill (default `claude -p --safe-mode --tools Read,Grep,Glob` in an empty directory; `MIS_SKILL_TEST_CMD` replaces it) and reports GREEN only when every scenario fails without the skill and passes with it. `mis skill graphs <name>` renders its ```dot flowcharts with graphviz.
-
-## Tools (MCP server `mis`, bundled)
-The plugin ships an MCP server (`.mcp.json`), so these tools appear as `mcp__plugin_make-it-ship_mis__<name>`:
-- **Memory:** `notepad_*` (priority / working 7 days / manual), `project_memory_*` (stack, commands, notes, directives), `state_*` (mode state; the run, loop, style and freeze are shown live and read-only), `shared_memory_*` (namespaced key/value with TTL for agents). Stored under `.git/make-it-ship/memory/`, never committed.
-- **Knowledge:** `wiki_*` (pages in `.make-it-ship/wiki/`, git-ignored by default — delete its `.gitignore` to commit them), `session_search` (past Claude Code sessions of this project, read-only), `trace_timeline` / `trace_summary` (run events and hook activity), `deepinit_manifest`, `merge_readiness_*` (a check-your-understanding session before merging, using the run's evidence).
-- **Code:** `lsp_*` (hover, definition, references, symbols, diagnostics, rename, code actions — uses language servers already installed: typescript-language-server, pyright/pylsp, gopls, rust-analyzer, clangd, sourcekit-lsp), `ast_grep_search` / `ast_grep_replace` (needs the `ast-grep` CLI), `python_repl` (a persistent `python3`; it is ordinary Python with the same reach as running python from Bash). A missing binary returns an install hint instead of a result.
-- **Skills:** `list_skills`, `load_skills_local`, `load_skills_global` (managing and writing them: see Skill authoring).
-- `ast_grep_replace` and `lsp_rename` change files only with `apply: true`; while a run is active the guard asks before they (and `lsp_code_action_resolve`) rewrite files, and freeze applies to them.
-- Note: Claude Code does not load a plugin's MCP server when started with `--strict-mcp-config`.
-
-## Browser (built in, no Playwright)
-`mis browse <command>` drives a real headless Chrome, Chromium or Edge already on the machine through the DevTools Protocol. Nothing is installed. One daemon runs per worktree; its state lives in `.git/make-it-ship/browse/`, or `~/.make-it-ship/browse/` outside a repo. It starts on the first command and stops after 30 idle minutes. If no browser is found, commands print `BLOCKED`.
-- **Commands:** `goto`, `snapshot -i` (`@e` refs for `click`/`fill`/…; `-C` adds `@c` refs for clickable divs, `-H` draws a color heatmap of refs), `text`, `media`, `inspect` (CSS cascade and box model), `ux-audit` (page structure as JSON), `console --errors`, `network`, `perf`, `memory`, `screenshot`, `prettyscreenshot`, `style`/`style --undo`, `cleanup` (ads, cookie banners, sticky bars), `responsive`, `pdf`, `diff`, tabs and frames (`tab-each` runs one command on every tab), `chain`, `watch`, and `handoff`/`resume` (a visible window for CAPTCHA or MFA, then back to headless with the cookies kept). `mis browse` lists them all; see `skills/browse/SKILL.md`.
-- **Guard:** `storage`, `js` and `eval` run freely on local pages (localhost, `file:`), judged by the origin the browser gives the page (a `blob:` page or popup a real site made counts as that site; `about:blank`/`data:` pages are not local). On real sites they need `--remote`, and the guard asks you. `MIS_BROWSE_CHROME_ARGS` takes only an allow list of display, language and rendering flags (and `--host-resolver-rules` that map names to loopback, or map non-local names); anything else is refused. Setting it, `MIS_BROWSER` or `MIS_BROWSER_EXE` for a `mis browse` command (also quoted, escaped, exported or under `set -a`) makes the guard ask. Raw `mis browse cdp` always asks. Chrome is driven over a pipe, so no DevTools port is open to other local programs.
-- **Local-only browser and upload:** a page script can send an attached file anywhere (a Service or Shared Worker, another page, an unload beacon, WebSocket, WebRTC), not only where its form posts. So `upload` without `--remote` runs only in the local-only browser: `mis browse start --local-only` starts Chrome so that nothing but this machine (localhost, `*.localhost`, `127.0.0.1`, `[::1]`) is reachable: all other traffic goes to a proxy that drops it, no other name resolves, and WebRTC may not send UDP. In a normal browser `upload` always asks and needs `--remote` (the guard asks you; the file can leave the machine). The mode is shown by `mis browse status` (`localOnly`); changing it restarts the browser (`start` / `start --local-only`; `restart` keeps it). `connect` is not available in local-only mode. As a second line, a local page's form that posts to a real site is refused, and while a page holds a file attached without `--remote` the browser blocks that page's requests to non-local hosts.
-- **Credentials always ask** (with or without a run, through shell functions, `sh -c`, `mis tty`, inline `chain` and `tab-each`): `cookies`, `cookie`, `cookie-import <file.json>`, `cookie-import-browser`, `header`, `useragent`, `connect`, `state save|load`, `download`, `scrape` and `archive`. The daemon refuses them inside `chain` files, `tab-each` and browser skills, and the CLI refuses them inside `mis check` scripts, because the guard cannot see those. `--remote` does not unlock them.
-  - `cookie-import-browser [chrome|chromium|edge|brave|arc] --domain <host>` decrypts your own browser's cookie store for the named sites only (macOS: the "Chrome Safe Storage" Keychain entry, which macOS asks you to allow; Linux: the built-in key or the Secret Service). Without `--domain` it lists domains and decrypts nothing. Values are never printed. The store is copied to a private temp dir and deleted after reading. Windows is not supported (Chrome 127+ binds the key to Chrome itself).
-  - `connect [--profile-dir d]` opens a visible Chrome on a persistent profile (default `~/.make-it-ship/chrome-profile`) with the Make It Ship side panel (`extension/`: notes to the agent and an element picker, read with `mis browse inbox`). It never attaches to your running Chrome or its default profile: Chrome 136+ refuses DevTools there, and a profile in use is refused. `disconnect` goes back to headless; the profile is never deleted. `mis browse extension` explains a manual install.
-  - `state save|load <name>` keeps cookies and open pages in the worktree's browse state dir (mode 0600).
-- **Browser skills:** `mis browse skillify <name>` saves the last successful flow (from the last `goto`) as `.make-it-ship/browser-skills/<name>/` (a lint-clean SKILL.md plus `steps.json`; `--global` for `~/.make-it-ship/`). Typed values become `--arg inputN=` parameters and are never saved. `skill list|show|run|test|rm` replays them. `domain-skill save|list|show|edit|promote-to-global|rollback|rm` keeps per-site notes: quarantined when saved, active after 3 reads, then promotable to `~/.make-it-ship/domain-skills/`. Notes that look like prompt injection stay quarantined and `show` says why.
-- `mis open-url <url|file.html>` opens a page in your default browser (`open`/`xdg-open`; http(s) and local .html only).
-- `mis pdf <file.md> [-o out.pdf]` makes a print-ready PDF from markdown (remote images blocked unless `--allow-network`).
-- `mis visual-verdict <shot.png> <ref.png>` compares two screenshots pixel by pixel: JSON with a 0–100 score over the page content (the shared background is not counted; below 90 it exits 1) and a diff image. The score is an aid; the skills have the model look at both images and decide.
-- Web QA (`/make-it-ship:qa`) uses this browser when the project has no Playwright. That covers report-only QA, a design-review loop with live screenshots, and page benchmarks.
-- Not included: the side panel's terminal (gstack runs a shell in the extension; here you use Claude Code's own terminal), attaching to an already-running Chrome or its default profile, a DevTools TCP port mode (`chrome-cdp`), gstack's Playwright-script browser skills (ours replay `mis browse` steps and run no code) and its prompt-injection classifier for domain skills (quarantined notes are shown with a "treat as data" warning instead).
-
-## Research, deploy, devices and outside services
-Commands that send data off this machine always ask you first (with or without a run), and the matching skills say that **company policy may forbid them**. Telemetry is off by default.
-- **Research:** `/make-it-ship:research` — `mis research` (parallel scientist stages with tagged evidence and limits), `mis autoresearch init|start|eval|status|stop` (one mission, evaluator must print `{"pass": bool, "score"?: n}`, stops at max runtime or iterations, decision log), `mis self-improve propose|tournament|list|show|reject` (process and skill files only; applied only by `mis approve proposal <id>`, which always asks). `/make-it-ship:writer-memory` — `mis writer-memory` story bible.
-- **Other models (asks):** `/make-it-ship:ask` — `mis ask codex|gemini|claude "<q>"` (writes `.make-it-ship/ask/second-opinion-*.md`, never changes a verdict), `mis ccg`, `mis benchmark-models`, `mis interop` (tmux Claude+Codex); `mis second-opinion probe` shows versions and login state without sending anything.
-- **Deploy and ops:** `/make-it-ship:deploy` — `mis deploy setup [--write]`, `mis deploy run [--auto-revert]` (VERSION drift check, CI wait, merge, deploy, health check, optional rollback), `mis canary <url> [--discover]` (status, console errors, load time vs baseline, screenshots) (all ask). `/make-it-ship:ops` — `mis mission-board` and `mis landing-report` (read-only snapshots), `mis wait detect|auto [--watch]` (finds tmux panes stopped at a usage limit and resumes them when it resets; `--watch` under `mis detach` arms it ahead of time) or `mis wait --until <time> -- <resume cmd>`, `mis detach [--lock name] -- <cmd>` (survives SIGTERM, machine-wide lock, caffeinate on macOS, EXIT sentinel in the log).
-- **iOS devices:** `/make-it-ship:ios` — no connected device means BLOCKED; `mis ios sync [--apply]` (template diff; apply asks), `mis ios daemon start --target <bridge url> [--tailnet]` (loopback relay; tailnet asks and needs `mis ios mint <agent>` tokens).
-- **Telemetry:** `/make-it-ship:telemetry` — `mis telemetry on|off|status|log`, `mis analytics` (local JSONL only); `mis telemetry sync` and `dashboard` go to an endpoint you set and ask.
-- **gbrain (asks):** `/make-it-ship:gbrain` — core flow over your own `gbrain` CLI (BLOCKED without it): detect, init, policy, enqueue/sync to a private artifacts repo, ingest `--probe`, query, restore, uninstall. Supabase provisioning, remote MCP checks and brain cache/consumers are not included.
-- **Design images (asks):** `/make-it-ship:design-images` — `mis design generate|variants|iterate|evolve` with your OpenAI key (BLOCKED without it), `compare` (static board) and `gallery`; output in `design/variants/`.
-- **Pair agent (asks):** `/make-it-ship:pair-agent` — `mis pair-agent start [--local]` gives another agent token access to the built-in browser (tunnel via ngrok unless `--local`); `stop` closes it.
-
-## Project layout and docs (.ai/ for AI, docs/ for people)
-Optional. With a `layout` in `.make-it-ship.json`, code and docs go to fixed folders: AI-facing docs in `.ai/` (English, terse facts: paths, commands, rules, invariants), human-facing docs in `docs/`, one file per language (`docs/guide/x.md` + `docs/guide/x.ko.md`, like `README.md` / `README.ko.md`).
-```json
-"layout": {
-  "paths": ["src/**", "tests/**", "docs/**", ".ai/**", "*.md", "package.json", ".make-it-ship.json"],
-  "purposes": { "src/**": "application code" },
-  "docs": { "human": "docs", "ai": ".ai", "languages": ["en", "ko"] }
-}
+**3. You only have an idea**
 ```
+/make-it-ship:interview I want a tool that summarizes our meeting notes and posts them to Slack
 ```
-.ai/              AI docs (English)
-  index.md        map: which file to read when
-  product.md      purpose, users, scope
-  structure.md    folder rules (generated part from "layout")
-  tech.md         stack and commands (points to package.json etc.)
-  conventions.md  style, forbidden things
-  decisions.md    one line per decision
-  modules/        one doc per directory (deepinit)
-AGENTS.md         core rules + map (CLAUDE.md imports it: @AGENTS.md)
-docs/             human docs, every language
-  guide/x.md
-  guide/x.ko.md
-src/  tests/
+No code changes. One question at a time, each with a restatement, a recommendation and 2–4 options. The result is a spec in `docs/make-it-ship/specs/` with testable acceptance criteria. A bare "just build it" starts this interview instead of building.
+
+**4. Review only**
 ```
-- `mis init` proposes a `layout` from the repository's top-level folders; it is written only with `mis init --write`.
-- Inside `/make-it-ship:run`, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and lists each violation with the fix. Changing the layout is a config change (`mis approve config` during a run). Outside a run nothing is enforced.
-- `mis layout` prints the rules and the files outside them (`--json` for JSON). `mis layout write` creates missing `.ai/` skeletons (never overwritten), regenerates the marked part of `.ai/structure.md`, and writes a marked section in AGENTS.md (rules + map) and `@AGENTS.md` in CLAUDE.md (asks first). `.ai/` files are read on demand, not imported.
-- Without `layout` the feature is off.
+/make-it-ship:review
+```
+Read-only reviewers check the working-tree changes; each finding has a severity and evidence. "audit the whole repo" reviews everything, report only.
 
-## `mis` CLI
-You run it as `node ~/make-it-ship/scripts/mis.mjs <command>`; the skills call it for you. Commands: `doctor`, `init [--write]`, `layout [--json] | write`, `start --input <file|text>`, `plan set <file|->`, `mode set <quick|standard|full> --reason <text>`, `interview add|resolve`, `approve plan|continue|config`, `task <id> start|done|fail|retry`, `check <name>`, `note dep|rootcause|design`, `review add <kind> <file|->`, `verdict`, `status [--json]`, `report`, `resume [run]`, `parallel plan`, `worktree add|merge <task>`, `qa detect`, `ship`, `block <reason>`, `cancel`, `style [level] | style default <level>`, `loop start [--max N] <task> | status | cancel`, `freeze <dir>`, `unfreeze`, `test-prompt <text>`, `browse <command>`, `pdf <file.md>`, `visual-verdict <shot> <ref>`, `team start|status|wait|shutdown`, `session create|list|remove`, `companion start|status|stop`, `tty start|send|keys|expect|capture|save|stop`, `skill list|search|add|edit|remove|lint|test|graphs`, `plan check <plan.md>`, `start --plan <plan.md>`, `goal add|list|done|handoff`, `question log|pref|list`, `profile`, `decision add|supersede|search`, `learn add|list|search|distill`, `retro [--git --since 7d]`, `diagram <x.mmd>`, `design-board <dir>`, `taste approve|reject|show`, `health`, `debt`, `redact scan [--history] [--pii] [--legal] | file <path> [--apply]`, `diff-scope`, `repo-mode`, `next-version <level>`, `version-bump <level>`, `jsonl-merge install`, `context save|restore|list|sessions`, `doctor [--json|--fix|session]`, `setup [--write] | setup team [--write]`, `mcp-setup list|add`, `config get|set`, `version`, `update-check`, `upgrade [--yes]`, `uninstall [--yes] [--purge-runs]`, `launch`, `cancel [--all [--run]]`, `open-url <url>`, `research`, `autoresearch`, `self-improve`, `approve proposal <id>`, `writer-memory`, `ask`, `ccg`, `benchmark-models`, `interop`, `second-opinion detect|probe`, `deploy setup|run|status`, `canary`, `landing-report`, `mission-board`, `wait`, `detach`, `ios sync|daemon|mint|tokens`, `telemetry`, `analytics`, `gbrain`, `design`, `pair-agent`, `help [topic]`, `info`, `capabilities [--write|--check]`, `gain [--json]`, `bench <check> [--runs N]`, `ios devices|bridge-scan`. `mis help commands` prints the full list from the code.
+**5. Resume, check status**
+```
+/make-it-ship:resume
+```
+It summarizes where the run stopped, what changed since, which checks are now `STALE` and what waits for you. Only you can lift a runtime or retry limit. `/make-it-ship:status` shows phase, tasks, checks, reviews and the current verdict.
 
-## Configuration: `.make-it-ship.json`
+**6. Browser QA (local-only)**
+```
+/make-it-ship:qa Check the sign-up page at http://localhost:3000 in local-only mode, including the profile photo upload
+```
+Headless screenshots and console errors from your installed browser. In local-only mode the upload runs without asking; in a normal browser it always asks, because the file could leave the machine.
+
+## Reference
+
+### Slash skills
+
+| Area | Skills |
+|---|---|
+| Main flow | `/make-it-ship:run`, `/make-it-ship:status`, `/make-it-ship:resume`, `/make-it-ship:cancel` |
+| Single phases | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
+| Always on | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:browse` |
+| Teams | `/make-it-ship:team`, `/make-it-ship:session` |
+| Skills | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
+| Setup and help | `/make-it-ship:setup`, `/make-it-ship:help`, `/make-it-ship:reference` |
+| Outside services (ask first) | `/make-it-ship:ask`, `/make-it-ship:research`, `/make-it-ship:deploy`, `/make-it-ship:ops`, `/make-it-ship:ios`, `/make-it-ship:telemetry`, `/make-it-ship:gbrain`, `/make-it-ship:design-images`, `/make-it-ship:pair-agent`, `/make-it-ship:writer-memory` |
+
+### Key `mis` commands
+
+`mis` is `node scripts/mis.mjs` in the plugin; the skills call it for you. `mis help commands` prints all 90 from the code.
+
+| Command | What it does |
+|---|---|
+| `mis doctor` / `mis init [--write]` | check the environment / propose `.make-it-ship.json` |
+| `mis start --input <file\|text>` | start a run |
+| `mis check <name>` | run one configured check and record the evidence |
+| `mis verdict` / `mis report` | compute the verdict / write the report |
+| `mis status` / `mis resume` | show / continue the current run |
+| `mis layout [--json] \| write` | show layout violations / write `.ai/` skeletons and AGENTS.md |
+| `mis browse <command>` | built-in headless browser |
+| `mis bench <check> --runs N` | performance; +20% is WARN, +50% REGRESSION |
+| `mis learn add\|list\|search` | project learnings |
+| `mis second-opinion detect` | find codex/gemini CLIs for a second opinion (sending code asks first) |
+| `mis help [topic]` | commands, skills, agents, keywords, styles, MCP tools, hooks |
+
+### Always on
+
+Installing the plugin is enough. Every session gets the working discipline (ask when unclear, test first, root cause before fixes, verify before claiming done), a coding style level (`/make-it-ship:style off|lite|full|ultra`), the guard, a status line, memory across sessions and auto-allow for plain read-only Bash inside the repository. Keywords in a prompt route to skills: `ralph` (persistent loop, only as a prefix such as "ralph: …"), `autopilot`, `ulw`, `ralplan`, `deep interview`, `deslop`, `tdd`, `code review`, `security review`, `ultrathink`, `ccg` (asks first), `office hours`, `cso`, `cancelomc`; Korean and Japanese forms work too. Check a prompt with `mis test-prompt "<text>"`.
+
+### Planning, review, design, docs and release inside the flow
+
+`/make-it-ship:run` brings in office hours, brainstorming, plan reviews (CEO, design, DX, eng), design boards, parallel tracers, audits, version bumps and secret scans at the phase where they fit; you do not call them separately. The run skill's "Situational steps" table lists every trigger.
+
+### Teams and sessions
+
+`/make-it-ship:team` runs plan → exec → verify → fix on top of a normal run (only on explicit request). `mis team start <N> "<task>"` opens tmux workers on their own worktrees; `mis session create issue|pr|feature` makes an isolated worktree; `mis companion start` serves mockups with clickable choices.
+
+### Skill authoring
+
+Learned skills live in `.make-it-ship/skills/` or `~/.make-it-ship/skills/`. `/make-it-ship:skillify` drafts one from the session, `/make-it-ship:writing-skills` tests it first (`mis skill test`), and `mis skill trust` is needed before a project skill is offered as instructions.
+
+### Agents
+
+21 subagents, each with the narrowest tool allowlist: read-only `explorer`, `analyst`, `planner`, `tracer`, `architect`, `critic`, `spec-reviewer`, `quality-reviewer`, `security-reviewer`, `product-reviewer`, `qa-tester`, `document-specialist`, `scientist`; `git-master` (commits, no push); writers `implementer`, `executor`, `debugger`, `designer`, `test-engineer`, `code-simplifier`, `writer`. Codex users: `adapters/codex/AGENTS.md` (same flow, no guard). iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`.
+
+## Configuration
+
+`.make-it-ship.json` in your repository:
+
 ```json
 {
   "version": 1,
   "checks": { "unit": { "argv": ["npm", "test"], "timeoutSec": 600 } },
   "required": { "quick": ["unit"], "standard": ["unit"] },
-  "limits": { "maxAttemptsPerTask": 2, "maxRuntimeMinutes": 120 }
+  "limits": { "maxAttemptsPerTask": 2, "maxRuntimeMinutes": 120 },
+  "layout": {
+    "paths": ["src/**", "tests/**", "docs/**", ".ai/**", "*.md", "package.json", ".make-it-ship.json"],
+    "purposes": { "src/**": "application code" },
+    "docs": { "human": "docs", "ai": ".ai", "languages": ["en", "ko"] }
+  }
 }
 ```
-Commands run without a shell. A command that is missing, not installed, or times out counts as `BLOCKED` ("not verified"), never as passed.
 
-## Development
-```sh
-npm test                       # node:test, no dependencies
-claude plugin validate .claude-plugin/plugin.json
-claude plugin validate .      # marketplace manifest
-node evals/setup-demo.mjs a    # demo repo in a temp dir
-node scripts/gap-matrix.mjs --write   # recount docs/research/gap-matrix.md from its rows
-node scripts/mis.mjs capabilities --write  # after adding a command, skill, agent, MCP tool or hook
-node evals/m10/run.mjs --arms control,mis --demos b --n 1   # comparison harness against the original plugins (runs real claude)
-node evals/m10/report.mjs <summary.json> [out.html]         # one local HTML report from the results
+Commands run without a shell. A command that is missing or times out counts as `BLOCKED`, never as passed. Per-user settings: `mis config get|set` (`~/.make-it-ship/config.json`).
+
+### Project layout and docs
+
+`layout` is optional; without it the feature is off. With it, files go to fixed folders and docs are split by reader:
+
 ```
-Releasing: bump `version` in `.claude-plugin/plugin.json`, or marketplace users keep their cached copy.
-Design documents: `docs/Make_It_Ship_Spec_v1.1.md` (authoritative), `docs/adr/`, `docs/PROGRESS.md`.
+.ai/              for AI, English, terse facts
+  index.md        map: which file to read when
+  product.md      purpose, users, scope
+  structure.md    folder rules (generated part from "layout")
+  tech.md         stack and commands
+  conventions.md  style, forbidden things
+  decisions.md    one line per decision
+  modules/        one doc per directory
+AGENTS.md         canonical rules + map (CLAUDE.md imports it: @AGENTS.md)
+docs/             for people, one file per language: guide/x.md + guide/x.ko.md
+```
+
+- `mis init` proposes a `layout` from your top-level folders (written only with `mis init --write`).
+- `mis layout` lists files outside the rules and docs missing a translation. `mis layout write` creates missing `.ai/` skeletons (never overwritten), regenerates the marked part of `.ai/structure.md`, and writes a marked section in AGENTS.md and `@AGENTS.md` in CLAUDE.md (asks first). `.ai/` files are read on demand, not imported.
+- At plan time inside a run, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and says how to fix each. Changing the layout is a config change (`mis approve config`).
+
+## FAQ
+
+**How is this different from oh-my-claudecode, superpowers, gstack or ponytail?** It absorbs their workflows into one plugin (`THIRD_PARTY_NOTICES.md`) and adds one rule: the verdict comes from recorded check results, not from the model. We measured it ([docs/m10/report.html](docs/m10/report.html)): on three small demos, N=3 per cell, all 54 runs of every arm passed and described the outcome honestly, so accuracy and honesty did not tell the arms apart. What differed was overhead against a no-plugin control: Make It Ship cost 4.1–6.1× as much, with 2.2–2.6× the turns. The OMC workflow activated in 1 of 9 runs and superpowers in 6 of 9, so those arms partly measure an installed plugin. Larger Standard and Full tasks were not measured.
+
+**Does it send my code anywhere?** Not by itself. Commands that send data off the machine (other models, deploys, telemetry, which is off by default) always ask first, and their skills say company policy may forbid them.
+
+**Why is my verdict `PARTIAL` when the tests pass?** Something else is missing: a review, a task not marked done, or a check that went `STALE`. The report lists each reason.
+
+**Can it run headless (`claude -p`)?** Yes, but approval prompts cannot be shown there, so steps that need approval stop. Continue interactively with `/make-it-ship:resume`.
 
 ## Troubleshooting
-- **A headless run (`claude -p`) stops at approval.** Expected: no prompt can be shown, so steps that need approval stop. Continue in an interactive session with `/make-it-ship:resume`.
-- **An update does not show the new version.** Run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart. Also check that the release bumped `version` in `.claude-plugin/plugin.json`.
-- **Files are left after removal.** `claude plugin uninstall` keeps `~/.claude/plugins/cache/make-it-ship`; delete it with `rm -rf`. `mis uninstall --yes` removes the plugin's own user state.
-- **The MCP tools are missing.** Claude Code does not load a plugin's MCP server under `--strict-mcp-config`.
 
+- **Update shows no new version:** run `marketplace update` before `plugin update`, then restart; check that the release bumped `version`.
+- **MCP tools are missing:** Claude Code does not load a plugin's MCP server under `--strict-mcp-config`.
+- **`mis review add` is refused:** a review must contain exactly one `BLOCKING: <number>` line.
+- **Files left after removal:** delete `~/.claude/plugins/cache/make-it-ship`; `mis uninstall --yes` removes the plugin's own user state.
+- **Anything else:** `mis doctor` (or `mis doctor --fix`, `mis doctor session`).
 
-## Limits
-- The guard protects against careless mistakes, not against a model deliberately obfuscating commands.
-- Token budgets are not supported because plugins cannot read token usage. Runtime and retry limits are enforced instead.
-- In headless runs (`claude -p`), approval prompts cannot be shown. Steps that need approval stop instead.
+## Docs, development, limits
+
+- **Docs:** [docs/reference.md](docs/reference.md) (every feature in detail), [docs/HANDOFF.md](docs/HANDOFF.md) (current state), [docs/PROGRESS.md](docs/PROGRESS.md), [docs/Make_It_Ship_Spec_v1.1.md](docs/Make_It_Ship_Spec_v1.1.md) (authoritative spec), [docs/adr/](docs/adr/), [docs/m10/report.html](docs/m10/report.html) (comparison).
+- **Development:**
+  ```sh
+  npm test                                         # node:test, no dependencies
+  claude plugin validate .claude-plugin/plugin.json
+  node evals/setup-demo.mjs a                      # demo repo in a temp dir
+  node scripts/mis.mjs capabilities --write        # after adding a command, skill, agent, MCP tool or hook
+  ```
+  To release, bump `version` in `.claude-plugin/plugin.json`.
+- **Limits:** the guard stops careless mistakes, not deliberate obfuscation. Token budgets are not supported (plugins cannot read token usage); runtime and retry limits are enforced instead. Headless runs stop at approval steps.
+- **License:** this private repository has no license file yet. Bundled third-party work is listed in `THIRD_PARTY_NOTICES.md`.
