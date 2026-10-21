@@ -1,3 +1,5 @@
+English | [한국어](README.ko.md)
+
 # Make It Ship
 
 A Claude Code plugin that takes an idea, a requirements `.md`, or an issue in your git repo, and runs it through planning, implementation, **real** verification, and review. It ends with an honest verdict: `VERIFIED`, `PARTIAL`, `BLOCKED`, or `FAILED`.
@@ -40,6 +42,91 @@ cd /path/to/your/repo
 claude --plugin-dir ~/make-it-ship
 ```
 To update the clone, run `git -C ~/make-it-ship pull`.
+
+## Quick start (5 minutes)
+1. Run `claude` inside the repository you want to work on.
+2. Check the environment: `/make-it-ship:setup doctor` (plugin, hooks, MCP server, status line).
+3. Hand it one sentence: `/make-it-ship:run Fix the bug where a failed login shows no error message`.
+4. On the first run it detects your test and build commands and shows a draft `.make-it-ship.json`. Confirm it if it is right; this file decides what has to pass before anything counts as verified.
+5. Check progress at any time with `/make-it-ship:status`.
+6. At the end you get the verdict and the report path (`docs/make-it-ship/<run>/report.md`).
+
+Forgot a command? `/make-it-ship:help` lists the commands, skills, agents and keywords, read from the code.
+
+## How to use
+Common situations, each with what to type and what happens next. Claude runs the `mis …` commands for you.
+
+### 1. Fix a bug
+```
+/make-it-ship:run Setting a cart quantity to 0 makes the total NaN. Fix it.
+```
+- It reads the repository and finds the code involved first.
+- A small, low-risk fix gets **Quick** mode, with a one-line reason. Quick with no risk flags skips plan approval.
+- It writes a failing test that reproduces the bug before changing code, and records the root cause before the fix.
+- `mis check` runs the tests and a quality reviewer reads the change. You get a verdict such as `VERIFIED` with its reasons.
+- Code touching auth, payment, personal data, migrations or security is raised to Standard or higher, and a security review is added.
+
+### 2. Add a feature (Standard, with approval)
+```
+/make-it-ship:run Implement docs/feature-request.md
+```
+- It reads the request and the code, then asks **only the questions the code cannot answer, one at a time**.
+- It writes a plan, picks a mode (usually **Standard**) and says why. The critic agent reviews the plan.
+- **You are asked to approve.** You see the goal, the tasks with acceptance criteria and the required checks, then a confirmation prompt. Nothing is built before you approve; declining stops there.
+- Each task is test-first. With 3+ tasks, each gets a fresh subagent and a spec review followed by a quality review.
+- Verify, review and report follow. Add "and prepare a PR" if you want it shipped; push and PR creation still ask.
+- To plan now and build later, use `/make-it-ship:plan`. The plan is saved to `docs/make-it-ship/plans/<slug>.md` and a later run can start from it.
+
+### 3. You only have an idea (interview)
+```
+/make-it-ship:interview I want a tool that summarizes our meeting notes and posts them to Slack
+```
+- No code changes. One question at a time, each with a one-line restatement, a recommendation and 2-4 options.
+- It picks office hours (startup or builder), spec, or brainstorming to fit the situation.
+- You get a document in `docs/make-it-ship/specs/` with goal, constraints, non-goals, testable acceptance criteria, assumptions and open questions, and an offer to build it with `/make-it-ship:run`.
+- A bare "just build it" with no goal starts this interview instead of building.
+
+### 4. Review only
+```
+/make-it-ship:review
+```
+- Read-only reviewers check the current working-tree changes: spec and quality when there are requirements, quality only when there are none.
+- Each finding has a severity and evidence. Nothing is fixed unless you ask.
+- "audit the whole repo" or `cso` reviews the whole repository, report only. "security review" adds the security reviewer.
+
+### 5. Resume interrupted work, check status
+```
+/make-it-ship:resume
+```
+- It summarizes where the run stopped, files changed since, checks that are now `STALE`, tasks in progress, and decisions waiting for you. You do not have to explain the task again.
+- A run BLOCKED by its runtime or retry limit asks you whether to continue; only you can lift a limit.
+- `/make-it-ship:status` shows the phase, tasks, required checks (PASS/FAIL/STALE/BLOCKED/MISSING), reviews, open questions and the current verdict.
+
+### 6. Browser QA of a web page (local-only mode)
+```
+/make-it-ship:qa Check the sign-up page at http://localhost:3000, including the profile photo upload
+```
+- No Playwright needed: it drives the Chrome, Chromium or Edge already installed, headless, and checks screenshots and console errors. With no browser it reports `BLOCKED`.
+- **File upload** without asking runs only in the local-only browser, which Claude starts with `mis browse start --local-only`: nothing but this machine (localhost, `127.0.0.1`, …) is reachable. In a normal browser an upload always asks, because the file can leave the machine. `mis browse status` shows `localOnly`; switching modes restarts the browser.
+- Credential commands (cookies, headers, downloads, …) always ask, run or not.
+
+## Reading the verdict
+`mis verdict` applies these rules; the first one that matches wins.
+
+| Verdict | Meaning | Common reasons | What to do |
+|---|---|---|---|
+| `BLOCKED` | could not verify | the run is blocked (limit, missing tool or credentials), or a required check could not run (missing command, timeout) and none failed | fix the reason, then `/make-it-ship:resume` |
+| `FAILED` | verified, and it fails | a required check failed, or a review has blocking issues | read the failure log in the report |
+| `PARTIAL` | nothing failed, but evidence is missing | stale or missing checks, a missing review, unfinished tasks or unmerged task worktrees, an unanswered HIGH question, a dependency change without `mis note dep`, `.make-it-ship.json` changed without approval, no required checks defined | work through the reasons listed in the report |
+| `VERIFIED` | required checks pass, required reviews exist, every task is done | — | run it as the report describes |
+
+Required checks: Quick uses `required.quick`; Standard and Full use `required.standard` plus every `qa-*` check. Required reviews: quality (Quick), spec and quality (Standard, Full), plus security with risk flags.
+
+## Troubleshooting
+- **A headless run (`claude -p`) stops at approval.** Expected: no prompt can be shown, so steps that need approval stop. Continue in an interactive session with `/make-it-ship:resume`.
+- **An update does not show the new version.** Run `claude plugin marketplace update make-it-ship` first, then `claude plugin update make-it-ship@make-it-ship`, then restart. Also check that the release bumped `version` in `.claude-plugin/plugin.json`.
+- **Files are left after removal.** `claude plugin uninstall` keeps `~/.claude/plugins/cache/make-it-ship`; delete it with `rm -rf`. `mis uninstall --yes` removes the plugin's own user state.
+- **The MCP tools are missing.** Claude Code does not load a plugin's MCP server under `--strict-mcp-config`.
 
 ## Use
 ```
@@ -111,7 +198,7 @@ Commands that change files outside your repository print what they would do firs
 - Help and reference: `mis help [topic]` lists every `mis` command by group, skill, agent, keyword (with the ralph prefix rule), style level, MCP tool and hook; topics are `commands`, `skills`, `agents`, `keywords`, `styles`, `mcp` and `hooks`. The lists are read from the code, so they cannot go stale. `/make-it-ship:help` shows them, and `/make-it-ship:reference` is the agent, tool and keyword reference to load before delegating or committing.
 - `mis info` prints the plugin version, Node version, commit, command and skill counts, agents, the MCP tool count from the tool registry and the hook events.
 - `mis capabilities` compares the current commands, skills, agents, MCP tools and hook events with `.make-it-ship/capabilities.lock.json` in the repository. `mis capabilities --write` records them; `mis capabilities --check` exits 1 and lists what was added or removed when they drift. This repository commits its lockfile and the test suite checks it. This lockfile is the only file these four commands write.
-- `mis gain [--json]` shows measured results from this repository only: run verdict counts, check pass rates (overall and per check), failures later fixed, `mis bench` medians against their baselines, and shortcut debt. It does not estimate savings. The comparison with the original plugins prints `BLOCKED: no benchmark results` until M10 writes results to `evals/benchmarks/*.json`.
+- `mis gain [--json]` shows measured results from this repository only: run verdict counts, check pass rates (overall and per check), failures later fixed, `mis bench` medians against their baselines, and shortcut debt. It does not estimate savings. The comparison with the original plugins prints `BLOCKED: no benchmark results` while `evals/benchmarks/*.json` has no results; the M10 comparison harness (`evals/m10/run.mjs`) keeps its own results in `evals/m10/` and has produced only a smoke run so far.
 
 ## Teams and sessions
 - **Team pipeline:** `/make-it-ship:team [N[:claude|codex|gemini]] <task>` runs plan → exec → verify → fix (at most 3 rounds) on top of a normal run, so approval, `mis check` and `mis verdict` still decide. Only on explicit request; the word "team" in a prompt does nothing.
@@ -193,6 +280,8 @@ claude plugin validate .      # marketplace manifest
 node evals/setup-demo.mjs a    # demo repo in a temp dir
 node scripts/gap-matrix.mjs --write   # recount docs/research/gap-matrix.md from its rows
 node scripts/mis.mjs capabilities --write  # after adding a command, skill, agent, MCP tool or hook
+node evals/m10/run.mjs --arms control,mis --demos b --n 1   # comparison harness against the original plugins (runs real claude)
+node evals/m10/report.mjs <summary.json> [out.html]         # one local HTML report from the results
 ```
 Releasing: bump `version` in `.claude-plugin/plugin.json`, or marketplace users keep their cached copy.
 Design documents: `docs/Make_It_Ship_Spec_v1.1.md` (authoritative), `docs/adr/`, `docs/PROGRESS.md`.
