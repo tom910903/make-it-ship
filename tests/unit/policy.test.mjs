@@ -324,7 +324,33 @@ test('remote upload: mis browse upload --remote asks (a local file leaves the ma
     assert.equal(r.decision, 'ask', c);
     assert.match(r.reason, /upload|sends? (a )?(local )?files?/i, c);
   }
-  for (const c of [`${MIS} browse goto https://example.com`, `${MIS} browse upload '#f' a.txt`]) assert.equal(d(bash(c), idle), 'allow', c);
+  assert.equal(d(bash(`${MIS} browse goto https://example.com`), idle), 'allow');
+});
+
+test('M8 R3-1: an upload without --remote asks unless this workspace runs the local-only browser (read from the daemon state)', async () => {
+  const { makeRepo } = await import('../helpers.mjs');
+  const { browseDir } = await import('../../scripts/lib/browse/client.mjs');
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const idle = { ...ctx, activeRun: false }, repo = makeRepo(), sd = browseDir(repo);
+  const at = (command) => classify({ tool_name: 'Bash', tool_input: { command }, cwd: repo }, idle);
+  const P = 'node /p/scripts/mis.mjs browse';
+  const uploads = [`${P} upload '#f' a.txt`, `${P} tab-each upload '#f' a.txt`, `${P} chain '[["goto","http://localhost:3"],["upload","#f","a.txt"]]'`];
+  for (const c of uploads) {
+    const r = at(c);
+    assert.equal(r.decision, 'ask', c);
+    assert.match(r.reason, /page script can send the file anywhere[\s\S]*--local-only/, c);
+  }
+  mkdirSync(sd, { recursive: true });
+  const state = (s) => writeFileSync(join(sd, 'state.json'), JSON.stringify(s));
+  state({ pid: process.pid, port: 1, localOnly: false });
+  for (const c of uploads) assert.equal(at(c).decision, 'ask', `normal daemon: ${c}`);
+  state({ pid: process.pid, port: 1, localOnly: true });
+  for (const c of uploads) assert.equal(at(c).decision, 'allow', `local-only daemon: ${c}`);
+  assert.equal(at(`${P} upload '#f' a.txt --remote`).decision, 'ask', '--remote still asks');
+  state({ pid: 2 ** 22 + 7, port: 1, localOnly: true });
+  assert.equal(at(uploads[0]).decision, 'ask', 'a dead daemon (stale state) is not local-only');
+  rmSync(repo, { recursive: true, force: true });
 });
 
 test('M9-F8: debug scope asks (not denies) for edits outside it, with or without a run; files and dirs both count', () => {

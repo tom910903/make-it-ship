@@ -56,7 +56,23 @@ export function chromeArgs(value = '') {
  */
 export const OWNER_MARK = '--mis-browse-owner'; // ignored by Chrome; lets client.mjs recognize (and only kill) browsers it started
 
-export async function launchChrome({ exe, userDataDir, headless, extraArgs = [], extensions = false }) {
+/**
+ * M8 R3-1/R3-2 local-only mode: nothing but loopback is reachable. Every connection goes to `proxyPort` (a socket the daemon
+ * owns that drops each connection), except loopback, listed explicitly because Chrome's implicit bypass also covers
+ * link-local addresses (measured); no name resolves except loopback ones (also stops DNS-name exfiltration, e.g.
+ * dns-prefetch; IP literals are covered too), and WebRTC may not send UDP outside the proxy (measured: the
+ * --force-webrtc-ip-handling-policy spelling did not stop STUN/TURN UDP on Chrome 156; this one did). The user's validated
+ * host rules go first in the one merged rule set (Chrome uses the last --host-resolver-rules given); these flags go last.
+ */
+export function localOnlyArgs(proxyPort, extraArgs) {
+  const rules = (a) => /^-+host-resolver-rules=/.test(a);
+  const user = extraArgs.filter(rules).map((a) => a.slice(a.indexOf('=') + 1));
+  return [...extraArgs.filter((a) => !rules(a)), `--proxy-server=http://127.0.0.1:${proxyPort}`, '--proxy-bypass-list=<-loopback>;localhost;*.localhost;127.0.0.1;[::1]',
+    `--host-resolver-rules=${[...user, 'MAP * ~NOTFOUND', 'EXCLUDE localhost', 'EXCLUDE *.localhost', 'EXCLUDE 127.0.0.1', 'EXCLUDE ::1'].join(', ')}`,
+    '--webrtc-ip-handling-policy=disable_non_proxied_udp'];
+}
+
+export async function launchChrome({ exe, userDataDir, headless, extraArgs = [], extensions = false, localOnly = null }) {
   const args = [OWNER_MARK, `--user-data-dir=${userDataDir}`, '--remote-debugging-pipe', '--no-first-run', '--no-default-browser-check',
     // no phoning home: the org forbids sending data out, and background traffic would pollute `network`/`perf`
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
@@ -65,7 +81,7 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [],
     '--password-store=basic', '--use-mock-keychain', ...(extensions ? ['--enable-unsafe-extension-debugging'] : ['--disable-extensions']),
     // cross-origin iframes stay in-process so `frame` can reach them through one session
     '--disable-features=Translate,OptimizationHints,MediaRouter,IsolateOrigins,site-per-process', '--disable-site-isolation-trials',
-    ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...extraArgs, 'about:blank'];
+    ...(headless ? ['--headless=new', '--hide-scrollbars', '--mute-audio'] : []), ...(localOnly ? localOnlyArgs(localOnly, extraArgs) : extraArgs), 'about:blank'];
   const proc = spawn(exe, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], detached: false });
   const cdp = new CDP(proc.stdio[3], proc.stdio[4]);
   const died = new Promise((_, reject) => {

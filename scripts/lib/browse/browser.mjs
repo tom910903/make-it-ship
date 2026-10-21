@@ -13,8 +13,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pageKey = (url) => `url:${String(url).split('#')[0]}`;
 
 export class Browser {
-  constructor({ exe, extraArgs = [], headlessOnly = false }) {
-    Object.assign(this, { exe, extraArgs, headlessOnly });
+  constructor({ exe, extraArgs = [], headlessOnly = false, localOnly = null }) {
+    // localOnly: port of the daemon's drop-everything proxy (M8 R3-1); every launch (handoff, resume, connect) keeps it
+    Object.assign(this, { exe, extraArgs, headlessOnly, localOnly });
     this.tabs = new Map(); this.bySession = new Map(); this.seq = 0; this.active = null;
     this.viewport = { width: 1280, height: 720, scale: 1 };
     this.headless = true; this.handoff = null; this.profile = null; this.proc = null; this.cdp = null;
@@ -27,7 +28,7 @@ export class Browser {
     this.profile ??= mkdtempSync(join(tmpdir(), 'mis-browse-profile-'));
     const c = this.connected;
     const { proc, cdp } = await launchChrome({ exe: this.exe, userDataDir: c?.profile ?? this.profile, headless: headless || this.headlessOnly,
-      extraArgs: this.extraArgs, extensions: !!c?.extension });
+      extraArgs: this.extraArgs, extensions: !!c?.extension, localOnly: this.localOnly });
     this.proc = proc; this.headless = headless; this.autoAttached = false;
     proc.on('exit', () => {
       if (this.proc !== proc) return;
@@ -201,8 +202,10 @@ export class Browser {
    * remembered by its document (loaderId) and its URLs: back/forward restores a form's chosen files into a new document
    * at the same URL, so that URL stays held for the tab's lifetime (over-blocking a later fresh visit is the safe side).
    * While any tab shows a held page, every tab's requests to non-local hosts fail (form posts, fetch/XHR, beacons,
-   * redirects, popups, workers), until the holding tab is closed. Interception is armed before the file is attached, so an onchange upload cannot slip out.
-   * shortcut: WebSocket handshakes are not visible to the Fetch domain and are not blocked; see PROGRESS RISKS.
+   * redirects, popups, dedicated workers). Interception is armed before the file is attached, so an onchange upload cannot slip out.
+   * This is a second line only: upload without --remote runs only in the local-only browser (R3-1), whose network reaches
+   * nothing but loopback. Service/Shared Workers, moving to another local document, unload beacons, WebSocket and WebRTC
+   * are not all visible here (measured in round 3); the local-only network closes them.
    */
   async holdLocalOnly(tab) {
     tab.holds.add(tab.loaderId).add(pageKey(tab.url));

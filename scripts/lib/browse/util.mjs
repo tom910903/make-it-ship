@@ -89,3 +89,10 @@ export function alwaysAskIn(browseArgs) {
   }
   return hits;
 }
+
+/** Whether a browse argv attaches files: upload, tab-each upload or an inline chain step (a chain file is invisible here). */
+export function uploadsIn(browseArgs) {
+  const [sub, next] = browseArgs.filter((w) => !w.startsWith('-'));
+  if (sub === 'upload' || (sub === 'tab-each' && next === 'upload')) return true;
+  try { return sub === 'chain' && JSON.parse(next ?? '').some((s) => Array.isArray(s) && s[0] === 'upload'); } catch { return false; }
+}

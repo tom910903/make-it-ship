@@ -13,7 +13,7 @@ import { markdownToHtml } from './markdown.mjs';
 import { decodePng, encodePng, compareImages } from './png.mjs';
 
 const USAGE = `usage: mis browse <command> [args] [--remote]
-  lifecycle   status | stop | restart
+  lifecycle   start [--local-only] | status | stop | restart  (--local-only: only this machine is reachable; plain upload runs only there)
   navigate    goto <url|file> | load-html <file> | back | forward | reload | url | wait <sel|--networkidle|--load> [--timeout ms]
   read        text [sel] | html [sel] | links | forms | accessibility | data [--jsonld|--og|--meta|--twitter]
   inspect     js <expr> | eval <file> | css <sel> <prop> | attrs <sel> | is <prop> <sel> | console [--errors|--clear]
@@ -88,7 +88,13 @@ async function browse(args, cwd) {
   }
   if (sub === 'status') return status(dir);
   if (sub === 'stop') return stop(dir);
-  if (sub === 'restart') { await stop(dir); await ensureDaemon(dir); return status(dir); }
+  if (sub === 'restart') { const { localOnly } = await status(dir); await stop(dir); await ensureDaemon(dir, { localOnly }); return status(dir); }
+  if (sub === 'start') { // the mode is fixed per daemon: another mode means a restart
+    const localOnly = a.includes('--local-only'), s = await status(dir);
+    if (s.running && !!s.localOnly !== localOnly) await stop(dir);
+    await ensureDaemon(dir, { localOnly });
+    return status(dir);
+  }
   return send(dir, { cmd: sub, args: sub === 'chain' ? [readChain(a[0], cwd)] : a, cwd, remote });
 }
 

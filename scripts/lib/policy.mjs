@@ -35,7 +35,8 @@ const outsideScope = (abs, paths) => { const r = realish(abs); return !paths.som
 
 import { commandsOf } from './shell.mjs';
 import { describeFindings } from './redact.mjs';
-import { BROWSE_ALWAYS_ASK, alwaysAskIn } from './browse/util.mjs';
+import { BROWSE_ALWAYS_ASK, alwaysAskIn, uploadsIn } from './browse/util.mjs';
+import { browseDir } from './browse/client.mjs';
 import { maskSecrets } from './mask.mjs';
 import { claudeDir, homeDir } from './home.mjs';
 import { ingestCandidates } from './commands-gbrain.mjs';
@@ -174,6 +175,14 @@ const DESTRUCTIVE = [
   [/\btruncate\s+(table\s+)?[a-z_]\w*/i, 'SQL TRUNCATE deletes all rows of a table'],
 ];
 
+function localOnlyBrowser(dir) {
+  try {
+    const s = JSON.parse(readFileSync(join(browseDir(dir), 'state.json'), 'utf8'));
+    process.kill(s.pid, 0);
+    return s.localOnly === true;
+  } catch { return false; }
+}
+
 function careful(ws, ctx, dir, functions) {
   const browse = misSub(ws, functions);
   if (browse?.[0] === 'browse') {
@@ -188,6 +197,11 @@ function careful(ws, ctx, dir, functions) {
         return ask(`mis browse ${sub} --remote uploads local files to a non-local site: data leaves this machine (internal data must not go to outside services)`);
       }
       return ask(`mis browse ${sub} --remote reads or changes cookies/storage, runs JavaScript, or browses with imported credentials (logged-in cookies) on a non-local site`);
+    }
+    // M8 R3-1: unconfirmed upload only with the local-only browser running (the daemon refuses it otherwise, so a stale or
+    // forged state file can only skip a question, never let a file out)
+    if (uploadsIn(browse.slice(1)) && !localOnlyBrowser(dir)) {
+      return ask('mis browse upload attaches a local file to a page, and a page script can send the file anywhere (workers, other pages, beacons, WebRTC), not only where the form posts. Unconfirmed upload needs the local-only browser (`mis browse start --local-only`); otherwise use --remote');
     }
   }
   if (browse?.[0] === 'setup' && browse[1] === 'routing' && browse.includes('--write')) return ask('mis setup routing --write changes the project CLAUDE.md; check the dry-run diff first — needs your approval');
