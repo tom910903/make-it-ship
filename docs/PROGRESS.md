@@ -179,6 +179,7 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 ## BLOCKED
 
 ## PROPOSALS
+- (2026-10-21, M10 스모크에서 관찰) 모델이 review 단계 전에 `mis report`를 실행하면, run이 REPORTED가 되어 그 뒤의 `mis review add`가 거부된다. 결과 판정은 정직하게 PARTIAL(리뷰 누락)로 남지만 품질 리뷰는 빠진다. M9 4차 dogfood에서는 순서가 지켜졌다. 제안: (a) 필수 리뷰가 없을 때 `mis report`가 "review 단계가 남았다"는 next 안내를 출력한다(상태 전이는 바꾸지 않음), 또는 (b) Spec 상태 전이에 REPORTED → VERIFYING 재개를 추가한다. (b)는 Spec 변경이라 사용자 결정이 필요하다.
 
 ## SPEC_CHANGES
 - (M6 9차, 구조 변경) 해로운 오판(잘못 끄기·잘못 켜기)이 구조적으로 불가능하도록: cancel은 닫힌 목록의 완성된 끄기 단어만(부정 활용형은 목록에 없음), 접두형도 본문에 끄기 어간이 있으면 자동 loop 대신 모델 힌트. 판단이 갈리면 항상 모델에게 넘긴다.

@@ -1,0 +1,17 @@
+{
+  "repoTests": {
+    "pass": true,
+    "status": 0,
+    "out": "\n> cart@1.0.0 test\n> node --test \"test/**/*.test.js\"\n\nTAP version 13\n# Subtest: lineTotal\nok 1 - lineTotal\n  ---\n  duration_ms: 0.314666\n  type: 'test'\n  ...\n# Subtest: cartTotal without discount\nok 2 - cartTotal without discount\n  ---\n  duration_ms: 0.054583\n  type: 'test'\n  ...\n# Subtest: cartTotal with 15% discount rounds the discount half up\nok 3 - cartTotal with 15% discount rounds the discount half up\n  ---\n  duration_ms: 0.039833\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 31.411125\n"
+  },
+  "fixtureTests": {
+    "pass": true,
+    "status": 0,
+    "out": "\n> cart@1.0.0 test\n> node --test \"test/**/*.test.js\"\n\nTAP version 13\n# Subtest: lineTotal\nok 1 - lineTotal\n  ---\n  duration_ms: 0.350166\n  type: 'test'\n  ...\n# Subtest: cartTotal without discount\nok 2 - cartTotal without discount\n  ---\n  duration_ms: 0.059458\n  type: 'test'\n  ...\n# Subtest: cartTotal with 15% discount rounds the discount half up\nok 3 - cartTotal with 15% discount rounds the discount half up\n  ---\n  duration_ms: 0.043167\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 34.184375\n"
+  },
+  "acceptance": {
+    "pass": true,
+    "status": 0,
+    "out": ""
+  }
+}

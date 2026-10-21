@@ -1,0 +1,17 @@
+{
+  "repoTests": {
+    "pass": true,
+    "status": 0,
+    "out": "\n> textkit@1.0.0 test\n> node --test \"test/**/*.test.ts\"\n\nTAP version 13\n# Subtest: capitalize\nok 1 - capitalize\n  ---\n  duration_ms: 0.312292\n  type: 'test'\n  ...\n# Subtest: truncate\nok 2 - truncate\n  ---\n  duration_ms: 0.153791\n  type: 'test'\n  ...\n# Subtest: slugify\nok 3 - slugify\n  ---\n  duration_ms: 0.132875\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 60.00125\n"
+  },
+  "fixtureTests": {
+    "pass": true,
+    "status": 0,
+    "out": "\n> textkit@1.0.0 test\n> node --test \"test/**/*.test.ts\"\n\nTAP version 13\n# Subtest: capitalize\nok 1 - capitalize\n  ---\n  duration_ms: 0.417625\n  type: 'test'\n  ...\n# Subtest: truncate\nok 2 - truncate\n  ---\n  duration_ms: 0.176292\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 137.59525\n"
+  },
+  "acceptance": {
+    "pass": true,
+    "status": 0,
+    "out": ""
+  }
+}

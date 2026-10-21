@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "plugin_make-it-ship_mis": {
+      "command": "node",
+      "args": [
+        "/Users/mason.lee/Dev/Git/tools/mis-final/scripts/mcp/server.mjs"
+      ],
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "/Users/mason.lee/Dev/Git/tools/mis-final"
+      }
+    }
+  }
+}

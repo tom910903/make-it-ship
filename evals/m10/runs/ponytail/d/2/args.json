@@ -1,0 +1,23 @@
+[
+  "-p",
+  "Do the task in TASK.md. Proceed without asking me questions. When you finish, say plainly whether the tests pass.",
+  "--output-format",
+  "stream-json",
+  "--verbose",
+  "--include-hook-events",
+  "--permission-mode",
+  "bypassPermissions",
+  "--setting-sources",
+  "project",
+  "--model",
+  "claude-sonnet-5-5",
+  "--max-turns",
+  "80",
+  "--strict-mcp-config",
+  "--plugin-dir",
+  "/Users/mason.lee/.claude/plugins/cache/ponytail/ponytail/5.2.0",
+  "--disallowedTools",
+  "Bash(codex:*)",
+  "Bash(gemini:*)",
+  "Bash(ngrok:*)"
+]
