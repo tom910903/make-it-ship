@@ -1,51 +1,58 @@
-# 작업 인계 (HANDOFF) — 2026-10-20
+# 작업 인계 (HANDOFF) — 2026-10-21
 
-다른 장비나 세션에서 이어서 작업하려면 이 문서부터 읽는다. 진행 기록의 원본은 `docs/PROGRESS.md`와 `git log`다.
+새 세션은 이 문서부터 읽는다. 원본 기록은 `docs/PROGRESS.md`, 각 worktree의 `git log`, `docs/milestones/*-report*.md`다.
+push는 사용자가 다시 요청할 때만 한다(마지막 push는 M1~M5 시점의 `feature/make-it-ship-m1-m5`).
 
-## 1. 현재 상태
+## 1. 목표 (사용자 요청, 2026-10-20)
 
-- **M1~M5 구현 완료.** 마일스톤마다 독립 검증을 PASS했고, 최종 검증도 PASS다(`docs/milestones/FINAL-report.md`).
-- **브랜치:** `feature/make-it-ship-m1-m5`
-  - 원격: `github.com/tom910903/make-it-ship` (비공개)
-  - 로컬 `develop`이 이 원격 브랜치를 추적한다.
-- **태그:** `m1-verified` ~ `m5-verified`. 검증 당시의 커밋을 가리킨다.
-- **테스트:** `npm test` 319/319, `claude plugin validate .` 통과.
-- **최종 검증 이후 바뀐 것**(검증 보고서에는 반영되지 않음):
-  1. `73e9260` — NH-1~4를 tmux 대화형 세션으로 자동 확인하고 기록했다(`docs/milestones/NH-auto-check.md`).
-  2. `75f2fb8` — guard 수정. 파일 편집 범위를 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 판정한다.
-  3. `a95fb61` — **BSP QA 프로파일 제거**(사용자 결정). NH-9는 해당 없음이다.
+Make It Ship 하나만 설치하면 OMC·Superpowers·Ponytail·gstack의 모든 기능(상시 동작, 도구, 설정, 연구·자가 개선 루프, 배포 후 운영, PDF 등)을 쓸 수 있게 한다. 제외: BSP, 알림. 다 만든 뒤 원본 4종과 같은 데모로 실제 비교하고 **로컬 HTML**로 시각화한다(M10). 범위와 결정은 `docs/adr/0003-single-plugin-full-absorption.md`, 갭 목록은 `docs/research/gap-matrix.md`(392행, `node scripts/gap-matrix.mjs --write`로 재집계).
 
-## 2. 다른 장비에서 시작하기
+사용자 결정(요약): npm 의존성 허용 / 알림 제외 / 자격증명 포함·항상 확인 / 외부 전송 구현·항상 확인, 텔레메트리 기본 꺼짐 / ralph는 접두형만 자동, 나머지는 모델 힌트 / 계획·리뷰·디자인 기능은 run 흐름과 자연어에 녹임(단독 명령 남발 금지) / **브라우저 업로드는 "로컬 전용 브라우저 모드"(아래 M8)** / 항상 한국어로 보고.
 
-```sh
-git clone git@github.com:tom910903/make-it-ship.git && cd make-it-ship
-git checkout feature/make-it-ship-m1-m5
-node --version              # 22 이상
-npm test                    # 319/319 기대
-claude plugin validate .    # 통과 기대
-claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으로 사용
-```
+## 2. 마일스톤 상태
 
-외부 패키지 의존성은 없다. Node 내장 기능과 `node:test`만 쓴다.
-
-## 3. 남은 일 (우선순위 순)
-
-| # | 할 일 | 상태 / 필요한 것 | 참고 |
+| M | 내용 | 상태 | 브랜치·worktree |
 |---|---|---|---|
-| 1 | **`mis-bench` 테스트를 결정적으로 만들기** | 실제 걸린 시간(`medianMs >= 30`)으로 판정한다. 그래서 고부하에서 가끔 실패한다. 이전 동시성 테스트처럼 release 파일 게이트 같은 방식으로 바꾼다. | `tests/integration/mis-bench.test.mjs`, 커밋 `555e4ef`(같은 유형 수정 사례) |
-| 2 | **NH-5 마켓플레이스 설치 확인** | 배포 전에 필요하다. 사용자 전역 마켓플레이스 목록이 잠시 바뀌므로 사용자 승인 후 진행한다. | `docs/milestones/NEEDS_HUMAN.md` NH-5 |
-| 3 | **NH-1~4 사람 확인** | Claude가 tmux로 확인한 것은 통과(AUTO)했다. 사람이 직접 누르는 확인은 아직이다. NH-1만 해도 5분 정도 걸린다. | `NH-auto-check.md`, `NEEDS_HUMAN.md` |
-| 4 | **NH-6 iOS 실기기 브리지** | iPhone(개발자 모드, USB)이 연결되면 진행할 수 있다. 쓰지 않을 거면 "해당 없음"으로 닫거나 기능을 제거한다. | `NEEDS_HUMAN.md` NH-6, `templates/ios-debug-bridge/` |
-| 5 | **NH-7 second opinion / NH-8 Codex 어댑터** | 코드가 외부 모델 서비스로 나가서 사내 정책상 막혀 있다. 쓸지 말지를 결정해야 한다. 안 쓰면 해당 없음 처리하거나 기능을 제거한다. | `NEEDS_HUMAN.md` NH-7·8 |
-| 6 | **사후 변경 재검증(선택)** | 위 1장의 세 가지 변경은 최종 독립 검증 이후의 것이다. 필요하면 검증 에이전트를 다시 돌린다. | `docs/milestones/VERIFIER_PROMPT.md` |
-| 7 | **main 브랜치 / PR** | 원격에는 이 feature 브랜치만 있다. main 생성과 PR은 사용자가 요청하면 진행한다. | — |
-| 8 | **문서 업로드 정책 확인** | `docs/`의 기획서와 Spec이 개인 계정 GitHub에 올라가 있다. 회사 정책상 문제가 되면 히스토리에서 제외하고 다시 올린다. | — |
+| M1~M6 | 핵심 + 상시 동작 계층 | 검증 PASS, 태그 `m1`~`m6-verified` | `develop` |
+| M7 | MCP 도구 서버(memory, wiki, LSP/REPL, trace, run lock) | **검증 PASS(6차)**, `m7-verified`, develop에 병합됨 (`3483577`) | `develop` |
+| M8 | 내장 브라우저(CDP pipe), pdf, visual-verdict, team, companion | 3차 검증 FAIL → **수정 착수 전 중단** | `m8-wip` @ `152898f` (`../make-it-ship-m8`) |
+| M9 | 나머지 기능 전부(A 설치·수명주기, B 흐름 통합, C 에이전트·스킬, D 연구·운영·배포, E 브라우저 고급, F 훅) | 구현 완료, 2차 검증 FAIL → **수정 도중 중단** | `m9-wip` @ `7fc6a80` (`../make-it-ship-m9`) |
+| M10 | 원본 4종 vs MIS 실측 비교 + 로컬 HTML | 미착수 | — |
 
-## 4. 열린 결정 (사용자에게 물어볼 것)
+gap-matrix(m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EXCLUDED 5 / N/A 15.
 
-- NH-6~8 기능을 유지할지, "해당 없음"으로 닫을지, 제거할지
-- NH-5를 Claude가 대신 진행해도 되는지
-- 일반 위험 플래그 `hardware`를 유지할지(BSP 제거 후에도 지금은 남겨 둠)
+## 3. 다음에 할 일 (순서대로)
+
+1. **M8 3차 결함 수정** (`../make-it-ship-m8`, 보고서 `docs/milestones/M8-report.md` "3차 검증")
+   - R3-1/R3-2(업로드 파일 유출: Service/Shared Worker, 다른 로컬 문서로 이동, closetab의 pagehide beacon, WebRTC) → **사용자 결정: 로컬 전용 모드**.
+     - `mis browse start --local-only`: Chrome을 `--proxy-server=http://127.0.0.1:<닫힌 포트>`(loopback 외 전부 차단), `--host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1, EXCLUDE [::1]"`, `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` 등으로 띄운다.
+     - 확인 없는 `upload`는 이 모드에서만 허용. 다른 모드에서는 `--remote` 여부와 무관하게 upload는 항상 guard ask(문구: 페이지 스크립트가 파일을 어디로든 보낼 수 있음).
+     - 모드는 데몬 상태 파일에 기록, guard가 읽음. 모드 전환은 데몬 재시작.
+     - 각 유출 경로를 로컬 전용 모드에서 실제로 재시도해 0건임을 측정(가정 금지). 기존 목적지 검사·Fetch 차단은 보조 방어로 유지.
+   - R3-3: guard가 `MIS_BROWSE_CHROME_ARGS`/`MIS_BROWSER`/`MIS_BROWSER_EXE`를 원문 정규식이 아니라 파서가 풀어낸 env 할당으로 판정. Chrome 플래그는 거부 목록 → **허용 목록(fail closed)**.
+   - R3-4: visual-verdict 정렬 탐색 ±8px 정도로 확대, 정확한 값 단언.
+   - 그다음 M8 4차 독립 검증 → PASS면 보고서 커밋, `develop` 병합, `m8-verified`.
+2. **M9 2차 결함 수정 마무리** — 두 브랜치에 WIP가 있다(**테스트 미실행**):
+   - `m9-fix3` @ `9e8f1c9` (`../make-it-ship-m9fix3`): D/E N1~N8(`docs/milestones/M9-report-r2-DE.md`). 중단 직전 "존재하지 않는 테스트 cwd 때문에 fail-closed 조건을 다듬는 중"이었다. N2는 고치기로 결정(평가기 등 저장 명령 실행에도 MIS_CLI 거부 환경 적용).
+   - `m9-fix4` @ `99ceb8f` (`../make-it-ship-m9fix4`): A/F D1~D7(`M9-report-r2-AF.md`). 본 수정은 `c11e94e`에 커밋됨, 그 뒤 RISKS 메모만 WIP. 남은 일: 전체 `npm test` 2회 + validate.
+   - 둘 다 끝나면 `m9-wip`에 병합(policy.mjs·shell.mjs 충돌 예상), 그다음 **최종 m8-wip도 m9-wip에 병합**한 뒤 M9 3차 검증(A/B/C/F, D/E 두 갈래). PASS면 `develop` 병합, `m9-verified`.
+3. **M10**: 원본 4종 각각을 `--plugin-dir`와 프로젝트 전용 설정으로 격리해 같은 합성 데모(`evals/demos`)에서 실제 실행, 셀마다 N≥3, 원시 로그 보관, 추정치 금지. 지표: 판정 정직성·통과율, 턴, 토큰/비용, 시간, diff 크기, 리뷰 지적 수. 결과를 **로컬 HTML**로(외부 업로드 금지). 독립 검증 후 `m10-verified`.
+4. HANDOFF·FINAL 보고서 갱신.
+
+## 4. 운영 메모
+
+- 독립 검증 에이전트는 보고서 파일만 쓰고(커밋은 조정자가), 소스는 건드리지 않는다. 수정은 별도 worktree에서 하고 조정자가 병합한다.
+- 여러 에이전트가 같은 scratchpad를 쓰면 로그가 섞인다 → 에이전트마다 고유 TMPDIR·로그 이름을 지정한다.
+- 고부하(load 20~40)에서 타이밍 테스트가 흔들렸다 → 테스트는 결정적으로 만든다.
+- 테스트 env는 `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CONFIG_DIR`를 지우고 `HOME`·`MIS_STATE_HOME`을 임시 디렉터리로 둔다.
+- 외부 모델 CLI(codex/gemini), ngrok, 실제 배포 서비스는 실제로 호출하지 않는다(사내 정책). 테스트는 stub과 localhost만.
+- 정리 대상 worktree: `make-it-ship-m2`, `m5`, `m7`, `m7a~c`, `m8a~b`, `m9a~f`는 병합이 끝나 지워도 된다(사용자 확인 후).
+
+## 5. 새 세션 시작 프롬프트 (예시)
+
+```
+docs/HANDOFF.md를 읽고 3장 "다음에 할 일"을 1번부터 이어서 진행해. 연속 모드, 한국어로 보고, push 금지.
+```
 
 ## 5. 작업 규칙 (원래 /goal 지시에서)
 
@@ -55,7 +62,7 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
   - 테스트 삭제·약화·skip
   - 실행하지 않은 검증을 통과로 기록하기
   - Spec에 없는 기능 추가(필요하면 PROGRESS.md 제안으로만)
-  - 외부 패키지 추가
+  - (변경) npm 의존성은 ADR-0003에 따라 허용
   - 사내 코드·데이터를 테스트에 쓰기
   - 외부 모델 CLI(codex/gemini) 호출(사내 정책)
 - 사람이 확인해야 하는 항목은 NEEDS_HUMAN으로 둔다. Claude가 대신 확인한 것은 "AUTO"로만 적는다.
@@ -79,10 +86,11 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
 ```sh
 node evals/setup-demo.mjs a /tmp/nh1 && cd /tmp/nh1
 mkdir -p .claude && echo '{"permissions":{"allow":["Bash","Read","Write","Edit","Glob","Grep","Agent"]}}' > .claude/settings.local.json
-tmux new-session -d -s nh1 -x 220 -y 60 "claude --plugin-dir <repo> --setting-sources project,local --strict-mcp-config"
+tmux new-session -d -s nh1 -x 220 -y 60 "claude --plugin-dir <repo> --setting-sources project,local"
 tmux send-keys -t nh1 -l "/make-it-ship:run Implement docs/feature-request.md. Use standard mode." && tmux send-keys -t nh1 Enter
 tmux capture-pane -p -t nh1 | tail -30   # 확인 창 확인 후 Enter(승인) / Down+Enter(거절)
 ```
 
+- `--strict-mcp-config`를 주면 플러그인 MCP 서버(M7 도구)가 로드되지 않는다(ADR-0003 실측).
 - headless 모드(`claude -p`)에서는 ask 확인 창이 뜨지 않는다(ADR-014). 확인 창을 검증하려면 위처럼 대화형 세션을 써야 한다.
 - 사용자 전역 설정(`~/.claude/settings.json`)은 건드리지 않는다. HUD는 데모 저장소의 `.claude/settings.local.json`에 `statusLine`을 넣어 확인한다.
