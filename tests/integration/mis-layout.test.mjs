@@ -1,0 +1,49 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { makeRepo, write, mis, git } from '../helpers.mjs';
+
+const LAYOUT = { paths: ['src/**', 'tests/**', 'docs/**', '.ai/**', '*.md', '.make-it-ship.json'],
+  purposes: { 'src/**': 'application code' }, docs: { human: 'docs', ai: '.ai', languages: ['en', 'ko'] } };
+const CFG = { version: 1, checks: { unit: { argv: ['node', '-e', 'process.exit(0)'] } }, layout: LAYOUT };
+const PLAN = { goal: 'Add greet', tasks: [{ id: 'T1', title: 'greet', acceptance: ['greet works'], files: ['src/greet.js', 'tests/greet.test.js'] }], plannedFiles: ['src/**', 'tests/**'] };
+const BAD = { ...PLAN, plannedFiles: ['src/**', 'lib/**'], tasks: [{ ...PLAN.tasks[0], files: ['src/greet.js', 'docs/guide/greet.md'] }] };
+const DOC = (files) => `# Plan: greet\n## Goal\nAdd greet\n## Tasks\n### T1: greet\nFiles: ${files}\n- greet works\n## Acceptance criteria\n- greet works\n## Verification\n- \`npm test\`\n`;
+
+const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
+
+test('plan set: with a layout, a plan outside it is refused with every violation and the fix; a conforming plan is stored', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG, 'README.md': '# x\n' });
+  write(dir, { 'bad.json': BAD, 'good.json': PLAN });
+  ok(mis(dir, ['start', '--input', 'greet']));
+  const r = mis(dir, ['plan', 'set', 'bad.json']);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /plan does not follow the project layout/);
+  assert.match(r.err, /plannedFiles: lib\/\*\* is outside the layout \(allowed: src\/\*\*/);
+  assert.match(r.err, /tasks\[0\]\.files: docs\/guide\/greet\.md needs its translation docs\/guide\/greet\.ko\.md/);
+  assert.match(r.err, /change the plan .* or change "layout" in \.make-it-ship\.json — a config change the user must approve/);
+  assert.equal(ok(mis(dir, ['status', '--json'])).state.plan, null, 'nothing stored');
+  ok(mis(dir, ['plan', 'set', 'good.json']));
+});
+
+test('plan set: without a layout nothing is checked (feature off)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { ...CFG, layout: undefined } });
+  write(dir, { 'bad.json': BAD });
+  ok(mis(dir, ['start', '--input', 'greet']));
+  ok(mis(dir, ['plan', 'set', 'bad.json']));
+});
+
+test('start --plan and plan check apply the layout too; a refused start leaves no run', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  write(dir, { 'docs/make-it-ship/plans/bad.md': DOC('lib/greet.js'), 'docs/make-it-ship/plans/good.md': DOC('src/greet.js, docs/guide/g.md, docs/guide/g.ko.md') });
+  const r = mis(dir, ['start', '--plan', 'docs/make-it-ship/plans/bad.md']);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /tasks\[0\]\.files: lib\/greet\.js is outside the layout/);
+  assert.notEqual(mis(dir, ['status', '--json']).json?.state?.state, 'PLANNING', 'no run was created');
+  const c = mis(dir, ['plan', 'check', 'docs/make-it-ship/plans/bad.md']);
+  assert.equal(c.code, 1);
+  assert.match(c.json.errors.join('\n'), /lib\/greet\.js is outside the layout/);
+  assert.equal(ok(mis(dir, ['plan', 'check', 'docs/make-it-ship/plans/good.md'])).ok, true);
+  ok(mis(dir, ['start', '--plan', 'docs/make-it-ship/plans/good.md']));
+});

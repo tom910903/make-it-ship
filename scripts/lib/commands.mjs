@@ -8,6 +8,7 @@ import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAli
 import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
+import { planLayoutErrors, LAYOUT_FIX } from './layout.mjs';
 import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
@@ -174,7 +175,15 @@ function planFromDoc(cwd, file) {
   if (missing.length) fail(`plan document is missing: ${missing.join(', ')}`);
   const errs = validatePlan(pl);
   if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  checkLayout(cwd, pl);
   return pl;
+}
+
+/** Plan stage: with a "layout" in the config, refuse planned files outside it (user decision 2026-10-22). */
+const layoutErrors = (cwd, p) => planLayoutErrors(p, loadConfig(repoRoot(cwd)).config?.layout);
+function checkLayout(cwd, p) {
+  const errs = layoutErrors(cwd, p);
+  if (errs.length) fail(`plan does not follow the project layout (.make-it-ship.json "layout"):\n${errs.map((e) => `- ${e}`).join('\n')}\n${LAYOUT_FIX}`);
 }
 
 function setPlan(cwd, p) {
@@ -195,6 +204,7 @@ function plan([sub, file], cwd) {
     if (!existsSync(p)) fail(`plan document not found: ${file}`);
     const { plan: pl, missing } = parsePlanDoc(readFileSync(p, 'utf8'));
     const errors = missing.length ? [] : validatePlan(pl);
+    if (!missing.length && !errors.length) errors.push(...layoutErrors(cwd, pl));
     const out = { ok: !missing.length && !errors.length, missing, errors, tasks: pl.tasks.length, howToRun: pl.howToRun };
     if (!out.ok) { console.log(JSON.stringify(out, null, 2)); process.exitCode = 1; return undefined; }
     return out;
@@ -203,6 +213,7 @@ function plan([sub, file], cwd) {
   const p = readJsonArg(cwd, file);
   const errs = validatePlan(p);
   if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  checkLayout(cwd, p);
   return setPlan(cwd, p);
 }
 
