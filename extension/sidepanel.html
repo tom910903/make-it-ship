@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Make It Ship</title>
+<style>
+  body { font: 13px system-ui, sans-serif; margin: 12px; color: #111; background: #fff; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 70px; font: inherit; }
+  button { margin: 6px 6px 0 0; font: inherit; }
+  ol { padding-left: 18px; } li { margin: 4px 0; word-break: break-word; } .meta { color: #666; font-size: 11px; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #eee; } .meta { color: #aaa; } }
+</style></head>
+<body>
+  <h1 style="font-size:15px">Make It Ship</h1>
+  <label for="note">Note to the agent</label>
+  <textarea id="note" placeholder="What should the agent look at?"></textarea>
+  <button id="send">Send note</button><button id="pick">Pick element</button>
+  <p id="status" class="meta" role="status"></p>
+  <h2 style="font-size:13px">Inbox (unread by the agent)</h2>
+  <ol id="list"></ol>
+  <p class="meta">The agent reads these with <code>mis browse inbox</code>. No terminal here: run commands in Claude Code.</p>
+  <script src="sidepanel.js"></script>
+</body></html>

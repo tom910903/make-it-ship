@@ -1,12 +1,29 @@
 // mis init (config detection) and mis doctor (environment checks). No run needed.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { CONFIG_FILE, loadConfig, validateConfig } from './config.mjs';
+import { claudeDir } from './home.mjs';
+import { detectQa } from './qa.mjs';
 
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 const has = (root, f) => existsSync(join(root, f));
+
+const MANIFESTS = ['package.json', 'pyproject.toml', 'setup.py', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Package.swift', 'Gemfile'];
+const FIRST_TASK = {
+  web: 'Web app: start with one user journey (load, main action, error state) and a qa-web check (mis qa detect).',
+  cli: 'CLI: start with one command\'s happy path and bad input, run as a subprocess in a qa-cli check.',
+  library: 'Library: start from the public API with a failing unit test, then make it pass.',
+  unknown: 'No project manifest found: describe the goal first; checks must be added to .make-it-ship.json by hand.',
+};
+
+/** First-task type (absorbs gstack-first-task-detect): web | cli | library | unknown. File checks only, no toolchain probes. */
+export function projectType(root) {
+  const surfaces = detectQa(root, { surfacesOnly: true }).profiles.map((p) => p.profile);
+  const type = surfaces.includes('web') || surfaces.includes('api') || surfaces.includes('ios') ? 'web'
+    : surfaces.includes('cli') ? 'cli' : MANIFESTS.some((f) => has(root, f)) ? 'library' : 'unknown';
+  return { projectType: type, firstTask: FIRST_TASK[type] };
+}
 
 /** @returns {{config:object|null, detected:string[], message:string}} */
 export function detectConfig(root) {
@@ -62,8 +79,7 @@ export function doctor(cwd) {
     checks.push({ name: 'config', status: !c.exists ? 'warn' : c.errors.length ? 'error' : 'ok',
       detail: !c.exists ? `${CONFIG_FILE} missing (run mis init)` : c.errors.length ? c.errors.join('; ') : `${Object.keys(c.config.checks).length} check(s)` });
   }
-  const home = homedir();
-  const files = [join(home, '.claude', 'settings.json'), ...(root ? [join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json')] : [])];
+  const files = [join(claudeDir(), 'settings.json'), ...(root ? [join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json')] : [])];
   const found = new Set();
   for (const f of files) {
     for (const [k, v] of Object.entries(readJson(f)?.enabledPlugins ?? {})) {
@@ -71,7 +87,7 @@ export function doctor(cwd) {
       if (v === true && DUPLICATES.includes(name)) found.add(name);
     }
   }
-  if (existsSync(join(home, '.claude', 'skills', 'gstack'))) found.add('gstack (~/.claude/skills/gstack)');
+  if (existsSync(join(claudeDir(), 'skills', 'gstack'))) found.add('gstack (~/.claude/skills/gstack)');
   checks.push({ name: 'plugins', status: found.size ? 'warn' : 'ok',
     detail: found.size ? `overlapping plugins enabled in settings (may not be loaded in this session): ${[...found].join(', ')}. Make It Ship works without them; their hooks may add duplicate prompts or reviews.` : 'no overlapping plugins' });
   checks.push({ name: 'token-budget', status: 'warn', detail: 'token/cost budgets are not supported: a plugin cannot read or cap token usage. Runtime and retry limits are enforced instead; the HUD shows session cost when Claude Code provides it.' });

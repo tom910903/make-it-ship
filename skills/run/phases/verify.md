@@ -9,3 +9,4 @@ Iron law: no completion claim without fresh evidence for the **current** code.
 3. Any edit after a check makes that evidence STALE. Re-run before the verdict.
 4. `mis verdict` decides. Quote its verdict and reasons; do not soften or upgrade them. Words to avoid about results: "should", "probably", "seems", "looks good".
 5. Separate what was machine-verified (checks), what is model judgment (task completion, reviews), and what is unsupported (token budget).
+6. Full mode, after the required checks: `mis health` once. It appends to `docs/make-it-ship/health.jsonl` and prints the trend. A score lower than the previous entry goes into the report as a regression to look at; it does not change the verdict.

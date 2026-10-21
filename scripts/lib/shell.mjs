@@ -2,18 +2,22 @@
 // (quotes, separators, subshells/groups, $( ) and backticks, heredocs) so the policy sees real commands, and
 // heredoc bodies — data such as plans and reviews — are never treated as commands.
 
+// Redirection operator in argv: a value no word can equal, so a quoted '>' stays a literal word (M9 r2 D1).
+const REDIR = Symbol('redirect');
+
 /**
  * @returns {{commands: {argv: string[]}[], text: string, functions: Map<string,string>, vars: Map<string,string>}}
  *   text = the source without heredoc bodies (for path-pattern checks)
  */
 export function parseShell(src, depth = 0) {
   const commands = [];
-  const functions = new Map();
+  const functions = functionDefs(src);
   let text = '';
   let argv = [];
   let word = null; // null = no word started
+  let quoted = false; // the current word has quoted or escaped text (so `'2'>f` is not an fd number)
   const pendingHeredocs = [];
-  const endWord = () => { if (word !== null) { argv.push(word); word = null; } };
+  const endWord = () => { if (word !== null) { argv.push(word); word = null; } quoted = false; };
   const endCmd = () => { endWord(); if (argv.length) commands.push({ argv }); argv = []; };
   const nested = (inner) => {
     if (depth > 8) return;
@@ -72,11 +76,23 @@ export function parseShell(src, depth = 0) {
     }
     text += c;
     if (c === ' ' || c === '\t') { endWord(); continue; }
-    if (c === '\\') { word = (word ?? '') + (src[i + 1] ?? ''); text += src[i + 1] ?? ''; i++; continue; }
+    if (c === '\\') { word = (word ?? '') + (src[i + 1] ?? ''); quoted = true; text += src[i + 1] ?? ''; i++; continue; }
+    if (c === '$' && src[i + 1] === '"') continue; // $"…" (locale string) is a double-quoted string
+    if (c === '$' && src[i + 1] === "'") { // $'…' (ANSI-C): \' does not end it
+      let j = i + 2;
+      while (j < src.length && src[j] !== "'") j += src[j] === '\\' ? 2 : 1;
+      const esc = { n: '\n', t: '\t', r: '\r', e: '\x1b', a: '\x07', b: '\b', f: '\f', v: '\v' };
+      word = (word ?? '') + src.slice(i + 2, j).replace(/\\(.)/g, (_, x) => esc[x] ?? x);
+      quoted = true;
+      text += src.slice(i + 1, j + 1);
+      i = j;
+      continue;
+    }
     if (c === "'") {
       const j = src.indexOf("'", i + 1);
       const end = j < 0 ? src.length : j;
       word = (word ?? '') + src.slice(i + 1, end);
+      quoted = true;
       text += src.slice(i + 1, end + 1);
       i = end;
       continue;
@@ -86,6 +102,7 @@ export function parseShell(src, depth = 0) {
       const body = src.slice(i + 1, end);
       for (const m of body.matchAll(/\$\(([^]*?)\)|`([^`]*)`/g)) nested(m[1] ?? m[2]);
       word = (word ?? '') + body.replace(/\\(["\\$`])/g, '$1');
+      quoted = true;
       text += src.slice(i + 1, end + 1);
       i = end;
       continue;
@@ -117,26 +134,22 @@ export function parseShell(src, depth = 0) {
       if (m) { pendingHeredocs.push({ delim: m[2], strip, argvRef: argv }); text += src.slice(i + 1, j + m[0].length); i = j + m[0].length - 1; }
       continue;
     }
-    if (c === '>' || c === '<') {
-      // redirection operator (with optional fd dup like 2>&1); the target stays a word
-      if (word !== null && /^\d+$/.test(word)) word = null;
+    if (c === '>' || c === '<' || (c === '&' && src[i + 1] === '>')) {
+      // redirection operator: > >> >| &> &>> < <> <<< N> N>&M >&- …; the target stays the next word unless it is an fd dup
+      if (word !== null && !quoted && /^\d+$/.test(word)) word = null;
       endWord();
       let j = i + 1;
-      while (src[j] === '>' || src[j] === '&') j++;
-      while (/[0-9-]/.test(src[j] ?? '') && src[j - 1] === '&') j++;
+      while (src[j] === '>' || src[j] === '<') j++;
+      if (src[j] === '|') j++;
+      const dup = src[j] === '&' && /^[0-9-]/.test(src[j + 1] ?? '');
+      if (src[j] === '&') j++;
+      if (dup) while (/[0-9-]/.test(src[j] ?? '')) j++;
       text += src.slice(i + 1, j);
       i = j - 1;
-      argv.push('>');
+      if (!dup) argv.push(REDIR);
       continue;
     }
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
-      // `name()` starts a function definition: record its body for `mis` wrappers
-      if (c === '(' && src[i + 1] === ')' && word !== null && !argv.length) {
-        const name = word;
-        const open = src.indexOf('{', i);
-        const close = open < 0 ? -1 : src.indexOf('}', open);
-        if (open >= 0 && close >= 0) functions.set(name, src.slice(open + 1, close));
-      }
       endCmd();
       continue;
     }
@@ -144,16 +157,48 @@ export function parseShell(src, depth = 0) {
     word = (word ?? '') + c;
   }
   endCmd();
-  // `>` placeholders separate redirection targets from argv; drop the operator and its target
+  // REDIR markers separate redirection targets from argv; drop the operator and its target
   for (const cmd of commands) {
     const out = [];
     for (let k = 0; k < cmd.argv.length; k++) {
-      if (cmd.argv[k] === '>') { cmd.redirects ??= []; if (cmd.argv[k + 1] !== undefined) cmd.redirects.push(cmd.argv[++k]); continue; }
+      if (cmd.argv[k] === REDIR) { cmd.redirects ??= []; if (typeof cmd.argv[k + 1] === 'string') cmd.redirects.push(cmd.argv[++k]); continue; }
       out.push(cmd.argv[k]);
     }
     cmd.argv = out;
   }
   return { commands, text, functions };
+}
+
+/** index of the '"' that closes the double quote opened at i */
+function skipDq(src, i) {
+  for (let j = i + 1; j < src.length; j++) {
+    if (src[j] === '\\') { j++; continue; }
+    if (src[j] === '"') return j;
+  }
+  return src.length;
+}
+
+/**
+ * Function definitions (`f() {…}`, `f() (…)`, `function f {…}`, `function f() {…}`): name → body. The body ends at the
+ * matching brace or paren outside quotes, so `${VAR}` and `$(…)` inside it do not cut it short. A definition-like text
+ * inside a string is recorded too: that can only make the guard stricter.
+ */
+function functionDefs(src) {
+  const defs = new Map();
+  for (const m of src.matchAll(/(?:^|[\s;&|(){}])(?:function\s+([\w.:-]+)\s*(?:\(\s*\))?|([\w.:-]+)\s*\(\s*\))\s*([{(])/g)) {
+    const open = m.index + m[0].length - 1, o = src[open], c = o === '{' ? '}' : ')';
+    let d = 0, j = open;
+    for (; j < src.length; j++) {
+      const ch = src[j];
+      if (ch === '\\') { j++; continue; }
+      if (ch === "'") { const k = src.indexOf("'", j + 1); if (k < 0) { j = src.length; break; } j = k; continue; }
+      if (ch === '"') { j = skipDq(src, j); continue; }
+      if (ch === o) d++;
+      else if (ch === c && --d === 0) break;
+    }
+    defs.set(m[1] ?? m[2], src.slice(open + 1, j));
+  }
+  return defs;
 }
 
 // Wrapper programs and which of their options take a value.
@@ -212,22 +257,44 @@ export function normalize(argv, vars, heredoc) {
   return { argv: a };
 }
 
-/** All simple commands, recursively expanded through `sh -c` / `eval`, normalized. */
-export function commandsOf(src, depth = 0) {
+/** `$@`, `$*`, `$1`… of a function body → the call's arguments */
+const POSITIONAL = /^\$\{?([@*]|\d)\}?$/;
+const substitute = (argv, args) => argv.flatMap((w) => {
+  const m = POSITIONAL.exec(w);
+  return !m ? [w] : '@*'.includes(m[1]) ? args : m[1] === '0' ? [w] : args[m[1] - 1] === undefined ? [] : [args[m[1] - 1]];
+});
+
+/**
+ * All simple commands, recursively expanded through `sh -c` / `eval` and through calls of shell functions and aliases
+ * defined in the command (the body's commands with the call's arguments, as the shell runs them), normalized.
+ */
+export function commandsOf(src, depth = 0, known = new Map()) {
   const p = parseShell(src);
   const vars = new Map();
   const out = [];
   let text = p.text;
-  const functions = new Map(p.functions);
+  const functions = new Map([...known, ...p.functions]);
+  for (const c of p.commands) {
+    if (c.argv[0] !== 'alias') continue;
+    for (const def of c.argv.slice(1)) { const m = /^([^=\s]+)=([^]*)$/.exec(def); if (m) functions.set(m[1], `${m[2]} "$@"`); }
+  }
   for (const c of p.commands) {
     const n = normalize(c.argv, vars, c.heredoc);
     if (n.script !== undefined && depth < 5) {
-      const inner = commandsOf(n.script, depth + 1);
+      const inner = commandsOf(n.script, depth + 1, functions);
       out.push(...inner.commands);
       text += ` ${inner.text} `;
       for (const [k, v] of inner.functions) functions.set(k, v);
     }
-    if (n.argv.length) out.push({ argv: n.argv, redirects: c.redirects ?? [] });
+    // `exec 3> f` and a bare `> f` still write f: keep the redirects as a no-op command (`:`)
+    if (!n.argv.length) { if (c.redirects?.length) out.push({ argv: [':'], redirects: c.redirects }); continue; }
+    out.push({ argv: n.argv, redirects: c.redirects ?? [] });
+    if (functions.has(n.argv[0]) && depth < 5) {
+      for (const ic of commandsOf(functions.get(n.argv[0]), depth + 1, functions).commands) {
+        const argv = normalize(substitute(ic.argv, n.argv.slice(1)), new Map()).argv;
+        if (argv.length) out.push({ argv, redirects: ic.redirects });
+      }
+    }
   }
   return { commands: out, text, functions };
 }

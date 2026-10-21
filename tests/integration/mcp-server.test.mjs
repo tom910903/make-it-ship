@@ -29,7 +29,15 @@ test('skills tools: plugin, local and global learned skills', async () => {
     assert.ok(all.some((x) => x.name === 'run' && x.scope === 'plugin'));
     assert.ok(all.some((x) => x.name === 'csv-export' && x.scope === 'local'));
     assert.ok(all.some((x) => x.name === 'deploy' && x.scope === 'global'));
+    // M9 r2 D5: an untrusted repository's skill bodies are not returned; name and description come framed as repository content
+    const untrusted = (await s.call('load_skills_local', { names: ['csv-export'] })).json[0];
+    assert.equal(untrusted.body, undefined);
+    assert.equal(untrusted.trusted, false);
+    assert.match(untrusted.note, /repository content[\s\S]*untrusted[\s\S]*mis skill trust/);
+    assert.equal(all.find((x) => x.name === 'csv-export').trusted, false);
+    write(home, { 'trusted-repos.json': { repos: [dir] } }); // what `mis skill trust` records
     assert.match((await s.call('load_skills_local', { names: ['csv-export'] })).json[0].body, /body-local/);
+    assert.equal((await s.call('list_skills')).json.find((x) => x.name === 'csv-export').trusted, true);
     assert.match((await s.call('load_skills_global')).json[0].body, /body-global/);
   } finally { s.close(); }
 });

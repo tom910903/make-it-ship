@@ -31,3 +31,32 @@ MIS
    `riskFlags` ⊆ `auth, payment, pii, migration, security`. `ui: true` when the work builds Web or iOS screens (Full mode then requires design-explore). Tasks may add `"dependsOn": ["T1"]`; `files` is the task's ownership for parallel work. `mis` rejects unknown keys and prints every schema error; fix and resend.
 6. Choose the mode and say why: `mis mode set <quick|standard|full> --reason "<why>"`. Risk flags force Standard or higher.
 7. Until the plan is approved (or Quick without risk flags starts), make **no** code changes.
+
+## Plan documents (Superpowers writing-plans, executing-plans; OMC plan)
+
+When the plan must outlive this session (Full mode, 4+ tasks, the user asks for a plan, or someone else will execute it), also write it as `docs/make-it-ship/plans/<slug>.md`:
+
+```
+# Plan: <title>
+## Goal
+<one paragraph>
+## Constraints
+- <what must not change>
+## Non-goals
+- <out of scope>
+## Tasks
+### T1: <title>
+Files: src/x.ts, test/x.test.ts
+Depends on: T0
+- <testable acceptance criterion>
+## Acceptance criteria
+- <overall, testable>
+## Verification
+- `npm test`
+```
+
+`mis plan check <file>` must pass; it exits 1 and lists missing sections (goal, tasks, a criterion per task, acceptance criteria, verification). To execute a plan document later (another session or person): `mis start --plan docs/make-it-ship/plans/<slug>.md` creates the run with its tasks loaded; continue at step 6 (mode) with every gate as usual.
+
+## Several independent goals (OMC ultragoal)
+
+When the request holds several goals that each deserve their own verified result ("CSV export, JSON export and an import wizard"), do not cram them into one plan. Record each one: `mis goal add "<goal>" --criteria "<a; b>"`. Then run them one at a time, one run per goal. After a goal's run is VERIFIED, `mis goal done <id> --evidence "<verdict and run id>"` prints the `/goal` handoff for the next goal. The ledger lives in the repository's state and survives sessions (`mis goal list`).

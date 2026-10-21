@@ -56,3 +56,22 @@ export function refreshLearnings(root) {
   writeFileSync(md, L.join('\n'));
   return entries;
 }
+
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').slice(0, 5).join('-').slice(0, 64);
+
+/** Free text → learning proposals (gstack distill): only lines that start with a learning type, e.g.
+ *  "- pitfall: node --test needs a quoted glob". Proposals change nothing unless `apply` (the user said yes). */
+export function distillLearnings(root, text, apply) {
+  const known = new Map(listLearnings(root).map((e) => [`${e.type}/${e.key}`, e]));
+  const proposals = [];
+  for (const l of String(text).split('\n')) {
+    const m = l.match(/^\s*(?:[-*]\s*)?(pattern|pitfall|preference|architecture|tool|operational)\s*:\s*(.{8,})$/i);
+    if (!m) continue;
+    const e = { type: m[1].toLowerCase(), key: slug(m[2]), insight: m[2].trim(), confidence: 5, source: 'inferred' };
+    if (e.key.length < 2 || known.get(`${e.type}/${e.key}`)?.insight === e.insight || proposals.some((p) => p.key === e.key && p.type === e.type)) continue;
+    proposals.push(e);
+  }
+  if (apply) for (const p of proposals) addLearning(root, p);
+  return { proposals, applied: Boolean(apply) && proposals.length > 0,
+    note: apply ? `${proposals.length} learning(s) recorded` : 'Proposals only. Show them to the user; after they agree, re-run with --yes (edit confidence/source with mis learn add for single entries).' };
+}

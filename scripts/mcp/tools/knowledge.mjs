@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, extname, join, posix, relative, resolve, sep } from 'node:path';
 import { CATEGORIES, WIKI_DIR, allPages, deletePage, ingest, lint, query, readIndex, readPage, slug } from '../../lib/wiki.mjs';
 import { readTrace } from '../../lib/trace.mjs';
+import { readTimeline, timelineText } from '../../lib/timeline.mjs';
 import { loadRun, readEvents, stateRoot } from '../../lib/state.mjs';
 import { repoRoot } from '../../lib/tree-hash.mjs';
 import { cancelGate, readGate, recordAnswer, renderGate, setContent, startGate, worktreeKey } from '../../lib/merge-readiness.mjs';
@@ -173,7 +174,8 @@ function traceData(cwd, a) {
   let root = cwd; try { root = repoRoot(cwd); } catch { /* not a repo */ }
   const startMs = run ? Date.parse(run.state.startedAt) : 0;
   const hooks = readTrace().filter((t) => typeof t.cwd === 'string' && (t.cwd === root || t.cwd.startsWith(root + '/')) && Date.parse(t.at) >= startMs);
-  return { run, events: run ? readEvents(run) : [], hooks };
+  const timeline = readTimeline(cwd).filter((t) => Date.parse(t.at) >= startMs);
+  return { run, events: run ? readEvents(run) : [], hooks, timeline };
 }
 
 const detail = (e) => {
@@ -186,15 +188,16 @@ const detail = (e) => {
 const traceTools = [
   {
     name: 'trace_timeline',
-    description: 'Chronological timeline of Make It Ship activity for a run (default: current run): run events (checks, reviews, verdicts, state changes) merged with hook trace entries for this repository.',
-    inputSchema: { type: 'object', properties: { runId: str('Run id (default: current run)'), filter: { type: 'string', enum: ['all', 'run', 'checks', 'hooks'] },
+    description: 'Chronological timeline of Make It Ship activity for a run (default: current run; without a run, everything): run events (checks, reviews, verdicts, state changes) merged with hook trace entries and project timeline events (sessions with their kind, subagents, skills) for this repository.',
+    inputSchema: { type: 'object', properties: { runId: str('Run id (default: current run)'), filter: { type: 'string', enum: ['all', 'run', 'checks', 'hooks', 'timeline'] },
       last: { type: 'integer', minimum: 1, description: 'Only the last N entries' } } },
     handler: (a, { cwd }) => {
-      const { run, events, hooks } = traceData(cwd, a);
+      const { run, events, hooks, timeline } = traceData(cwd, a);
       const f = a.filter ?? 'all';
       let rows = [
         ...(f === 'hooks' ? [] : events.filter((e) => f !== 'checks' || e.type === 'check').map((e) => ({ at: e.at, kind: 'RUN', text: detail(e) }))),
         ...(f === 'all' || f === 'hooks' ? hooks.map((h) => ({ at: h.at, kind: 'HOOK', text: [h.hook, h.tool, h.decision, h.reason].filter(Boolean).join(' ') })) : []),
+        ...(f === 'all' || f === 'timeline' ? timeline.map((t) => ({ at: t.at, kind: 'TL', text: timelineText(t) })) : []),
       ].sort((x, y) => x.at.localeCompare(y.at));
       if (a.last) rows = rows.slice(-a.last);
       const head = run ? `## Trace: run ${run.state.runId} (${run.state.state})` : '## Trace: no run found for this repository (hook traces only)';

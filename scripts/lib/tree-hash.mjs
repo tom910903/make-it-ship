@@ -7,7 +7,8 @@ import { join } from 'node:path';
 
 export const REPORT_DIR = 'docs/make-it-ship';
 
-export const repoRoot = (cwd) => execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }).trim();
+// stderr is captured (kept in the error), never inherited: hooks outside a repository must not print git's fatal line.
+export const repoRoot = (cwd) => execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
 
 export function treeHash(cwd) {
   const top = repoRoot(cwd);

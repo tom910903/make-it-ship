@@ -12,10 +12,11 @@ function frontmatter(text) {
   return Object.fromEntries(m[1].split('\n').filter((l) => /^\w[\w-]*:/.test(l)).map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
 }
 
-const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester'];
+const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester', 'analyst', 'planner', 'tracer'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro'];
+const SKILLS = ['run', 'plan', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
+  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent', 'help', 'reference'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -66,7 +67,7 @@ test('direct commands use their phase files', () => {
 });
 
 test('every `mis <command>` mentioned in skills and phases exists', () => {
-  const files = [...SKILLS.map((s) => `skills/${s}/SKILL.md`), ...readdirSync(join(ROOT, 'skills/run/phases')).map((f) => `skills/run/phases/${f}`)];
+  const files = [...SKILLS.map((s) => `skills/${s}/SKILL.md`), ...readdirSync(join(ROOT, 'agents')).map((f) => `agents/${f}`), ...readdirSync(join(ROOT, 'skills/run/phases')).map((f) => `skills/run/phases/${f}`)];
   for (const f of files) {
     for (const m of read(f).matchAll(/`mis ([a-z-]+)/g)) {
       assert.ok(commands[m[1]], `${f}: unknown mis command "${m[1]}"`);
@@ -172,4 +173,152 @@ test('M6 always-on layer is wired: hooks for every event, skills, notices, READM
   const readme = read('README.md');
   assert.match(readme, /## Always on/);
   assert.match(readme, /asked about \*\*at any time\*\*/);
+});
+
+test('M8-A: web QA uses the built-in browser (report-only, design loop, page benchmark) and the browse skill documents the guard', () => {
+  const qa = read('skills/run/phases/qa.md');
+  for (const re of [/skills\/browse\/SKILL\.md/, /mis browse perf/, /mis visual-verdict/, /Report-only/i, /\$MIS_CLI/, /handoff/]) assert.match(qa, re);
+  assert.doesNotMatch(qa, /BLOCKED reason \(e\.g\. no Playwright/);
+  const b = read('skills/browse/SKILL.md');
+  for (const re of [/snapshot -i/, /stale ref/, /--remote/, /mis browse cdp/, /mis browse resume/, /mis pdf/, /BLOCKED/]) assert.match(b, re);
+  assert.match(read('skills/qa/SKILL.md'), /report only|qa-only/i);
+});
+
+test('M8-B: team pipeline, session manager and visual companion are wired into skills, phases and README', () => {
+  const team = read('skills/team/SKILL.md');
+  for (const re of [/mis team start/, /mis team wait/, /mis team shutdown/, /mis check/, /mis verdict/, /Agent tool/, /plan.*exec.*verify.*fix/is, /mis task <id> retry/, /only when (the user )?explicitly/i, /omc-teams/])
+    assert.match(team, re);
+  const session = read('skills/session/SKILL.md');
+  assert.match(frontmatter(session).description, /psm/);
+  for (const re of [/mis session create/, /mis session list/, /mis session remove/, /approv/i]) assert.match(session, re);
+  for (const p of ['design-explore', 'interview', 'design']) assert.match(read(`skills/run/phases/${p}.md`), /mis companion start/, p);
+  assert.match(read('skills/run/phases/parallel.md'), /skills\/team|\/make-it-ship:team/);
+  const readme = read('README.md');
+  assert.match(readme, /## Teams and sessions/);
+  for (const re of [/mis team/, /mis session/, /mis companion/]) assert.match(readme, re);
+});
+
+// M9-C C1: the OMC agents that were missing, each with the narrowest tool allowlist for its role.
+const M9C_AGENTS = {
+  analyst: 'Read, Grep, Glob, Bash', planner: 'Read, Grep, Glob, Bash', tracer: 'Read, Grep, Glob, Bash',
+  'document-specialist': 'Read, Grep, Glob, Bash, WebFetch, WebSearch', 'git-master': 'Read, Grep, Glob, Bash',
+  executor: 'Read, Write, Edit, Grep, Glob, Bash', debugger: 'Read, Write, Edit, Grep, Glob, Bash', designer: 'Read, Write, Edit, Grep, Glob, Bash',
+  'test-engineer': 'Read, Write, Edit, Grep, Glob, Bash', 'code-simplifier': 'Read, Write, Edit, Grep, Glob, Bash', writer: 'Read, Write, Edit, Grep, Glob, Bash',
+};
+for (const [a, tools] of Object.entries(M9C_AGENTS)) {
+  test(`M9-C agent ${a}: allowlist, evidence rule, no push, no run state`, () => {
+    const text = read(`agents/${a}.md`);
+    const fm = frontmatter(text);
+    assert.equal(fm.name, a);
+    assert.ok(fm.description.length > 40);
+    assert.equal(fm.tools, tools);
+    assert.doesNotMatch(fm.tools, /\bAgent\b|mcp__/, 'no nested agents, no MCP');
+    if (['analyst', 'planner', 'tracer', 'document-specialist'].includes(a)) assert.doesNotMatch(fm.tools, /Write|Edit/, 'read-only role');
+    assert.match(text, /untrusted/i);
+    assert.match(text, /mis check/);
+    assert.match(text, /never say done, fixed, or passing without the real output/i);
+    assert.match(text, /never `git push`|Never `git push`/);
+    assert.match(text, /\.git\/make-it-ship\//);
+    assert.match(text, new RegExp(`absorbed from OMC ${a}`));
+  });
+}
+
+test('M9-C role specifics: executor defers to implementer in runs, debugger uses the root-cause gate, document-specialist keeps code out of queries, git-master never rewrites shared history', () => {
+  assert.match(read('agents/executor.md'), /`implementer` agent/);
+  assert.match(read('agents/debugger.md'), /mis note rootcause/);
+  assert.match(read('agents/debugger.md'), /three failed hypotheses.*BLOCKED/s);
+  assert.match(read('agents/document-specialist.md'), /Never put repository code.*into a search query/);
+  assert.match(read('agents/git-master.md'), /never rewrite commits that exist on a remote/i);
+});
+
+test('M9-C C2: qa-tester drives interactive programs with mis tty and leaves only the replay script', () => {
+  const t = read('agents/qa-tester.md');
+  for (const re of [/mis tty start/, /mis tty expect/, /mis tty send/, /mis tty save <name> qa\//, /mis tty stop/, /BLOCKED if tmux is missing/]) assert.match(t, re);
+  assert.match(read('skills/run/phases/qa.md'), /mis tty/);
+});
+
+test('M9-C C3: skill authoring skills write only learned-skill locations and test with subagents', () => {
+  const skill = read('skills/skill/SKILL.md');
+  for (const re of [/mis skill list/, /mis skill search/, /mis skill add/, /mis skill edit/, /mis skill remove/, /mis skill lint/, /read-only/, /triggers: \[/]) assert.match(skill, re);
+  const skillify = read('skills/skillify/SKILL.md');
+  assert.match(frontmatter(skillify).description, /learner/);
+  for (const re of [/mis skill add - --scope/, /mis test-prompt/, /Never write a skill into the plugin/]) assert.match(skillify, re);
+  const ws = read('skills/writing-skills/SKILL.md');
+  for (const re of [/RED/, /GREEN/, /mis skill test/, /MIS_SKILL_TEST_CMD/, /mis skill lint/, /mis skill graphs/, /Agent tool/, /never launch real claude/]) assert.match(ws, re);
+  const readme = read('README.md');
+  assert.match(readme, /## Skill authoring/);
+  for (const a of Object.keys(M9C_AGENTS)) assert.match(readme, new RegExp(`\`${a}\``), `README lists ${a}`);
+});
+
+test('M8 D3: the design review loop and the browse skill make the model look at both images; the pixel score alone never ends it', () => {
+  for (const f of ['skills/run/phases/qa.md', 'skills/browse/SKILL.md']) {
+    const t = readFileSync(join(ROOT, f), 'utf8');
+    assert.match(t, /Read both images/, f);
+    assert.match(t, /only an aid/, f);
+    assert.doesNotMatch(t, /\(90\+ passes\)/, f);
+  }
+});
+
+test('M8 D12/D5: every skill that defines the `mis` shorthand gives a function that works in zsh and that the guard sees through', async () => {
+  const { classify } = await import('../../scripts/lib/policy.mjs');
+  const { spawnSync } = await import('node:child_process');
+  const FN = 'mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }';
+  const files = readdirSync(join(ROOT, 'skills')).map((s) => `skills/${s}/SKILL.md`).filter((f) => existsSync(join(ROOT, f)))
+    .filter((f) => /`mis`( <args>)? (=|means)/.test(read(f)) || /where `mis` =/.test(read(f)));
+  assert.ok(files.includes('skills/browse/SKILL.md'));
+  for (const f of files) {
+    assert.ok(read(f).includes(FN), `${f} defines mis as the function`);
+    assert.doesNotMatch(read(f), /`mis`( <args>)? (=|means) `node /, `${f}: no plain-text alias that invites M="node …"; $M`);
+  }
+  const d = classify({ tool_name: 'Bash', tool_input: { command: `${FN}; mis browse cdp X.y` }, cwd: ROOT }, { repoRoot: ROOT, activeRun: false }).decision;
+  assert.equal(d, 'ask');
+  const zsh = ['/bin/zsh', '/usr/bin/zsh'].find(existsSync);
+  if (!zsh) return; // no zsh on this machine: the bash form is what runs
+  const r = spawnSync(zsh, ['-fc', `${FN}; mis browse help`], { env: { ...process.env, CLAUDE_PLUGIN_ROOT: ROOT }, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /usage: mis browse/);
+});
+
+// M9-B (B0 decision): planning/review/design/doc/audit/release/memory features live in the phase where they apply,
+// with a trigger, and are reachable from existing skills; only `plan` is a new skill.
+test('M9-B features are blended into phases with triggers, artifact paths and real mis commands', () => {
+  const ph = (p) => read(`skills/run/phases/${p}.md`);
+  const expect = {
+    discover: [/deepinit_manifest/, /action: "save"/, /document-specialist/, /mis health/],
+    interview: [/docs\/make-it-ship\/traces\/<slug>\.md/, /docs\/make-it-ship\/specs\/<slug>\.md/, /office-hours/, /\*Startup\*/, /\*Builder\*/, /mis profile/, /mis question log/, /"qid"/, /HIGH items are always asked/, /no code changes/],
+    plan: [/docs\/make-it-ship\/plans\/<slug>\.md/, /mis plan check/, /mis start --plan/, /mis goal add/, /\/goal/],
+    'product-review': [/## Review: CEO/, /## Review: DX/, /plan-eng-review/, /six decision principles/, /mis decision add/, /Taste decisions/],
+    design: [/mis diagram/, /\.excalidraw/, /mis browse screenshot/, /mis decision search/],
+    'design-explore': [/mis taste show/, /mis design-board/, /data-choice/, /mis taste approve/, /design-html/, /Outside a run/],
+    implement: [/subagent-driven-development/, /spec-reviewer.*then.*quality-reviewer/s],
+    debug: [/make-it-ship:tracer/, /same message/, /docs\/make-it-ship\/traces\/<slug>\.md/],
+    simplify: [/mis debt/, /review-only|Review-only/, /change nothing/],
+    review: [/ponytail-audit/, /cso/, /devex-review/, /mis redact scan --history/, /write no files/],
+    verify: [/mis health/],
+    ship: [/mis version-bump/, /mis next-version/, /mis diff-scope/, /mis repo-mode/, /release-rules\.md/, /mis redact scan/, /document-generate/, /without a run/],
+    retro: [/mis retro --git --since 7d/, /hit rate/, /mis learn search/, /mis learn distill/, /--yes/, /mis decision supersede/, /mis jsonl-merge install/],
+    parallel: [/baseline/],
+  };
+  for (const [p, res] of Object.entries(expect)) for (const re of res) assert.match(ph(p), re, `${p}: ${re}`);
+  const plan = read('skills/plan/SKILL.md');
+  for (const re of [/docs\/make-it-ship\/plans\/<slug>\.md/, /mis plan check/, /mis start --plan/, /No run is started/]) assert.match(plan, re);
+  assert.match(read('skills/loop/SKILL.md'), /Ralphthon[\s\S]*Interview[\s\S]*Loop[\s\S]*Harden/);
+  for (const re of [/mis context save/, /mis context restore/, /branch mismatch/, /mis context sessions/]) assert.match(read('skills/resume/SKILL.md'), re);
+  for (const [s, re] of [['plan-review', /autoplan/], ['review', /cso/], ['interview', /office hours/i], ['ship', /without a run/], ['retro', /decision/], ['status', /mis health/], ['session', /baseline/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
+  // every agent a phase dispatches exists
+  for (const f of readdirSync(join(ROOT, 'skills/run/phases'))) for (const m of read(`skills/run/phases/${f}`).matchAll(/make-it-ship:([a-z][a-z-]*)/g)) {
+    if (['run', 'plan', 'plan-review', 'review', 'interview', 'debug', 'qa', 'ship', 'retro', 'resume', 'team', 'session', 'loop', 'status'].includes(m[1])) continue;
+    assert.ok(existsSync(join(ROOT, `agents/${m[1]}.md`)), `${f}: agent ${m[1]}`);
+  }
+  const run = read('skills/run/SKILL.md');
+  assert.match(run, /Situational steps/);
+  assert.match(run, /Partial requests/);
+  assert.match(read('README.md'), /## Planning, review, design, docs and release inside the flow/);
+});
+
+test('M9-D: external-transfer skills say company policy may forbid it; the scientist agent is read-only with python_repl', () => {
+  for (const s of ['ask', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent']) assert.match(read(`skills/${s}/SKILL.md`), /company policy may forbid/i, s);
+  for (const [s, re] of [['research', /mis approve proposal/], ['research', /ONE message/], ['deploy', /mis canary/], ['telemetry', /off by default/i], ['gbrain', /BLOCKED/], ['ios', /BLOCKED/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
+  const sci = read('agents/scientist.md'), fm = frontmatter(sci);
+  assert.equal(fm.tools, 'Read, Grep, Glob, Bash, mcp__plugin_make-it-ship_mis__python_repl');
+  for (const re of [/untrusted/i, /\[FINDING:/, /\[EVIDENCE:/, /\[CONFIDENCE:/, /Do not modify/, /\.git\/make-it-ship\//]) assert.match(sci, re);
 });

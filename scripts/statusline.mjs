@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // HUD (Spec §14.2 hud, M6 §6.2): the one status line — run progress when a run exists, plus style level, loop,
-// branch, model and context use (absorbs the OMC HUD core and Ponytail's level badge). Registered by the user as statusLine.
+// subagents (5 min = stale), todos, branch, model and context use (absorbs the OMC HUD core and Ponytail's level badge). Registered by the user as statusLine.
 // shortcut: recomputes the tree hash on every refresh; fine for small/medium repos, cache by index mtime if it gets slow.
 import { pathToFileURL } from 'node:url';
 import { verdict, evidenceStatus } from './lib/verdict.mjs';
@@ -16,11 +16,13 @@ export function renderHud(s, ctx, cost) {
   return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}${usd}`;
 }
 
-export function renderExtras({ style, loop, frozen, branch, model, ctxPct }) {
+export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct }) {
   return [
     style && style !== 'off' ? `style ${style === 'ultra' ? 'ULTRA' : style}` : null,
     loop?.active ? `loop ${loop.iteration}/${loop.max}` : null,
     frozen ? `frozen ${frozen}` : null,
+    agents?.running ? `agents ${agents.running}${agents.stale ? ` (${agents.stale} stale)` : ''}` : null,
+    todo?.total ? `todo ${todo.done}/${todo.total}` : null,
     branch || null,
     model || null,
     ctxPct ? `ctx ${ctxPct}%` : null,
@@ -46,6 +48,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       style: await part(() => currentStyle(input.session_id)),
       loop: await part(() => { const l = readLoop(cwd); return !l.session || !input.session_id || l.session === input.session_id ? l : null; }),
       branch: await part(() => execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()),
+      agents: await part(async () => (await import('./lib/tracking.mjs')).agentCounts(input.session_id)),
+      todo: await part(async () => (await import('./lib/tracking.mjs')).todoCounts((await import('./lib/home.mjs')).readSession(input.session_id).todos)),
       model: input.model?.display_name,
       ctxPct: contextPercent(input.transcript_path),
       frozen: await part(async () => {

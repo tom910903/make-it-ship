@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { findChrome } from './browse/chrome.mjs';
 
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
@@ -33,9 +34,15 @@ export function detectQa(root, probe) {
   const webApp = has('react', 'vue', 'svelte', 'next', 'vite', '@angular/core', 'solid-js') || existsSync(join(root, 'index.html'));
   if (has('@playwright/test') || has('cypress') || webApp) {
     const argv = has('@playwright/test') ? ['npx', 'playwright', 'test'] : has('cypress') ? ['npx', 'cypress', 'run'] : null;
-    profiles.push({ profile: 'web', surface: 'browser UI', check: argv ? { name: 'qa-web', argv, timeoutSec: 900 } : null,
-      ...(argv ? {} : { blocked: 'no browser test runner (e.g. Playwright) in the project; qa-web would be BLOCKED until one is added (package install needs approval)' }),
-      how: 'Write user-journey tests for the changed screens (load, main action, error and empty states, 375px width) in the project runner.' });
+    const how = 'Write user-journey tests for the changed screens (load, main action, error and empty states, 375px width)';
+    if (argv) profiles.push({ profile: 'web', surface: 'browser UI', check: { name: 'qa-web', argv, timeoutSec: 900 }, how: `${how} in the project runner.` });
+    else if (findChrome()) {
+      // M8: no project runner → the built-in browser (mis browse) drives a scenario script; nothing to install
+      profiles.push({ profile: 'web', surface: 'browser UI', check: { name: 'qa-web', argv: ['node', 'qa/web-smoke.mjs'], timeoutSec: 900 }, needsScript: 'qa/web-smoke.mjs',
+        how: `${how} as qa/web-smoke.mjs: start the app on a free port, drive it with execFileSync(process.execPath, [process.env.MIS_CLI, 'browse', ...]) (goto, snapshot -i, click/fill @refs, text, console --errors, viewport 375x812), assert on the output, always stop the app and run \`browse stop\`; exit non-zero on any mismatch. \`mis check\` sets MIS_CLI.` });
+    } else profiles.push({ profile: 'web', surface: 'browser UI', check: null,
+      blocked: 'no browser test runner (e.g. Playwright) in the project and no Chrome/Chromium/Edge for the built-in browser; qa-web stays BLOCKED until one is installed (install needs approval)',
+      how: `${how}.` });
   }
   if (pkg?.bin || /\[project\.scripts\]/.test(py)) {
     const node = !!pkg?.bin;

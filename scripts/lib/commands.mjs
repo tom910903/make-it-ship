@@ -16,7 +16,7 @@ import { writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
-import { detectConfig, writeConfig, doctor as runDoctor } from './setup.mjs';
+import { detectConfig, writeConfig, projectType } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
 import { planWaves } from './parallel.mjs';
 import { detectQa } from './qa.mjs';
@@ -26,7 +26,26 @@ import { addLearning, refreshLearnings } from './learn.mjs';
 import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
+import { setupCommands, cancelAll } from './commands-setup.mjs';
+import { browseCommands } from './commands-browse.mjs';
+import { teamCommands, excludeWorktrees } from './commands-team.mjs';
+import { skillCommands } from './commands-skill.mjs';
+import { ttyCommands } from './commands-tty.mjs';
 import { readLoop, endLoop } from './loop.mjs';
+import { flowCommands, questionPrefs } from './commands-flow.mjs';
+import { parsePlanDoc } from './plandoc.mjs';
+import { filterQuestions } from './questions.mjs';
+import { gitMetrics, renderGitRetro } from './retro.mjs';
+import { listLearnings, distillLearnings } from './learn.mjs';
+import { modelCommands, probeModels } from './commands-models.mjs';
+import { researchCommands, approveProposal } from './commands-research.mjs';
+import { opsCommands } from './commands-ops.mjs';
+import { iosExtra } from './commands-ios.mjs';
+import { telemetryCommands } from './telemetry.mjs';
+import { gbrainCommands } from './commands-gbrain.mjs';
+import { designCommands } from './commands-design.mjs';
+import { pairCommands } from './commands-pair.mjs';
+import { helpCommands } from './commands-help.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../templates/report.md', import.meta.url));
 
@@ -126,8 +145,10 @@ function beginExecution(s, cwd) {
 // ---------------------------------------------------------------- commands
 
 function start(args, cwd) {
-  const input = flag(args, '--input');
-  if (!input) fail('usage: mis start --input <file|text>');
+  const planDoc = flag(args, '--plan');
+  const input = flag(args, '--input') ?? planDoc;
+  if (!input) fail('usage: mis start --input <file|text> [--plan <plan.md>]');
+  const fromDoc = planDoc ? planFromDoc(cwd, planDoc) : null;
   const root = repoRoot(cwd);
   const prev = loadRun(cwd);
   if (prev && !TERMINAL.includes(prev.state.state)) fail(`active run ${prev.state.runId} is ${prev.state.state}; resume it or \`mis cancel\` first`);
@@ -140,14 +161,23 @@ function start(args, cwd) {
   let baseCommit = null;
   try { baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* no commits yet */ }
   const run = createRun(cwd, { input: inp, baseCommit, configHash: cfg.configHash, maxRuntimeMinutes: cfg.config?.limits.maxRuntimeMinutes ?? 120 });
-  return { runId: run.state.runId, state: run.state.state, config: cfg.exists ? 'ok' : 'missing (run `mis init`)' };
+  const out = { runId: run.state.runId, state: run.state.state, config: cfg.exists ? 'ok' : 'missing (run `mis init`)' };
+  if (fromDoc) Object.assign(out, setPlan(cwd, fromDoc), { tasks: fromDoc.tasks.map((t) => `${t.id}: ${t.title}`) });
+  return out;
 }
 
-function plan([sub, file], cwd) {
-  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file|->');
-  const p = readJsonArg(cwd, file);
-  const errs = validatePlan(p);
+/** Plan JSON from a plan document (docs/make-it-ship/plans/<slug>.md); refuses missing sections and schema errors. */
+function planFromDoc(cwd, file) {
+  const p = resolve(cwd, file);
+  if (!existsSync(p)) fail(`plan document not found: ${file}`);
+  const { plan: pl, missing } = parsePlanDoc(readFileSync(p, 'utf8'));
+  if (missing.length) fail(`plan document is missing: ${missing.join(', ')}`);
+  const errs = validatePlan(pl);
   if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  return pl;
+}
+
+function setPlan(cwd, p) {
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'plan set');
@@ -157,6 +187,23 @@ function plan([sub, file], cwd) {
     settle(s);
     return { event: { type: 'plan', planHash: s.planHash, tasks: p.tasks.length }, result: { state: s.state, planHash: s.planHash, mode: s.mode } };
   });
+}
+
+function plan([sub, file], cwd) {
+  if (sub === 'check' && file) {
+    const p = resolve(cwd, file);
+    if (!existsSync(p)) fail(`plan document not found: ${file}`);
+    const { plan: pl, missing } = parsePlanDoc(readFileSync(p, 'utf8'));
+    const errors = missing.length ? [] : validatePlan(pl);
+    const out = { ok: !missing.length && !errors.length, missing, errors, tasks: pl.tasks.length, howToRun: pl.howToRun };
+    if (!out.ok) { console.log(JSON.stringify(out, null, 2)); process.exitCode = 1; return undefined; }
+    return out;
+  }
+  if (sub !== 'set' || !file) fail('usage: mis plan set <json-file|-> | check <plan.md>');
+  const p = readJsonArg(cwd, file);
+  const errs = validatePlan(p);
+  if (errs.length) fail(`plan invalid: ${errs.join('; ')}`);
+  return setPlan(cwd, p);
 }
 
 function mode([sub, m, ...rest], cwd) {
@@ -179,10 +226,15 @@ function interview([sub, ...rest], cwd) {
     const q = readJsonArg(cwd, rest[0]);
     if (typeof q.question !== 'string' || !q.question.trim()) fail('interview item needs "question"');
     if (!LEVEL_ORDER[q.impact]) fail('interview item needs "impact": HIGH|MED|LOW');
+    if (q.qid !== undefined && !/^[a-z0-9][a-z0-9-]{1,63}$/.test(q.qid)) fail('"qid" must be kebab-case (a stable id for question preferences)');
+    // plan-tune: a skip preference resolves non-HIGH items with their stated default; HIGH items are always asked.
+    const skipped = filterQuestions([q], questionPrefs(cwd)).skip.length > 0;
     return mutate(cwd, (run) => {
       const s = run.state;
       if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
-      const item = { id: `Q${s.interview.length + 1}`, question: q.question, impact: q.impact, why: q.why ?? null, answer: null };
+      const item = { id: `Q${s.interview.length + 1}`, question: q.question, impact: q.impact, why: q.why ?? null, answer: null,
+        ...(q.qid ? { qid: q.qid } : {}), ...(q.default ? { default: q.default } : {}) };
+      if (skipped) Object.assign(item, { answer: `${q.default ?? 'the stated default'} (skipped by the user's question preference)`, skippedByPreference: true });
       s.interview.push(item);
       return { event: { type: 'interview-add', id: item.id, impact: item.impact }, result: item };
     });
@@ -212,10 +264,11 @@ const pastDeadline = (s) => s.deadlineAt && Date.now() > Date.parse(s.deadlineAt
 const deadlineBlock = (s) => limitBlock(s, `runtime limit exceeded (deadline ${s.deadlineAt}); ask the user: mis approve continue`);
 const limits = (cwd) => loadConfig(repoRoot(cwd)).config?.limits ?? { maxAttemptsPerTask: 2, maxRuntimeMinutes: 120 };
 
-function approve([what], cwd) {
+function approve([what, id], cwd) {
+  if (what === 'proposal') return approveProposal(id, cwd); // self-improve: no run needed; the guard always asks
   if (what === 'continue') return approveContinue(cwd);
   if (what === 'config') return approveConfig(cwd);
-  if (what !== 'plan') fail('usage: mis approve <plan|continue|config>');
+  if (what !== 'plan') fail('usage: mis approve <plan|continue|config|proposal <id>>');
   return mutate(cwd, (run) => {
     const s = run.state;
     needState(run, ['PLANNING', 'AWAITING_APPROVAL'], 'approve plan');
@@ -349,7 +402,7 @@ function check([name], cwd) {
   else {
     // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
     const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
-      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env } });
+      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
     else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
@@ -551,9 +604,7 @@ function worktree([sub, id], cwd) {
       if (s.worktrees[id]) fail(`task ${id} already has a worktree: ${s.worktrees[id].path}`);
       if (t.status !== 'TODO') fail(`task ${id} is ${t.status}`);
       beginExecution(s, cwd);
-      const exclude = join(gitOut(root, 'rev-parse', '--git-common-dir').replace(/^(?!\/)/, `${root}/`), 'info', 'exclude');
-      mkdirSync(join(exclude, '..'), { recursive: true });
-      if (!(existsSync(exclude) && readFileSync(exclude, 'utf8').split('\n').includes('.worktrees/'))) writeFileSync(exclude, `${existsSync(exclude) ? readFileSync(exclude, 'utf8').replace(/\n?$/, '\n') : ''}.worktrees/\n`);
+      excludeWorktrees(root);
       const path = join(root, '.worktrees', `${s.runId}-${id}`);
       const branch = `mis/${s.runId}/${id}`;
       const base = gitOut(root, 'rev-parse', 'HEAD');
@@ -601,27 +652,46 @@ function ship(args, cwd) {
 }
 
 function retro(args, cwd) {
-  const days = flag(args, '--days');
+  const since = flag(args, '--since');
+  let days = flag(args, '--days');
+  if (since) {
+    const m = since.match(/^(\d+)([dw])$/) ?? fail('--since must look like 7d or 2w');
+    days = String(Number(m[1]) * (m[2] === 'w' ? 7 : 1));
+  }
   const root = repoRoot(cwd);
   const metrics = retroMetrics(loadRuns(stateRoot(cwd)), { sinceMs: days ? Date.now() - Number(days) * 86400000 : 0 });
+  const gitm = args.includes('--git') ? gitMetrics(root, Number(days ?? 7)) : null;
   const date = new Date().toISOString().slice(0, 10);
   const rel = `${REPORT_DIR}/retro-${date}.md`;
   mkdirSync(join(root, REPORT_DIR), { recursive: true });
-  writeFileSync(join(root, rel), renderRetro(metrics, date));
-  return { path: rel, metrics };
+  writeFileSync(join(root, rel), renderRetro(metrics, date) + (gitm ? renderGitRetro(gitm) : ''));
+  return { path: rel, metrics, ...(gitm ? { git: gitm } : {}) };
 }
 
-function learn([sub, arg], cwd) {
+function learn([sub, ...rest], cwd) {
   const root = repoRoot(cwd);
   if (sub === 'list') return { entries: refreshLearnings(root) };
-  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, arg)) };
-  return fail('usage: mis learn <add <json|->|list>');
+  if (sub === 'add') return { entries: addLearning(root, readJsonArg(cwd, rest[0])) };
+  if (sub === 'search') {
+    const type = flag(rest, '--type');
+    const q = rest.join(' ').toLowerCase();
+    return { entries: listLearnings(root).filter((e) => (!type || e.type === type) && (!q || `${e.key} ${e.insight} ${(e.files ?? []).join(' ')}`.toLowerCase().includes(q))) };
+  }
+  if (sub === 'distill') {
+    const yes = rest.includes('--yes');
+    const src = rest.find((a) => a !== '--yes');
+    if (!src) fail('usage: mis learn distill <file|-> [--yes]');
+    const text = src === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(cwd, src), 'utf8');
+    return distillLearnings(root, text, yes);
+  }
+  return fail('usage: mis learn add <json|-> | list | search <text> [--type t] | distill <file|-> [--yes]');
 }
 
 const OTHER_MODEL_CLIS = ['codex', 'gemini'];
 
 function secondOpinion([sub], cwd) {
-  if (sub !== 'detect') fail('usage: mis second-opinion detect');
+  if (sub === 'probe') return probeModels();
+  if (sub !== 'detect') fail('usage: mis second-opinion detect|probe');
   const available = [];
   for (const name of OTHER_MODEL_CLIS) {
     for (const d of (process.env.PATH ?? '').split(':')) {
@@ -650,7 +720,7 @@ function bench(args, cwd) {
   let failed = null;
   for (let i = 0; i < runs; i++) {
     const t0 = process.hrtime.bigint();
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env } });
+    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     times.push(Number(process.hrtime.bigint() - t0) / 1e6);
     if (r.status !== 0) { failed = r.error?.message ?? `exit ${r.status ?? r.signal}`; break; }
   }
@@ -667,13 +737,14 @@ function bench(args, cwd) {
   });
 }
 
-function ios([sub], cwd) {
+function ios([sub, ...rest], cwd) {
+  if (iosExtra[sub]) return iosExtra[sub](rest, cwd);
   if (sub === 'bridge-scan') {
     const files = bridgeScan(repoRoot(cwd));
     return { files, clean: files.length === 0 };
   }
   if (sub === 'devices') return listDevices();
-  return fail('usage: mis ios <bridge-scan|devices>');
+  return fail('usage: mis ios <bridge-scan|devices|sync [--apply]|daemon start|status|stop|mint <name>|tokens [revoke <name>]>');
 }
 
 function qa([sub], cwd) {
@@ -682,6 +753,11 @@ function qa([sub], cwd) {
 }
 
 function cancel(args, cwd) {
+  if (args.includes('--all')) return cancelAll(args, cwd, cancelRun);
+  return cancelRun(cwd);
+}
+
+function cancelRun(cwd) {
   return mutate(cwd, (run) => {
     transition(run.state, 'CANCELLED');
     try { if (readLoop(cwd).active) endLoop(cwd, 'cancelled'); } catch { /* no loop */ }
@@ -691,7 +767,7 @@ function cancel(args, cwd) {
 
 function init(args, cwd) {
   const root = repoRoot(cwd);
-  const r = detectConfig(root);
+  const r = { ...detectConfig(root), ...projectType(root) };
   r.hud = {
     statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
@@ -703,7 +779,10 @@ function init(args, cwd) {
   return r;
 }
 
-const doctor = (args, cwd) => runDoctor(cwd);
 
-export const commands = { init, doctor, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, ...alwaysCommands };
+/** Commands by the module that defines them (`mis help` groups by this); later groups override earlier ones. */
+export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel },
+  always: alwaysCommands, browse: browseCommands, team: teamCommands, setup: setupCommands, skill: skillCommands, tty: ttyCommands, flow: flowCommands, models: modelCommands,
+  research: researchCommands, ops: opsCommands, telemetry: telemetryCommands, gbrain: gbrainCommands, design: designCommands, pair: pairCommands, help: helpCommands };
+export const commands = Object.assign({}, ...Object.values(commandGroups));
 export { requiredChecks };

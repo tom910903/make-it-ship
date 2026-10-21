@@ -177,3 +177,8 @@ test('M6 after PASS: katakana/hiragana off spellings and full-width prefixes', (
   for (const p of ['ラルフ: ヤメテ', 'ralph: ﾔﾒﾃ', 'ralph: とめて']) assert.ok(!names(p).includes('loop'), p);
   assert.deepEqual(names('ｒａｌｐｈ: fix the parser'), ['loop']);
 });
+
+test('M8: team and session skills are explicit-only (no always-on keyword for "team")', () => {
+  for (const p of ['our team wants csv export', 'ask the team to review this', 'omc-teams', 'team 3 fix the build', 'psm review pr 12'])
+    assert.deepEqual(names(p), [], p);
+});
