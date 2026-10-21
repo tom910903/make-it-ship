@@ -59,7 +59,7 @@ function caveats(m, runs) {
   }
   const l1 = runs.map((r) => r.loadAvg?.[0]).filter((x) => typeof x === 'number');
   const noise = [l1.length ? `load1 at run start ranged ${Math.min(...l1).toFixed(2)}–${Math.max(...l1).toFixed(2)}` : null, ...(m.operatorNotes ?? []).map(esc)].filter(Boolean);
-  if (noise.length) items.push(`Machine noise: ${noise.join('; ')}. Wall time is the noisiest metric; cost and turns do not depend on machine load.`);
+  if (noise.length) items.push(`Machine noise: ${noise.join('; ')}. Wall time is the noisiest metric.`);
   return `<h2>Read this first</h2><ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>`;
 }
 

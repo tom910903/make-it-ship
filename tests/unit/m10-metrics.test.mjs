@@ -129,7 +129,8 @@ test('diffFromNumstat: MIS run report kept out of the diff size, shown separatel
   const ns = '54\t0\tdocs/make-it-ship/20261021-1628-8224/report.md\n10\t0\tsrc/text.ts\n10\t1\ttest/text.test.ts\n-\t-\timg.png\n';
   assert.deepEqual(diffFromNumstat(ns), { files: 3, insertions: 20, deletions: 1, toolReportLines: 54 });
   assert.deepEqual(diffFromNumstat(''), { files: 0, insertions: 0, deletions: 0, toolReportLines: 0 });
-  assert.equal(diffFromNumstat('3\t0\tdocs/make-it-ship/notes.md\n').files, 1, 'only <run>/report.md is excluded');
+  assert.equal(diffFromNumstat('3\t0\tdocs/make-it-ship/notes.md\n').files, 1, 'only report.md files are excluded');
+  assert.equal(diffFromNumstat('3\t0\tdocs/make-it-ship/a/b/report.md\n').toolReportLines, 3, 'docs/make-it-ship/**/report.md');
 });
 
 test('deriveRun: every metric re-derived from the raw files; run.json-only fields kept', () => {

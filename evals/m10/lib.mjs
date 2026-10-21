@@ -99,7 +99,7 @@ export function reviewFindingsFromStream(p) {
 
 // MIS writes its own run report (docs/make-it-ship/<run>/report.md) into the tree; it is not code, so it is kept
 // out of the diff size and reported separately.
-const TOOL_REPORT = /^docs\/make-it-ship\/[^/]+\/report\.md$/;
+const TOOL_REPORT = /^docs\/make-it-ship\/(?:.+\/)?report\.md$/;
 export function diffFromNumstat(ns) {
   const n = (x) => (x === '-' ? 0 : Number(x));
   const rows = ns.split('\n').filter(Boolean).map((l) => l.split('\t'));
