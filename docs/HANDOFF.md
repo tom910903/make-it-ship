@@ -5,15 +5,15 @@
 ## 0. 통합 라인
 
 - **개발은 `feature/make-it-ship-m1-m5` 한 라인에서 끝낸 뒤 master로 만든다**(사용자 결정, 2026-10-21).
-  - 로컬에서는 worktree `~/orca/workspaces/make-it-ship/make-it-ship`의 `make-it-ship` 브랜치가 이 라인이다.
+  - 로컬과 원격 모두 `feature/make-it-ship-m1-m5` 브랜치 하나만 쓴다(로컬 브랜치가 원격을 추적).
+  - 작업 worktree: `~/orca/workspaces/make-it-ship/make-it-ship`
+  - 저장소 본체 `~/Dev/Git/tools/make-it-ship`(main worktree, `.git`이 있는 곳)는 detached HEAD로 둔다. 같은 브랜치를 두 곳에서 checkout할 수 없기 때문이다.
   - 원격: `github.com/tom910903/make-it-ship` (비공개). 이 브랜치가 원격 기본 브랜치이고, 마켓플레이스 설치도 이 브랜치에서 받는다.
 - 2026-10-21에 모든 작업 브랜치를 이 라인으로 병합하고 정리했다.
   - 병합 순서: `develop`(M6·M7 검증 PASS, 병합 검증 PASS) → `m9-fix4` → `m9-fix3` → `m8-wip`.
   - **M8·M9 코드는 검증을 통과하지 못한 상태로 들어왔다.** M8은 3차 FAIL, M9는 2차 FAIL 뒤 수정 중이었다. 태그는 달지 않았다.
   - 병합할 때마다 전체 `npm test`를 돌려 통과했다(최종 737/737). 병합한 브랜치의 테스트 제목이 하나도 빠지지 않은 것도 확인했다.
-  - 병합된 브랜치와 worktree는 지웠다. 남은 것:
-    - `develop` 브랜치: 내용은 모두 병합됐다. 저장소 본체 `~/Dev/Git/tools/make-it-ship`(main worktree, `.git`이 있는 곳)에 checkout돼 있다. 사용자 결정으로 그대로 둔다.
-    - 이 라인
+  - 병합된 브랜치(`develop` 포함)와 worktree는 모두 지웠다. 이 상태는 원격에 push했다(`8765793`).
 - 의미 충돌을 고친 곳:
   - `scripts/lib/keywords.mjs`: M9 코드가 M6 후속 수정에서 없어진 `LOOP_PREFIX`를 참조하고 있었다.
   - browse `actions.mjs`: M8의 업로드 차단 검사를 M9의 `gated()` 바깥, 호출하는 쪽으로 옮겼다.
@@ -91,7 +91,7 @@ M1~M5 라인에서 2026-10-21에 바뀐 것(모두 이 라인에 있음):
 ## 4. 열린 결정
 
 - version을 언제, 몇으로 올릴지(3장 6번)
-- 병합 결과를 원격에 언제 push할지. push하면 마켓플레이스로 새로 설치하는 사람이 검증 안 된 M8·M9 코드를 받는다. 여기에는 M8 업로드 유출 결함(R3-1, MEDIUM)도 들어 있다.
+- (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에 검증 안 된 M8·M9 코드가 들어 있다. 여기에는 M8 업로드 유출 결함(R3-1, MEDIUM)도 있다. 마켓플레이스로 새로 설치하는 사람도 이 코드를 받는다. M8 수정과 M9 재검증을 우선한다.
 - NH-6~8: 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지
 
 ## 4-1. 남은 위험 (LOW)
