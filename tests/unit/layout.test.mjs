@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateConfig, normalizeConfig } from '../../scripts/lib/config.mjs';
-import { layoutViolations, planLayoutErrors, renderLayoutDoc } from '../../scripts/lib/layout.mjs';
+import { layoutViolations, planLayoutErrors, renderStructure } from '../../scripts/lib/layout.mjs';
 
 const BASE = { version: 1, checks: { unit: { argv: ['npm', 'test'] } } };
 const LAYOUT = { paths: ['src/**', 'tests/**', 'docs/**', '.ai/**', '*.md', 'package.json'],
@@ -47,13 +47,13 @@ test('planLayoutErrors: every violation with where it is and how to fix it', () 
   assert.deepEqual(planLayoutErrors(plan, undefined), [], 'no layout: nothing checked');
 });
 
-test('renderLayoutDoc: rules, purposes and doc rules, deterministic', () => {
-  const md = renderLayoutDoc(LAYOUT);
-  assert.match(md, /^# Layout/);
+test('renderStructure: rules, purposes and doc rules, deterministic (the generated part of .ai/structure.md)', () => {
+  const md = renderStructure(LAYOUT);
+  assert.match(md, /^## Allowed paths/m);
   assert.match(md, /- `src\/\*\*` — application code/);
   assert.match(md, /- `tests\/\*\*`\n/);
   assert.match(md, /docs\/guide\/x\.md.*docs\/guide\/x\.ko\.md/);
   assert.match(md, /`\.ai\/`.*English/);
   assert.match(md, /docs\/make-it-ship\//);
-  assert.equal(renderLayoutDoc(LAYOUT), md);
+  assert.equal(renderStructure(LAYOUT), md);
 });

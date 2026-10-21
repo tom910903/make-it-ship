@@ -77,27 +77,36 @@ test('mis layout: rules and working-tree violations (tracked + untracked, .gitig
   assert.match(t.out, /docs\/guide\/x\.md → docs\/guide\/x\.ko\.md/);
 });
 
-test('mis layout write: .ai/layout.md from config, .ai/index.md only if missing, marked pointers in CLAUDE.md and AGENTS.md; idempotent', () => {
-  const dir = makeRepo({ '.make-it-ship.json': CFG, 'CLAUDE.md': '# Project\n\nKeep this.\n', '.ai/index.md': '# mine\n' });
+test('mis layout write: .ai/ skeletons only if missing, generated part of structure.md, AGENTS.md rules section, CLAUDE.md @AGENTS.md; idempotent', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG, 'CLAUDE.md': '# Project\n\nKeep this.\n', '.ai/index.md': '# mine\n', '.ai/structure.md': '# Structure\n\nMy notes.\n' });
   const w = ok(mis(dir, ['layout', 'write']));
-  assert.deepEqual(w.written.sort(), ['.ai/layout.md', 'AGENTS.md', 'CLAUDE.md']);
-  assert.equal(readFileSync(join(dir, '.ai/index.md'), 'utf8'), '# mine\n', 'existing index.md never overwritten');
-  assert.match(readFileSync(join(dir, '.ai/layout.md'), 'utf8'), /- `src\/\*\*` — application code/);
-  const claude = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
-  assert.match(claude, /^# Project\n\nKeep this\.\n\n<!-- MIS:LAYOUT:START -->\n[\s\S]*^@\.ai\/index\.md$[\s\S]*<!-- MIS:LAYOUT:END -->\n$/m);
-  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /<!-- MIS:LAYOUT:START -->\n## Project docs for AI\n.*\.ai\/index\.md.*\n<!-- MIS:LAYOUT:END -->/);
-  const before = ['CLAUDE.md', 'AGENTS.md', '.ai/layout.md'].map((f) => readFileSync(join(dir, f), 'utf8'));
-  const again = ok(mis(dir, ['layout', 'write']));
-  assert.deepEqual(again.written, []);
-  assert.deepEqual(['CLAUDE.md', 'AGENTS.md', '.ai/layout.md'].map((f) => readFileSync(join(dir, f), 'utf8')), before, 'same bytes');
-  // the section is replaced in place when the config changes; text after it stays
-  write(dir, { 'CLAUDE.md': `${before[0]}\n## After\nstay\n`, '.make-it-ship.json': { ...CFG, layout: { ...LAYOUT, paths: [...LAYOUT.paths, 'bin/**'] } } });
-  ok(mis(dir, ['layout', 'write']));
-  assert.match(readFileSync(join(dir, '.ai/layout.md'), 'utf8'), /`bin\/\*\*`/);
+  assert.deepEqual(w.written.sort(), ['.ai/conventions.md', '.ai/decisions.md', '.ai/product.md', '.ai/structure.md', '.ai/tech.md', 'AGENTS.md', 'CLAUDE.md']);
+  assert.equal(readFileSync(join(dir, '.ai/index.md'), 'utf8'), '# mine\n', 'existing files are never overwritten');
+  const structure = readFileSync(join(dir, '.ai/structure.md'), 'utf8');
+  assert.match(structure, /^# Structure\n\nMy notes\.\n\n<!-- MIS:STRUCTURE:START -->\n[\s\S]*- `src\/\*\*` — application code[\s\S]*<!-- MIS:STRUCTURE:END -->\n$/);
+  assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), '# Project\n\nKeep this.\n\n<!-- MIS:LAYOUT:START -->\n@AGENTS.md\n<!-- MIS:LAYOUT:END -->\n');
+  const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /^<!-- MIS:LAYOUT:START -->\n## Project rules for AI agents\n[\s\S]*<!-- MIS:LAYOUT:END -->\n$/);
+  for (const re of [/`src\/\*\*`/, /`\.ai\/`, English only/, /`docs\/guide\/x\.md` \+ `docs\/guide\/x\.ko\.md`/, /`mis layout`/, /`\.ai\/tech\.md`/, /`\.ai\/structure\.md`/, /`\.ai\/modules\/<dir path>\.md`/]) assert.match(agents, re);
+  const lines = agents.split('\n').length;
+  assert.ok(lines >= 10 && lines <= 34, `AGENTS.md section is short (${lines} lines)`);
+  for (const f of ['CLAUDE.md', 'AGENTS.md']) assert.doesNotMatch(readFileSync(join(dir, f), 'utf8'), /@\.ai\//, `${f} never imports .ai/ files`);
+  const names = ['CLAUDE.md', 'AGENTS.md', '.ai/structure.md', '.ai/tech.md'];
+  const before = names.map((f) => readFileSync(join(dir, f), 'utf8'));
+  assert.deepEqual(ok(mis(dir, ['layout', 'write'])).written, []);
+  assert.deepEqual(names.map((f) => readFileSync(join(dir, f), 'utf8')), before, 'same bytes');
+  // a config change regenerates only the marked parts; text around them stays
+  write(dir, { 'CLAUDE.md': `${before[0]}\n## After\nstay\n`, '.ai/tech.md': '# Tech\nmine\n', '.make-it-ship.json': { ...CFG, layout: { ...LAYOUT, paths: [...LAYOUT.paths, 'bin/**'] } } });
+  assert.deepEqual(ok(mis(dir, ['layout', 'write'])).written.sort(), ['.ai/structure.md', 'AGENTS.md']);
+  assert.match(readFileSync(join(dir, '.ai/structure.md'), 'utf8'), /^# Structure\n\nMy notes\.\n[\s\S]*`bin\/\*\*`/);
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /`bin\/\*\*`/);
   assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), `${before[0]}\n## After\nstay\n`);
+  assert.equal(readFileSync(join(dir, '.ai/tech.md'), 'utf8'), '# Tech\nmine\n');
   const fresh = makeRepo({ '.make-it-ship.json': CFG });
-  ok(mis(fresh, ['layout', 'write']));
-  assert.match(readFileSync(join(fresh, '.ai/index.md'), 'utf8'), /^# AI index/);
+  assert.deepEqual(ok(mis(fresh, ['layout', 'write'])).written.sort(), ['.ai/conventions.md', '.ai/decisions.md', '.ai/index.md', '.ai/product.md', '.ai/structure.md', '.ai/tech.md', 'AGENTS.md', 'CLAUDE.md']);
+  assert.match(readFileSync(join(fresh, '.ai/structure.md'), 'utf8'), /^# Structure\n\n<!-- MIS:STRUCTURE:START -->/);
+  assert.equal(readFileSync(join(fresh, 'CLAUDE.md'), 'utf8'), '<!-- MIS:LAYOUT:START -->\n@AGENTS.md\n<!-- MIS:LAYOUT:END -->\n', 'created with just the section');
+  assert.match(readFileSync(join(fresh, '.ai/index.md'), 'utf8'), /^# AI index[\s\S]*product\.md[\s\S]*decisions\.md/);
   assert.notEqual(mis(makeRepo(), ['layout', 'write']).code, 0, 'no layout: nothing to write');
 });
 
@@ -107,6 +116,6 @@ test('end to end: init --write, layout write, then the working tree has no layou
   ok(mis(dir, ['layout', 'write']));
   const j = ok(mis(dir, ['layout', '--json']));
   assert.deepEqual([j.outside, j.missingTranslation], [[], []]);
-  assert.ok(existsSync(join(dir, '.ai', 'layout.md')));
+  assert.ok(existsSync(join(dir, '.ai', 'structure.md')));
   assert.match(git(dir, 'status', '--porcelain', '-uall'), /\?\? \.ai\/index\.md/);
 });

@@ -263,9 +263,14 @@ Optional. With a `layout` in `.make-it-ship.json`, code and docs go to fixed fol
 ```
 ```
 .ai/              AI docs (English)
-  index.md        entry point, imported from CLAUDE.md (@.ai/index.md)
-  layout.md       the rules above, generated
+  index.md        map: which file to read when
+  product.md      purpose, users, scope
+  structure.md    folder rules (generated part from "layout")
+  tech.md         stack and commands (points to package.json etc.)
+  conventions.md  style, forbidden things
+  decisions.md    one line per decision
   modules/        one doc per directory (deepinit)
+AGENTS.md         core rules + map (CLAUDE.md imports it: @AGENTS.md)
 docs/             human docs, every language
   guide/x.md
   guide/x.ko.md
@@ -273,7 +278,7 @@ src/  tests/
 ```
 - `mis init` proposes a `layout` from the repository's top-level folders; it is written only with `mis init --write`.
 - Inside `/make-it-ship:run`, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and lists each violation with the fix. Changing the layout is a config change (`mis approve config` during a run). Outside a run nothing is enforced.
-- `mis layout` prints the rules and the files outside them (`--json` for JSON). `mis layout write` writes `.ai/layout.md`, an `.ai/index.md` skeleton (never overwritten) and a marked pointer section in CLAUDE.md and AGENTS.md (asks first).
+- `mis layout` prints the rules and the files outside them (`--json` for JSON). `mis layout write` creates missing `.ai/` skeletons (never overwritten), regenerates the marked part of `.ai/structure.md`, and writes a marked section in AGENTS.md (rules + map) and `@AGENTS.md` in CLAUDE.md (asks first). `.ai/` files are read on demand, not imported.
 - Without `layout` the feature is off.
 
 ## `mis` CLI

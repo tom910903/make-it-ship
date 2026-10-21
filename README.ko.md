@@ -277,9 +277,14 @@ claude --plugin-dir ~/make-it-ship
 
 ```
 .ai/              AI용 문서(영어)
-  index.md        시작점, CLAUDE.md에서 가져옴(@.ai/index.md)
-  layout.md       위 규칙(자동 생성)
+  index.md        언제 어느 파일을 읽을지(지도)
+  product.md      목적, 사용자, 범위
+  structure.md    폴더 규칙("layout"에서 생성되는 부분 포함)
+  tech.md         스택과 명령(package.json 등을 가리킴)
+  conventions.md  스타일, 금지 사항
+  decisions.md    결정 한 줄씩
   modules/        디렉터리별 문서(deepinit)
+AGENTS.md         핵심 규칙 + 지도(CLAUDE.md가 @AGENTS.md로 가져옴)
 docs/             사람용 문서(언어별)
   guide/x.md
   guide/x.ko.md
@@ -288,7 +293,7 @@ src/  tests/
 
 - `mis init`이 저장소의 최상위 폴더를 보고 `layout`을 제안합니다. `mis init --write`로만 기록됩니다.
 - `/make-it-ship:run` 안에서 `mis plan set`은 `paths` 밖의 파일이나 번역이 빠진 사람용 문서가 있는 계획을 거부하고, 위반마다 고치는 방법을 보여 줍니다. 구조를 바꾸는 것은 설정 변경입니다(run 중에는 `mis approve config`). run 밖에서는 강제하지 않습니다.
-- `mis layout`은 규칙과 규칙 밖 파일을 보여 줍니다(`--json`). `mis layout write`는 `.ai/layout.md`, `.ai/index.md` 뼈대(있으면 덮어쓰지 않음), CLAUDE.md와 AGENTS.md의 표시된 안내 절을 씁니다(먼저 묻습니다).
+- `mis layout`은 규칙과 규칙 밖 파일을 보여 줍니다(`--json`). `mis layout write`는 없는 `.ai/` 뼈대만 만들고(있으면 덮어쓰지 않음), `.ai/structure.md`의 표시된 부분을 다시 만들며, AGENTS.md에 표시된 절(규칙 + 지도)과 CLAUDE.md에 `@AGENTS.md`를 씁니다(먼저 묻습니다). `.ai/` 파일은 필요할 때 읽고, import하지 않습니다.
 - `layout`이 없으면 이 기능은 꺼져 있습니다.
 
 ## 설정: `.make-it-ship.json`
