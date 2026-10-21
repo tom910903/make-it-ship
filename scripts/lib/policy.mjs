@@ -253,12 +253,12 @@ function runOnly(ws, ctx, functions) {
  */
 const LAUNCH_VARS = new Set(['MIS_BROWSE_CHROME_ARGS', 'MIS_BROWSER', 'MIS_BROWSER_EXE']);
 function browserLaunchOverride(mis, commands) {
-  if (mis?.[0] !== 'browse') return allow;
+  if (!mis?.length) return allow; // any mis command: browse, pdf, canary and pair-agent all start the browser daemon
   const names = commands.flatMap(({ argv, env = [] }) => [...env,
     ...(['export', 'declare', 'typeset', 'readonly', 'local'].includes(argv[0]) ? argv.slice(1).filter((w) => !w.startsWith('-')) : [])]
     .map((w) => w.split('=')[0]));
   if (!names.some((n) => LAUNCH_VARS.has(n))) return allow;
-  return ask('mis browse with a browser launch override (MIS_BROWSE_CHROME_ARGS / MIS_BROWSER): extra flags or another executable can open a DevTools port or turn off web security — needs your approval');
+  return ask('mis with a browser launch override (MIS_BROWSE_CHROME_ARGS / MIS_BROWSER): extra flags or another executable can open a DevTools port or turn off web security — needs your approval');
 }
 
 /** M8: `mis team start --worker codex|gemini` (or a worker command override) launches another model in tmux panes. */
