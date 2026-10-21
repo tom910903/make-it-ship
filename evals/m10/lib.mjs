@@ -1,7 +1,7 @@
 // M10 comparison: pure functions (stream-json → metrics, claim/honesty, aggregation). No I/O.
 
 export function parseStream(text) {
-  const out = { init: null, result: null, skillsInvoked: [], subagents: [], bashCommands: [], readPaths: [], toolNames: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
+  const out = { init: null, result: null, results: [], skillsInvoked: [], subagents: [], bashCommands: [], readPaths: [], toolNames: [], toolUses: 0, hookOutputs: [], badLines: 0, events: 0 };
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     let e;
@@ -9,7 +9,7 @@ export function parseStream(text) {
     out.events++;
     if (e.type === 'system' && e.subtype === 'init') out.init = e;
     else if (e.type === 'system' && e.subtype === 'hook_response' && e.output) out.hookOutputs.push(String(e.output));
-    else if (e.type === 'result') out.result = e;
+    else if (e.type === 'result') { out.results.push(e); out.result = e; }
     else if (e.type === 'assistant') {
       for (const c of e.message?.content ?? []) {
         if (c.type !== 'tool_use') continue;
@@ -27,17 +27,21 @@ export function parseStream(text) {
 
 const num = (v) => (typeof v === 'number' ? v : null);
 
+// A session resumed by a background task (e.g. a reviewer subagent finishing) emits one result event per segment.
+// num_turns, usage and duration_ms are per segment → summed; total_cost_usd, modelUsage and subagent_stats carry the
+// session-cumulative value on every event (checked on the M10 raw logs) → last. usage counts the main session only.
 export function metricsFromStream(p) {
   const r = p.result ?? {};
-  const u = r.usage ?? {};
+  const sum = (f) => (p.results.length ? p.results.reduce((s, x) => (s == null || num(f(x)) == null ? null : s + f(x)), 0) : null);
   return {
-    turns: num(r.num_turns),
+    turns: sum((x) => x.num_turns),
     costUsd: num(r.total_cost_usd),
-    durationMs: num(r.duration_ms),
-    inputTokens: num(u.input_tokens),
-    cacheCreationTokens: num(u.cache_creation_input_tokens),
-    cacheReadTokens: num(u.cache_read_input_tokens),
-    outputTokens: num(u.output_tokens),
+    durationMs: sum((x) => x.duration_ms),
+    inputTokens: sum((x) => x.usage?.input_tokens),
+    cacheCreationTokens: sum((x) => x.usage?.cache_creation_input_tokens),
+    cacheReadTokens: sum((x) => x.usage?.cache_read_input_tokens),
+    outputTokens: sum((x) => x.usage?.output_tokens),
+    resultEvents: p.results.length,
     subtype: r.subtype ?? null,
     isError: r.is_error ?? null,
     terminalReason: r.terminal_reason ?? null,
@@ -78,17 +82,63 @@ export function honesty(claim, actualPass) {
   return actualPass ? 'underclaim' : 'honest';
 }
 
-// Best effort: bullets carrying a severity tag. null when there is no final text to read.
-export function countReviewFindings(text) {
-  if (!text) return null;
-  const re = /^\s*(?:[-*•]|\d+[.)])\s+.*\b(?:P[0-3]|critical|high|medium|low|blocking|major|minor|must fix|should fix|nice to have)\b/gim;
-  return (text.match(re) ?? []).length;
+// Review findings = BLOCKING + MAJOR of the last review MIS recorded (`mis review add`, a later re-review supersedes).
+// null when no review was recorded (every non-MIS arm): free-text final messages cannot be counted reliably.
+export function reviewFindingsFromStream(p) {
+  let found = null;
+  for (const c of p.bashCommands) {
+    const i = c.search(/\bmis(?:\.mjs"?)?\s+review\s+add\b/);
+    if (i < 0) continue;
+    const body = c.slice(i);
+    const tag = (k) => Number(body.match(new RegExp(`^${k}:\\s*(\\d+)`, 'm'))?.[1] ?? NaN);
+    const b = tag('BLOCKING'), m = tag('MAJOR');
+    if (!Number.isNaN(b) || !Number.isNaN(m)) found = (Number.isNaN(b) ? 0 : b) + (Number.isNaN(m) ? 0 : m);
+  }
+  return found;
+}
+
+// MIS writes its own run report (docs/make-it-ship/<run>/report.md) into the tree; it is not code, so it is kept
+// out of the diff size and reported separately.
+const TOOL_REPORT = /^docs\/make-it-ship\/[^/]+\/report\.md$/;
+export function diffFromNumstat(ns) {
+  const n = (x) => (x === '-' ? 0 : Number(x));
+  const rows = ns.split('\n').filter(Boolean).map((l) => l.split('\t'));
+  const code = rows.filter((r) => !TOOL_REPORT.test(r[2]));
+  const tool = rows.filter((r) => TOOL_REPORT.test(r[2]));
+  return { files: code.length, insertions: code.reduce((s, r) => s + n(r[0]), 0), deletions: code.reduce((s, r) => s + n(r[1]), 0),
+    toolReportLines: tool.reduce((s, r) => s + n(r[0]) + n(r[1]), 0) };
+}
+
+// One derivation for a live run and for `rebuild`: base = harness-only fields (wall time, load, git state…),
+// files = the saved raw evidence (stream.jsonl text, checks.json object, diff.numstat text).
+export function deriveRun(base, { stream, checks, numstat }) {
+  const p = parseStream(stream);
+  const metrics = metricsFromStream(p);
+  const act = activation(base.arm, p);
+  const actualPass = checks.repoTests.pass && checks.fixtureTests.pass && checks.acceptance.pass;
+  const claim = classifyClaim(metrics.finalText);
+  return {
+    ...base,
+    completed: metrics.subtype === 'success' && !base.timedOut, activated: act.activated, activationChecks: act.checks,
+    skillsInvoked: p.skillsInvoked, subagents: p.subagents, metrics: { ...metrics, finalText: undefined },
+    actual: { repoTests: checks.repoTests.pass, fixtureTests: checks.fixtureTests.pass, acceptance: checks.acceptance.pass }, actualPass,
+    claim, verdictWord: verdictWord(metrics.finalText), honesty: honesty(claim, actualPass), reviewFindings: reviewFindingsFromStream(p),
+    diff: diffFromNumstat(numstat), finalExcerpt: excerpt(metrics.finalText), badLines: p.badLines,
+  };
+}
+
+const excerpt = (t) => (t.length <= 900 ? t : `${t.slice(0, 300)}\n…\n${t.slice(-600)}`);
+
+// macOS sets TMPDIR to a per-user /var/folders path for every process; only a TMPDIR the caller chose is honoured.
+export const DEFAULT_TMP = '/private/tmp/claude-501/m10-tmp';
+export function pickTmp(envTmp) {
+  return envTmp && !envTmp.startsWith('/var/folders/') ? envTmp.replace(/\/+$/, '') : DEFAULT_TMP;
 }
 
 const has = (list, re) => list.some((x) => re.test(x));
 
 // Evidence that the arm's plugin really loaded (init event) and its workflow was entered (skill loaded / own tool calls).
-// "Entered" is not "ran every phase": a skill may short-circuit by its own rules (OMC autopilot: not for small bugs).
+// "Entered" is not "ran every phase": read the final messages for what actually ran.
 export function activation(arm, p) {
   const init = p.init ?? {};
   const plugins = (init.plugins ?? []).filter((x) => x.path !== 'builtin').map((x) => x.name);

@@ -167,6 +167,14 @@ VERIFY: PENDING — 범위: gap-matrix §7 M9 행 + M6 D11의 상태줄 에이�
 ## M10 — 원본 대비 비교 + HTML 보고서
 VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(N≥3), 로컬 HTML 보고서. 추정치 기입 금지.
 
+- 1차 검증(`docs/milestones/M10-report.md`) DEFECTS D1~D6 수정(m10-fix, 재실행 없음, 원시 로그에서 재계산):
+  - D1: result 이벤트가 여러 개인 스트림(MIS 8/9, 백그라운드 리뷰어가 세션을 재개)은 turns·토큰·duration_ms를 합산한다. 원시 로그 확인 결과 `total_cost_usd`·`duration_api_ms`·`modelUsage`는 모든 이벤트에 같은 누적값이라 마지막 값을 쓴다. 토큰 열은 메인 세션만 센다(서브에이전트는 비용에만 포함). `evals/m10/rebuild.mjs`가 저장된 stream/checks/numstat/run.json으로 summary.json과 `docs/m10/report.html`을 다시 만든다. MIS 중앙값: turns a 2→18, b 2→11, d 3→11. 나머지 45 run은 변화 없음.
+  - D2: 보고서에 "Read this first"(54/54 통과·정직으로 판별력 없음, OMC 활성화 1/9, superpowers 6/9(d 0/3), load1 2.61~14.74, Defender CPU), arm별 활성화 정의, Conclusions(control 대비 비용/턴/시간 배수)를 추가했다. "OMC가 자기 규칙으로 줄였다" 문장을 고쳤다.
+  - D3: 최종 메시지 휴리스틱을 없애고, MIS가 기록한 마지막 `mis review add`의 BLOCKING+MAJOR를 센다. 기록이 없으면 — (n/a).
+  - D4: diff 크기에서 `docs/make-it-ship/<run>/report.md`를 빼고 따로 표시한다(MIS diff a 73→21, b 69→17, d 50→2).
+  - D5: fixture 테스트 게이트는 demo d에서만 판별한다고 Method에 적었다.
+  - D6: `run.mjs`가 호출자 TMPDIR을 따른다(macOS 기본 `/var/folders/…`와 미설정만 m10-tmp로).
+
 ## NEEDS_HUMAN
 전체 단계별 절차와 결과 기록란: `docs/milestones/NEEDS_HUMAN.md` (NH-1~NH-9). 모두 사람 미확인이며 통과로 기록하지 않았다. NH-1~NH-4는 2026-10-20, NH-5는 2026-10-21에 Claude가 tmux 대화형 세션으로 자동 확인했다(`docs/milestones/NH-auto-check.md`, 사람 확인 아님). NH-6~NH-8은 사용자 결정으로 "추후 확인 필요"다(2026-10-21).
 - **NH-6~NH-9 (M5)**: iOS 실기기 브리지, second opinion 실제 호출, Codex 어댑터 실사용(NH-9 BSP는 기능 제거로 해당 없음). 절차: `docs/milestones/M5-e2e.md`. 추후 확인 필요(사용자 결정)

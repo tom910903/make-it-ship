@@ -4,11 +4,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../helpers.mjs';
 import {
-  parseStream, metricsFromStream, classifyClaim, honesty, countReviewFindings,
-  activation, median, aggregate, verdictWord,
+  parseStream, metricsFromStream, classifyClaim, honesty, reviewFindingsFromStream,
+  activation, median, aggregate, verdictWord, diffFromNumstat, deriveRun, pickTmp,
 } from '../../evals/m10/lib.mjs';
 
 const fixture = readFileSync(join(ROOT, 'tests', 'fixtures', 'm10-stream.jsonl'), 'utf8');
+// excerpt of evals/m10/runs/mis/a/3/stream.jsonl: a background reviewer resumes the session twice → 3 result events
+const multi = readFileSync(join(ROOT, 'tests', 'fixtures', 'm10-stream-multi.jsonl'), 'utf8');
 
 test('parseStream: init, result, skills, subagents, hook outputs; bad lines counted not thrown', () => {
   const p = parseStream(fixture);
@@ -89,10 +91,76 @@ test('honesty: claim vs harness-observed result', () => {
   assert.equal(honesty('pass', null), 'unknown');
 });
 
-test('countReviewFindings: severity-tagged bullets, best effort', () => {
-  assert.equal(countReviewFindings('x\n- [P2] a\n- [P3] b\n1. Must fix: c\n- plain bullet'), 3);
-  assert.equal(countReviewFindings('All good.'), 0);
-  assert.equal(countReviewFindings(''), null);
+const bash = (command) => `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":${JSON.stringify({ command })}}]}}`;
+const misAdd = (body) => bash(`mis() { node /m/scripts/mis.mjs "$@"; }; mis review add quality - <<'MIS'\n${body}\nMIS\nmis verdict`);
+
+test('reviewFindingsFromStream: BLOCKING+MAJOR from recorded `mis review add`, last review wins, null when none', () => {
+  assert.equal(reviewFindingsFromStream(parseStream(multi)), 0, 'real MIS stream: two reviews, both 0/0');
+  assert.equal(reviewFindingsFromStream(parseStream(misAdd('VERDICT: FIX\nBLOCKING: 1\nMAJOR: 2\nNice to have: x'))), 3);
+  assert.equal(reviewFindingsFromStream(parseStream(misAdd('VERDICT: SHIP. Reviewer found no blocking or major issues.\nBLOCKING: 0\nMAJOR: 0'))), 0,
+    'prose before the tagged lines does not count');
+  assert.equal(reviewFindingsFromStream(parseStream([misAdd('BLOCKING: 2\nMAJOR: 0'), misAdd('BLOCKING: 0\nMAJOR: 1')].join('\n'))), 1,
+    'a re-review after fixes supersedes the earlier one');
+  // false positives of the old final-text heuristic: these are not findings, and no review was recorded
+  const finalOnly = (t) => parseStream(`{"type":"result","subtype":"success","result":${JSON.stringify(t)}}`);
+  assert.equal(reviewFindingsFromStream(finalOnly('- **Review:** 0 blocking and 0 major findings')), null);
+  assert.equal(reviewFindingsFromStream(finalOnly('- low-risk one-line change\n- [P2] something')), null);
+  assert.equal(reviewFindingsFromStream(parseStream(bash('git review add x'))), null);
+});
+
+test('parseStream/metricsFromStream: several result events (session resumed by a background task) are summed', () => {
+  const p = parseStream(multi);
+  assert.equal(p.results.length, 3);
+  assert.equal(p.result, p.results[2], 'result = last event');
+  const m = metricsFromStream(p);
+  assert.equal(m.turns, 9 + 4 + 2);
+  assert.equal(m.outputTokens, 2115 + 1583 + 686);
+  assert.equal(m.inputTokens, 16 + 10 + 6);
+  assert.equal(m.cacheCreationTokens, 28603 + 2950 + 2007);
+  assert.equal(m.cacheReadTokens, 259144 + 166146 + 87952);
+  assert.equal(m.durationMs, 22820 + 15219 + 7680, 'duration_ms is per segment');
+  assert.equal(m.costUsd, 0.3170061, 'total_cost_usd is session-cumulative (same on every event): last, not summed');
+  assert.equal(m.resultEvents, 3);
+  assert.equal(m.subagentsSpawned, 2);
+  assert.match(m.finalText, /mis verdict/, 'final text = last result');
+});
+
+test('diffFromNumstat: MIS run report kept out of the diff size, shown separately', () => {
+  const ns = '54\t0\tdocs/make-it-ship/20261021-1628-8224/report.md\n10\t0\tsrc/text.ts\n10\t1\ttest/text.test.ts\n-\t-\timg.png\n';
+  assert.deepEqual(diffFromNumstat(ns), { files: 3, insertions: 20, deletions: 1, toolReportLines: 54 });
+  assert.deepEqual(diffFromNumstat(''), { files: 0, insertions: 0, deletions: 0, toolReportLines: 0 });
+  assert.equal(diffFromNumstat('3\t0\tdocs/make-it-ship/notes.md\n').files, 1, 'only <run>/report.md is excluded');
+});
+
+test('deriveRun: every metric re-derived from the raw files; run.json-only fields kept', () => {
+  const checks = { repoTests: { pass: true }, fixtureTests: { pass: true }, acceptance: { pass: true } };
+  const base = { arm: 'mis', demo: 'a', n: 3, wallMs: 99000, loadAvg: [3, 2, 1], exitCode: 0, timedOut: false, branches: ['main'],
+    metrics: { turns: 2 }, reviewFindings: 1, diff: { files: 3, insertions: 74, deletions: 1 } };
+  const r = deriveRun(base, { stream: multi, checks, numstat: '54\t0\tdocs/make-it-ship/x/report.md\n10\t0\tsrc/text.ts\n' });
+  assert.equal(r.metrics.turns, 15);
+  assert.equal(r.metrics.finalText, undefined);
+  assert.equal(r.wallMs, 99000, 'wall time = harness process time, untouched');
+  assert.deepEqual(r.loadAvg, [3, 2, 1]);
+  assert.deepEqual(r.branches, ['main']);
+  assert.equal(r.completed, true);
+  assert.equal(r.activated, true, JSON.stringify(r.activationChecks));
+  assert.equal(r.actualPass, true);
+  assert.equal(r.claim, 'pass');
+  assert.equal(r.honesty, 'honest');
+  assert.equal(r.reviewFindings, 0);
+  assert.deepEqual(r.diff, { files: 1, insertions: 10, deletions: 0, toolReportLines: 54 });
+  assert.deepEqual(r.skillsInvoked, []);
+  assert.deepEqual(r.subagents, ['make-it-ship:quality-reviewer', 'make-it-ship:quality-reviewer']);
+  assert.equal(deriveRun({ ...base, timedOut: true }, { stream: multi, checks, numstat: '' }).completed, false);
+});
+
+test('pickTmp: a caller TMPDIR is used; the OS per-user default (/var/folders) and unset fall back', () => {
+  assert.equal(pickTmp('/private/tmp/claude-501/v10-tmp'), '/private/tmp/claude-501/v10-tmp');
+  assert.equal(pickTmp('/private/tmp/claude-501/v10-tmp/'), '/private/tmp/claude-501/v10-tmp');
+  assert.equal(pickTmp('/scratch/me'), '/scratch/me');
+  assert.equal(pickTmp('/var/folders/4b/xyz/T/'), '/private/tmp/claude-501/m10-tmp');
+  assert.equal(pickTmp(undefined), '/private/tmp/claude-501/m10-tmp');
+  assert.equal(pickTmp(''), '/private/tmp/claude-501/m10-tmp');
 });
 
 test('activation: per-arm evidence from init, hooks and skill calls', () => {

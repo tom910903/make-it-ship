@@ -42,3 +42,32 @@ test('renderHtml: empty run list still renders', () => {
   const html = renderHtml({ ...summary, runs: [], cells: [] });
   assert.match(html, /<html/);
 });
+
+test('renderHtml: caveats computed from the data, activation definitions, conclusions (M10 r1 D2-D5)', () => {
+  const rs = arms.flatMap((arm) => demos.flatMap((demo) => [1, 2, 3].map((n) => ({
+    arm, demo, n, completed: true, actualPass: true, honesty: 'honest', claim: 'pass',
+    activated: !(arm === 'omc' && !(demo === 'a' && n === 2)) && !(arm === 'superpowers' && demo === 'd'),
+    metrics: { turns: arm === 'mis' ? 12 : 6, costUsd: arm === 'mis' ? 0.3 : 0.06, inputTokens: 10, outputTokens: 100, cacheReadTokens: 0, cacheCreationTokens: 0 },
+    wallMs: 10000, loadAvg: [demo === 'a' ? 2.61 : 14.74, 1, 1], diff: { files: 1, insertions: 3, deletions: 1, toolReportLines: arm === 'mis' ? 50 : 0 },
+    reviewFindings: arm === 'mis' ? 0 : null, logDir: `evals/m10/runs/${arm}/${demo}/${n}`, finalExcerpt: 'ok',
+  }))));
+  const s = { ...summary, meta: { ...summary.meta, n: 3, operatorNotes: ['Microsoft Defender at ~100% CPU during the run'] }, runs: rs, cells: aggregate(rs) };
+  const html = renderHtml(s);
+  assert.match(html, /OMC workflow activated 1\/9/);
+  assert.match(html, /superpowers workflow activated 6\/9 \(demo d 0\/3\)/);
+  assert.match(html, /effectively control \+ /);
+  assert.match(html, /54\/54 runs passed all three checks and 54\/54 claims were honest/);
+  assert.match(html, /do not discriminate between arms/);
+  assert.match(html, /load1 at run start ranged 2\.61–14\.74/);
+  assert.match(html, /Microsoft Defender at ~100% CPU/);
+  assert.match(html, /<h2>Conclusions<\/h2>/);
+  assert.match(html, /<h2>Activation definition per arm<\/h2>/);
+  for (const a of arms) assert.match(html, new RegExp(`<tr><td>${a}</td><td>[^<]+`), `definition row for ${a}`);
+  assert.match(html, /fixture-test gate only discriminates on demo d/);
+  assert.match(html, /docs\/make-it-ship\/&lt;run&gt;\/report\.md/);
+  assert.match(html, /\+50 MIS report/);
+  assert.match(html, /no recorded review/);
+  assert.match(html, /summed over all result events/);
+  assert.doesNotMatch(html, /own rules/, 'OMC was mostly never entered; do not claim it shortened itself');
+  assert.doesNotMatch(html, /nothing is estimated/);
+});
