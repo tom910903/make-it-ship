@@ -113,3 +113,45 @@
   - HANDOFF가 오래된 부분은 §3에 적었다.
 - **NH-5 절의 외부 환경 서술**: 전역 설정 diff가 없다는 것과 cache를 삭제했다는 것은 이 저장소에서 다시 확인할 수 없다. 기록은 AUTO로만 되어 있다.
 - **D-1은 HEAD(c0c11c2)에도 그대로 있다**: guard 파일이 바뀌지 않았다.
+
+## 재검증 (9aaf3b1) — 2026-10-21
+
+대상: `9aaf3b1`.
+- `scripts/guard.mjs:42-45`: 파일 기준 컨텍스트는 그 파일의 `--git-common-dir`이 세션 cwd의 것과 같을 때만 쓴다. 그 밖에는 `context(cwd)`를 쓴다.
+- `tests/integration/guard.test.mjs:113-125`: 새 테스트.
+- `mis-bench.test.mjs:38`: `slow.baselineMs === 1` 단언이 추가됐다.
+
+**판정: D-1 해소. 재검증 PASS.**
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` (HEAD=9aaf3b1) | tests 320, pass 320, fail 0, skipped 0, todo 0 |
+| `claude plugin validate .` | ✔ Validation passed |
+| `node --test guard.test.mjs mis-bench.test.mjs` 3회 | 매회 13 pass / 0 fail |
+| 새 guard 테스트를 27f86f3 guard에 적용 | `not ok 11 … files under .git/ or in a nested repo …`, 1 fail. 이 테스트가 D-1을 실제로 잡는다는 증거다 |
+| 스텁 grep (`scripts tests`, 상태값 `'TODO'` 제외) | 1건: `commands.mjs:512` 문자열 "next TODO task"(상태 안내 문구). 스텁 아님 |
+| 재현 매트릭스: OLD(ce23cbd) / 27f86f3 / HEAD의 guard에 같은 입력 43개 | 아래 표 |
+
+run은 EXECUTING이고, 계획은 T1=`src/a.js`, T2=`src/b.js`, worktree는 T1이다. 결과는 세 버전 순서(OLD / 27f / HEAD)로 적는다.
+
+| 확인 항목 | 입력 | 결과 |
+|---|---|---|
+| (1) D-1 경로가 다시 ask | main cwd → `.git/hooks/pre-commit`, `.git/config`, `.git/worktrees/<id>/HEAD`, `vendor/lib/x.js`, `vendor/lib/new.js`(중첩 저장소) | ask / allow / **ask** (5건 모두) |
+| (1) 상태 위조는 계속 deny | `.git/make-it-ship/runs/x`, `current` | deny / deny / deny |
+| (2) worktree 수정 의도는 유지 | main cwd → WT/src/a.js(T1 소유) | ask / allow / **allow** |
+| (2) | main cwd → WT/src/b.js(T2 소유) | ask / ask / **ask** |
+| (2) | WT cwd → WT/src/b.js, 상대경로 `src/b.js` | ask / ask / ask |
+| (3) 정상 편집에 새 오탐 없음 | main cwd → D/src/a.js, WT cwd → WT/src/a.js, WT cwd → 상대경로 `src/a.js` | allow / allow / allow |
+| (3) `/tmp` ↔ `/private/tmp` 혼용 | cwd와 file을 `/tmp/…` 형식과 `/private/tmp/…` 형식으로 섞은 8가지 조합 | 8건 모두 HEAD가 OLD와 같다. 새 오탐 없음 |
+| 부수 변화 | main cwd → `linkout/o.js`(저장소 밖을 가리키는 symlink), 저장소 밖 `.make-it-ship.json` | ask / allow / ask (원래 동작으로 돌아감) |
+| 부수 변화 | git 아닌 cwd → D/README.md, WT/src/b.js | allow / ask / allow (OLD와 같음) |
+
+나머지 입력은 OLD·27f·HEAD 결과가 같다(`..` 정규화, 없는 경로, 디렉터리 자체 등).
+
+남은 위험(이번 수정과 무관, OLD부터 있었음)
+- **file_path가 실제 경로가 아닐 때**: file_path를 symlink 형식(`/tmp/…`)으로 주면 계획 범위 검사를 하지 않고 allow다.
+  - `repoRoot`는 git이 돌려준 실제 경로(`/private/tmp/…`)라서 문자열 접두사가 맞지 않기 때문이다.
+  - 예: `/tmp`-형식 README.md, WT/src/b.js(T2), .git/config가 세 버전 모두 allow다.
+  - Claude Code가 실제 경로를 넘기면 문제가 없다. 수정 방향은 `abs`에 `realpathSync`(가장 가까운 기존 상위 경로 기준)를 적용하는 것이다. LOW.
+- **git 아닌 cwd에서 저장소 파일 편집**: 다시 allow다(OLD와 같다). 이 경우 세션에 속한 run이 없으므로 Spec §7 적용 범위와 맞다.
+- **사유 문자열**: worktree 디렉터리 자체를 file_path로 넘기면 사유의 `rel`이 빈 문자열이다. 외형상 문제다.

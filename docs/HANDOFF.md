@@ -1,4 +1,4 @@
-# 작업 인계 (HANDOFF) — 2026-10-20
+# 작업 인계 (HANDOFF) — 2026-10-21 갱신
 
 다른 장비나 세션에서 이어서 작업하려면 이 문서부터 읽는다. 진행 기록의 원본은 `docs/PROGRESS.md`와 `git log`다.
 
@@ -9,11 +9,19 @@
   - 원격: `github.com/tom910903/make-it-ship` (비공개)
   - 로컬 `develop`이 이 원격 브랜치를 추적한다.
 - **태그:** `m1-verified` ~ `m5-verified`. 검증 당시의 커밋을 가리킨다.
-- **테스트:** `npm test` 319/319, `claude plugin validate .` 통과.
+- **테스트:** `npm test` 320/320, `claude plugin validate .` 통과.
+- **2026-10-21 작업은 로컬 브랜치 `make-it-ship`에만 커밋했다(push 안 함).** 커밋: `27f86f3`, `8052bd1`, `c0c11c2`, `9aaf3b1`, 그리고 이 문서 갱신.
 - **최종 검증 이후 바뀐 것**(검증 보고서에는 반영되지 않음):
   1. `73e9260` — NH-1~4를 tmux 대화형 세션으로 자동 확인하고 기록했다(`docs/milestones/NH-auto-check.md`).
   2. `75f2fb8` — guard 수정. 파일 편집 범위를 세션 cwd가 아니라 **파일이 있는 worktree** 기준으로 판정한다.
   3. `a95fb61` — **BSP QA 프로파일 제거**(사용자 결정). NH-9는 해당 없음이다.
+  4. `27f86f3` — `mis-bench` 테스트를 결정적으로 바꿨다. baseline을 1e6ms/1ms로 고정한다.
+     - 부하를 걸고 비교했을 때 수정 전은 1/15 실패, 수정 후는 0/15 실패였다.
+  5. `8052bd1` — **위험 플래그 `hardware` 제거**(사용자 결정). Spec §418과 다른 점은 SPEC_CHANGES에 기록했다.
+  6. `c0c11c2` — NH-5 마켓플레이스 설치를 AUTO(tmux)로 확인했다. NH-6·7·8은 "추후 확인 필요"로 표시했다.
+  7. `9aaf3b1` — guard 수정. 사후 재검증 D-1(MEDIUM)을 고쳤다.
+     - 문제: 2번 수정 이후 `.git/` 내부와 중첩 저장소의 파일 편집이 run 중에도 allow됐다.
+     - 결과는 `docs/milestones/POST-FINAL-report.md`에 있다.
 
 ## 2. 다른 장비에서 시작하기
 
@@ -32,20 +40,31 @@ claude --plugin-dir "$PWD"  # 다른 저장소에서 /make-it-ship:run ... 으�
 
 | # | 할 일 | 상태 / 필요한 것 | 참고 |
 |---|---|---|---|
-| 1 | **`mis-bench` 테스트를 결정적으로 만들기** | 실제 걸린 시간(`medianMs >= 30`)으로 판정한다. 그래서 고부하에서 가끔 실패한다. 이전 동시성 테스트처럼 release 파일 게이트 같은 방식으로 바꾼다. | `tests/integration/mis-bench.test.mjs`, 커밋 `555e4ef`(같은 유형 수정 사례) |
-| 2 | **NH-5 마켓플레이스 설치 확인** | 배포 전에 필요하다. 사용자 전역 마켓플레이스 목록이 잠시 바뀌므로 사용자 승인 후 진행한다. | `docs/milestones/NEEDS_HUMAN.md` NH-5 |
-| 3 | **NH-1~4 사람 확인** | Claude가 tmux로 확인한 것은 통과(AUTO)했다. 사람이 직접 누르는 확인은 아직이다. NH-1만 해도 5분 정도 걸린다. | `NH-auto-check.md`, `NEEDS_HUMAN.md` |
-| 4 | **NH-6 iOS 실기기 브리지** | iPhone(개발자 모드, USB)이 연결되면 진행할 수 있다. 쓰지 않을 거면 "해당 없음"으로 닫거나 기능을 제거한다. | `NEEDS_HUMAN.md` NH-6, `templates/ios-debug-bridge/` |
-| 5 | **NH-7 second opinion / NH-8 Codex 어댑터** | 코드가 외부 모델 서비스로 나가서 사내 정책상 막혀 있다. 쓸지 말지를 결정해야 한다. 안 쓰면 해당 없음 처리하거나 기능을 제거한다. | `NEEDS_HUMAN.md` NH-7·8 |
-| 6 | **사후 변경 재검증(선택)** | 위 1장의 세 가지 변경은 최종 독립 검증 이후의 것이다. 필요하면 검증 에이전트를 다시 돌린다. | `docs/milestones/VERIFIER_PROMPT.md` |
-| 7 | **main 브랜치 / PR** | 원격에는 이 feature 브랜치만 있다. main 생성과 PR은 사용자가 요청하면 진행한다. | — |
+| 1 | ~~`mis-bench` 테스트 결정화~~ | **완료** (`27f86f3`, 9aaf3b1에서 보강) | — |
+| 2 | ~~NH-5 마켓플레이스 설치 확인~~ | **AUTO 통과** (2026-10-21, 사용자 승인 후 진행). 사람 확인은 아직이다. | `NH-auto-check.md` NH-5 절 |
+| 3 | **NH-1~5 사람 확인** | Claude가 tmux로 확인한 것은 AUTO로 통과했다. 사람이 직접 누르는 확인은 아직이다. | `NH-auto-check.md`, `NEEDS_HUMAN.md` |
+| 4 | **NH-6 iOS 실기기 브리지** | **추후 확인 필요**(사용자 결정). 기능은 유지한다. iPhone(개발자 모드, USB)을 연결하면 진행할 수 있다. | `NEEDS_HUMAN.md` NH-6 |
+| 5 | **NH-7 second opinion / NH-8 Codex 어댑터** | **추후 확인 필요**(사용자 결정). 사내 정책이 정해진 뒤 결정한다. | `NEEDS_HUMAN.md` NH-7·8 |
+| 6 | ~~사후 변경 재검증~~ | **완료.** 처음에는 DEFECTS FOUND(D-1 MEDIUM)였고, `9aaf3b1`에서 수정한 뒤 재검증했다. | `POST-FINAL-report.md` |
+| 7 | **main 브랜치 / PR / push** | 원격에는 feature 브랜치만 있다. 로컬 `make-it-ship` 브랜치의 2026-10-21 커밋도 아직 push하지 않았다. 사용자가 요청하면 진행한다. | — |
 | 8 | **문서 업로드 정책 확인** | `docs/`의 기획서와 Spec이 개인 계정 GitHub에 올라가 있다. 회사 정책상 문제가 되면 히스토리에서 제외하고 다시 올린다. | — |
 
 ## 4. 열린 결정 (사용자에게 물어볼 것)
 
-- NH-6~8 기능을 유지할지, "해당 없음"으로 닫을지, 제거할지
-- NH-5를 Claude가 대신 진행해도 되는지
-- 일반 위험 플래그 `hardware`를 유지할지(BSP 제거 후에도 지금은 남겨 둠)
+- NH-6~8: 지금은 "추후 확인 필요"(2026-10-21 결정)다. 실기기와 사내 정책이 준비되면 유지할지, 닫을지, 제거할지 결정한다.
+- 문서 업로드 정책(3장 8번)
+- (2026-10-21 결정됨) NH-5는 Claude가 진행했다. `hardware` 플래그는 제거했다.
+
+## 4-1. 남은 위험·정리 거리 (사후 재검증에서 나옴, LOW)
+
+- guard: 다음 경우는 allow다. 의도적 우회는 위협 모델 밖이라 결함이 아니라 위험으로 둔다.
+  - worktree 안의 implementer가 main 트리의 다른 task 파일을 편집하는 경우
+  - `file_path`가 실제 경로가 아닌 경우. 예: `/private/tmp`가 아니라 `/tmp`로 주면 계획 범위 검사를 건너뛴다. 원래 guard부터 있던 동작이다.
+  - (참고) 저장소 밖을 가리키는 symlink 편집과 저장소 밖 `.make-it-ship.json` 편집은 `9aaf3b1` 이후 다시 ask다.
+- 문서 잔재:
+  - `docs/milestones/M5-e2e.md`에 BSP 절차가 남아 있다. 역사 기록이라 수정하지 않았다.
+  - Spec §435 qa 행에 BSP가 남아 있다. Spec은 수정하지 않는다는 규칙에 따라 그대로 두고, 대신 SPEC_CHANGES에 기록했다.
+- bench: WARN 구간(20~50%)을 다루는 테스트가 없다.
 
 ## 5. 작업 규칙 (원래 /goal 지시에서)
 
