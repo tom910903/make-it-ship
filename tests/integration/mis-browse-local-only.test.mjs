@@ -118,7 +118,9 @@ test('local-only: upload needs no confirmation; connect is refused; handoff/resu
   b('upload', '#f', secret);
   writeFileSync(join(dir, 'doc.md'), '# Doc\n\ntext\n');
   failed(mis(dir, ['pdf', 'doc.md'], { env: ENV }), /blocked[\s\S]*\/i/);
-  ok(b('closetab'));
+  // the page posts every 50ms, so any command while it is open (closing it too) may report a blocked request; it is the active tab
+  b('closetab');
+  assert.ok(!ok(b('tabs')).some((t) => t.url.includes('kind=interval')), 'the holding tab was closed');
 });
 
 test('normal browser (control): plain upload is refused, and the same harness measures every path leaking after upload --remote', (t) => {
