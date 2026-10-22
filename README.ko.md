@@ -57,7 +57,7 @@ claude plugin install make-it-ship@make-it-ship
 }
 ```
 
-보고서는 `docs/make-it-ship/<run>/report.md`에 씁니다(템플릿: `templates/report.md`). 같은 run의 보고서 일부입니다.
+보고서는 `docs/make-it-ship/<run>/report.md`에 씁니다. 템플릿(`templates/report.md`)은 한국어로 작성되어 있습니다. 같은 run의 보고서 일부입니다.
 
 ```
 > **판정: PARTIAL** — 배포 준비 완료 아님
@@ -82,7 +82,7 @@ claude plugin install make-it-ship@make-it-ship
 |---|---|---|---|
 | `BLOCKED` | 검증할 수 없었음 | run이 막힘(한도, 도구나 자격 증명 없음), 또는 필수 check가 실행되지 못했고 실패한 check는 없음 | 이유를 해결하고 `/make-it-ship:resume` |
 | `FAILED` | 검증했고 실패함 | 필수 check 실패, 리뷰에 blocking 이슈 | 보고서의 실패 로그 확인 |
-| `PARTIAL` | 실패는 없지만 증거가 모자람 | 오래되었거나 없는 check, 빠진 리뷰, 끝나지 않은 작업, 답하지 않은 HIGH 질문, `mis note dep` 없는 의존성 변경, 승인 없는 설정 변경 | 보고서의 이유를 하나씩 해결 |
+| `PARTIAL` | 실패는 없지만 증거가 모자람 | 오래되었거나 없는 check, 빠진 리뷰, 끝나지 않은 작업이나 병합하지 않은 task worktree, 답하지 않은 HIGH 질문, `mis note dep` 없는 의존성 변경, 승인 없는 설정 변경, 필수 check가 정의되지 않음 | 보고서의 이유를 하나씩 해결 |
 | `VERIFIED` | 필수 check 통과, 필요한 리뷰 있음, 모든 작업 완료 | — | 보고서의 실행 방법대로 확인 |
 
 Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모든 `qa-*` check가 필수입니다. 리뷰는 Quick이 quality, Standard·Full이 spec과 quality이며, 위험 플래그(인증, 결제, 개인정보, 마이그레이션, 보안)가 있으면 security가 추가됩니다. 기록한 뒤 코드나 설정이 바뀐 증거는 `STALE`이 됩니다. run 상태는 `.git/make-it-ship/`에 있어서 커밋되지 않습니다.
@@ -109,7 +109,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 ```
 /make-it-ship:run docs/feature-request.md 구현해줘
 ```
-코드로 답할 수 없는 질문만 하나씩 묻고, 계획을 세운 뒤 critic 에이전트가 검토합니다. 목표, 작업, 완료 기준, 필수 check를 보고 **사용자가 승인**해야 구현을 시작합니다. 작업마다 테스트를 먼저 쓰며, 작업이 3개 이상이면 작업마다 새 서브에이전트가 맡고 spec 리뷰와 quality 리뷰를 거칩니다. 배포까지 원하면 "PR까지 준비해줘"를 덧붙이세요. 그래도 push와 PR 생성은 다시 묻습니다. 계획만 먼저 받으려면 `/make-it-ship:plan`을 씁니다.
+코드로 답할 수 없는 질문만 하나씩 묻고, 계획을 세운 뒤 critic 에이전트가 검토합니다. 목표, 작업, 완료 기준, 필수 check를 보고 **사용자가 승인**해야 구현을 시작합니다. 거절하면 그 자리에서 멈춥니다. 작업마다 테스트를 먼저 쓰며, 작업이 3개 이상이면 작업마다 새 서브에이전트가 맡고 spec 리뷰와 quality 리뷰를 거칩니다. 배포까지 원하면 "PR까지 준비해줘"를 덧붙이세요. 그래도 push와 PR 생성은 다시 묻습니다. 계획만 먼저 받으려면 `/make-it-ship:plan`을 씁니다.
 
 **3. 아이디어만 있을 때**
 ```
@@ -205,7 +205,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 }
 ```
 
-명령은 셸 없이 실행합니다. 명령이 없거나 시간이 초과되면 통과가 아니라 `BLOCKED`입니다. `limits`를 넘으면 BLOCKED가 되고, 계속하려면 사용자 승인이 필요합니다. 사용자 단위 설정은 `mis config get|set`(`~/.make-it-ship/config.json`)으로 다룹니다.
+명령은 셸 없이 실행합니다. 명령이 없거나 시간이 초과되면 통과가 아니라 `BLOCKED`입니다. `limits`를 넘으면 run이 `BLOCKED`가 되고, 계속하려면 사용자 승인이 필요합니다. 사용자 단위 설정은 `mis config get|set`(`~/.make-it-ship/config.json`)으로 다룹니다.
 
 ### 프로젝트 구조와 문서
 
@@ -224,7 +224,7 @@ AGENTS.md         기준 규칙 + 지도(CLAUDE.md가 @AGENTS.md로 가져옴)
 docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
 ```
 
-- `mis init`이 최상위 폴더를 보고 `layout`을 제안합니다(`mis init --write`로만 기록).
+- `mis init`이 최상위 폴더를 보고 `layout`을 제안합니다(`mis init --write`로만 기록. `.make-it-ship.json`이 이미 있으면 `mis init --layout --write`가 `layout`만 추가하며, run 중이면 이 설정 변경에 `mis approve config`가 필요합니다). `layout.docs`가 있으면 사람용 문서를 덮는 glob(`docs/**`)을 계획에 쓸 수 없습니다. 문서와 번역을 하나씩 적으세요. 보고서는 이번 run에서 바뀐 사람용 문서 중 번역이 아직 없는 것을 6절에 적습니다(판정 규칙은 그대로).
 - `mis layout`은 규칙 밖의 파일과 번역이 빠진 문서를 보여 줍니다. `mis layout write`는 없는 `.ai/` 뼈대만 만들고(덮어쓰지 않음), `.ai/structure.md`의 표시된 부분을 다시 만들며, AGENTS.md에 표시된 절과 CLAUDE.md에 `@AGENTS.md`를 씁니다(먼저 묻습니다). `.ai/` 파일은 필요할 때 읽고, import하지 않습니다.
 - run의 계획 단계에서 `mis plan set`은 `paths` 밖의 파일이나 번역이 빠진 사람용 문서가 있는 계획을 거부하고, 위반마다 고치는 방법을 알려 줍니다. 구조를 바꾸는 것은 설정 변경입니다(`mis approve config`).
 

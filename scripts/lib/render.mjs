@@ -53,7 +53,7 @@ const list = (items, empty) => (items.length ? items.map((i) => `- ${i}`).join('
 /**
  * @param data {state, ctx, verdict, changes: {status,path}[], generatedAt}
  */
-export function renderReport(templatePath, { state: s, ctx, verdict: v, changes, debt = [], generatedAt }) {
+export function renderReport(templatePath, { state: s, ctx, verdict: v, changes, layout = [], debt = [], generatedAt }) {
   const latest = latestEvidence(s);
   const tasks = s.plan?.tasks ?? [];
   const evRows = (s.evidence ?? []).map((e) => `| ${e.id} | ${e.check} | \`${(e.argv ?? []).join(' ')}\` | ${e.exitCode ?? '—'} | ${e.status}${e.reason ? ` (${e.reason})` : ''} | ${evidenceStatus(e, ctx)} | ${e.endedAt ?? ''} |`);
@@ -77,6 +77,7 @@ export function renderReport(templatePath, { state: s, ctx, verdict: v, changes,
     if (ctx.required.includes(`qa-${p.profile}`)) continue; // already listed above as a required check
     if (!e || evidenceStatus(e, ctx) !== 'PASS') unverified.push(`${p.profile} 표면(${p.surface}): 실사용 QA(qa-${p.profile}) ${e ? `결과 ${evidenceStatus(e, ctx)}` : '미실행'}${s.mode === 'quick' ? ' — Quick 모드라 판정에는 필수가 아님' : ''}`);
   }
+  for (const m of layout) unverified.push(`구조 규칙(layout): 이번 실행에서 바뀐 사람용 문서 \`${m.file}\`에 번역 \`${m.missing}\`이 없음${m.unknownLanguage ? ` (또는 "${m.unknownLanguage}"가 layout.docs.languages에 없는 언어)` : ''} — \`mis layout\`로 확인, 판정에는 반영되지 않음`);
   const stale = (s.evidence ?? []).filter((e) => e.status !== 'BLOCKED' && evidenceStatus(e, ctx) === 'STALE')
     .map((e) => `${e.id} \`${e.check}\` (${e.status}) — 이후 코드 또는 설정이 바뀌어 무효`);
   const decisions = [];

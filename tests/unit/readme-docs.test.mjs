@@ -28,3 +28,14 @@ test('README.md and README.ko.md link to each other', () => {
   assert.match(readFileSync(join(ROOT, 'README.md'), 'utf8'), /\]\(README\.ko\.md\)/);
   assert.match(readFileSync(join(ROOT, 'README.ko.md'), 'utf8'), /\]\(README\.md\)/);
 });
+
+test('LAYOUT D7/D6: both READMEs give every PARTIAL reason, say rejecting approval stops the run, and match each other', () => {
+  const en = readFileSync(join(ROOT, 'README.md'), 'utf8'), ko = readFileSync(join(ROOT, 'README.ko.md'), 'utf8');
+  const row = (t) => t.split('\n').find((l) => l.startsWith('| `PARTIAL`'));
+  assert.match(row(en), /unmerged task worktrees/); assert.match(row(en), /no required checks defined/);
+  assert.match(row(ko), /병합하지 않은 task worktree/); assert.match(row(ko), /필수 check가 정의되지 않음/);
+  assert.match(en, /declining stops the run/i); assert.match(ko, /거절하면 그 자리에서 멈춥니다/);
+  assert.match(en, /Going over `limits` makes the run `BLOCKED`/); assert.match(ko, /`limits`를 넘으면/);
+  assert.match(en, /written in Korean/); assert.match(ko, /한국어로 작성/);
+  for (const t of [en, ko]) assert.match(t, /mis init --layout --write/);
+});

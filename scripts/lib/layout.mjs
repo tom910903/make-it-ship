@@ -1,8 +1,8 @@
 // Project layout (user decision 2026-10-22): `layout` in .make-it-ship.json lists the path globs new files may use and
 // the doc folders (human docs in every language, AI docs in English). Checked by `mis plan set` and `mis layout`.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { globToRegExp } from './policy.mjs';
 import { REPORT_DIR, repoRoot } from './tree-hash.mjs';
 import { CONFIG_FILE, loadConfig } from './config.mjs';
@@ -35,12 +35,24 @@ function translations(file, docs) {
   return langs.map((l) => (l === 'en' ? `${base}.md` : `${base}.${l}.md`)).filter((f) => f !== file);
 }
 
-/** {outside: files no layout glob matches, missingTranslation: [{file, missing}] for human docs without every language}. */
+/** A two-letter suffix (`x.ja.md`) that is not in languages: probably a language the config does not list (D5). */
+const unknownLang = (file, docs) => { const m = file.match(/\.([a-z]{2}(?:-[a-z0-9]+)?)\.md$/); return m && !(docs?.languages ?? []).includes(m[1]) ? m[1] : null; };
+
+/** {outside: files no layout glob matches, missingTranslation: [{file, missing, unknownLanguage?}] for human docs without every language}. */
 export function layoutViolations(files, layout) {
   const set = new Set(files);
   const outside = files.filter((f) => !inside(f, layout));
-  const missingTranslation = files.flatMap((f) => translations(f, layout.docs).filter((t) => !set.has(t)).map((missing) => ({ file: f, missing })));
+  const missingTranslation = files.flatMap((f) => translations(f, layout.docs).filter((t) => !set.has(t))
+    .map((missing) => { const u = unknownLang(f, layout.docs); return u ? { file: f, missing, unknownLanguage: u } : { file: f, missing }; }));
   return { outside, missingTranslation };
+}
+
+/** D2: a planned glob that can match a human doc (pairs cannot be checked for a glob).
+ * shortcut: tests sample paths built from the glob, not real glob overlap; upgrade if a doc glob slips through. */
+function coversHumanDocs(glob, docs) {
+  if (!isGlob(glob) || !docs?.human || (docs.languages ?? []).length < 2) return false;
+  const re = globToRegExp(glob), g = glob.replace(/\*\*|[*?]/g, 'a');
+  return [g, `${g}.md`, `${g}/x.md`, `${docs.human}/x.md`, `${docs.human}/a/x.md`, `${docs.human}/a/b/x.md`].some((f) => re.test(f) && translations(f, docs).length > 0);
 }
 
 /** A planned glob is broader than an allowed path when it matches a sample file under that path (`src/**` vs `src/lib/**`).
@@ -56,7 +68,10 @@ export function planLayoutErrors(plan, layout) {
   const { missingTranslation } = layoutViolations(all, layout);
   for (const [f, at] of where) {
     if (!inside(f, layout)) errs.push(`${at}: ${f} is outside the layout (allowed: ${layout.paths.join(', ')}); ${broader(f, layout) ? 'narrow the glob to an allowed path' : 'move it under an allowed path or change the layout'}`);
-    for (const m of missingTranslation.filter((x) => x.file === f)) errs.push(`${at}: ${f} needs its translation ${m.missing} in the plan (human docs are written in ${layout.docs.languages.join(', ')})`);
+    if (coversHumanDocs(f, layout.docs)) errs.push(`${at}: ${f} is a glob that covers human docs under ${layout.docs.human}/; list each doc and its translations explicitly (e.g. ${layout.docs.languages.map((l) => `${layout.docs.human}/guide/x${l === 'en' ? '' : `.${l}`}.md`).join(' + ')}) so every pair is checked`);
+    const ms = missingTranslation.filter((x) => x.file === f), u = ms[0]?.unknownLanguage;
+    if (u) errs.push(`${at}: ${f} has an unknown language suffix "${u}" (languages: ${layout.docs.languages.join(', ')}); add "${u}" to layout.docs.languages, or if ".${u}" is part of the name add ${ms.map((m) => m.missing).join(' + ')}`);
+    else for (const m of ms) errs.push(`${at}: ${f} needs its translation ${m.missing} in the plan (human docs are written in ${layout.docs.languages.join(', ')})`);
   }
   return errs;
 }
@@ -125,16 +140,13 @@ const SKELETONS = {
 const files = (root) => execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
   .split('\0').filter((f) => f && existsSync(join(root, f))).sort(); // deleted-but-tracked files are gone
 
+const lexists = (p) => { try { lstatSync(p); return true; } catch { return false; } };
+
 function writeDocs(root, layout) {
   const ai = layout.docs?.ai ?? DEFAULT_DOCS.ai;
-  const written = [];
+  const pending = [];
   const read = (rel) => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), 'utf8') : null);
-  const put = (rel, next) => {
-    if (read(rel) === next) return;
-    mkdirSync(dirname(join(root, rel)), { recursive: true });
-    writeFileSync(join(root, rel), next);
-    written.push(rel);
-  };
+  const put = (rel, next) => { if (read(rel) !== next) pending.push([rel, next]); };
   // Skeletons only where missing; structure.md's marked part always follows the config.
   for (const [k, make] of Object.entries(SKELETONS)) if (k !== 'structure' && read(`${ai}/${AI_DOCS[k]}`) === null) put(`${ai}/${AI_DOCS[k]}`, make(ai));
   const structure = `${ai}/${AI_DOCS.structure}`;
@@ -142,7 +154,20 @@ function writeDocs(root, layout) {
   put('AGENTS.md', upsertBlock(read('AGENTS.md') ?? '', 'LAYOUT', agentsSection(layout, ai)));
   // Claude Code reads CLAUDE.md, not AGENTS.md, but follows @imports; .ai/ files are never imported (they would all load at start).
   put('CLAUDE.md', upsertBlock(read('CLAUDE.md') ?? '', 'LAYOUT', '@AGENTS.md'));
-  return { written };
+  // D1 defence in depth: every target, symlinks resolved, must stay in the repo; checked before the first write.
+  const real = realpathSync(root);
+  for (const [rel] of pending) {
+    let p = resolve(root, rel);
+    while (!lexists(p)) p = dirname(p);
+    let r = null;
+    try { r = realpathSync(p); } catch { /* dangling symlink: refused below */ }
+    if (r === null || (r !== real && !r.startsWith(real + sep))) throw new Error(`${rel} resolves outside the repository (${r ?? 'a dangling symlink'}); nothing written. Fix layout.docs.ai or the symlink.`);
+  }
+  for (const [rel, next] of pending) {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), next);
+  }
+  return { written: pending.map(([rel]) => rel) };
 }
 
 export function layoutCommand([sub, ...rest], cwd) {
@@ -162,5 +187,5 @@ export function layoutCommand([sub, ...rest], cwd) {
   if (json) return { layout, files: all.length, ...v };
   return ['# Layout', '', renderStructure(layout), '', `## Working tree (${all.length} files)`,
     `Outside the layout (${v.outside.length}):`, ...v.outside.map((f) => `- ${f}`),
-    `Human docs missing a translation (${v.missingTranslation.length}):`, ...v.missingTranslation.map((m) => `- ${m.file} → ${m.missing}`)].join('\n');
+    `Human docs missing a translation (${v.missingTranslation.length}):`, ...v.missingTranslation.map((m) => `- ${m.file} → ${m.missing}${m.unknownLanguage ? ` (or "${m.unknownLanguage}" is a language missing from layout.docs.languages)` : ''}`)].join('\n');
 }

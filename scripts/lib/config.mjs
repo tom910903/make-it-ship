@@ -76,7 +76,9 @@ function validateLayout(l, errs) {
   if (l.docs !== undefined) {
     if (!isObj(l.docs)) { errs.push('layout.docs must be an object'); return; }
     unknownKeys(l.docs, ['human', 'ai', 'languages'], 'layout.docs.', errs);
-    for (const k of ['human', 'ai']) if (l.docs[k] !== undefined && !(typeof l.docs[k] === 'string' && /^[^/*?]+(\/[^/*?]+)*$/.test(l.docs[k]))) errs.push(`layout.docs.${k} must be a folder path like "docs" (no globs, no trailing slash)`);
+    // D1: `mis layout write` writes under docs.ai, so a folder must stay inside the repo: no `..`/`.` segment, absolute path, `~` or `\`.
+    const folder = (v) => typeof v === 'string' && /^[^/*?\\~][^/*?\\]*(\/[^/*?\\]+)*$/.test(v) && !v.split('/').some((x) => x === '..' || x === '.');
+    for (const k of ['human', 'ai']) if (l.docs[k] !== undefined && !folder(l.docs[k])) errs.push(`layout.docs.${k} must be a repo-relative folder path like "docs" (no globs, no trailing slash, no "..", ".", "~", "\\" or leading "/")`);
     const langs = l.docs.languages;
     if (langs !== undefined) {
       if (!isStrArr(langs) || !langs.every((x) => /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(x))) errs.push('layout.docs.languages must be language codes like ["en", "ko"]');

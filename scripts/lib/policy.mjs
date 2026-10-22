@@ -334,6 +334,11 @@ function detail(mis, dir, text, env = []) {
       const pages = String(flagOf(mis, '--pages') ?? (mis.includes('--discover') ? '' : '/')).split(',').filter(Boolean);
       return url ? ` [targets: ${list(pages.map((p) => { try { return new URL(p, url).href; } catch { return p; } }))}${mis.includes('--discover') ? `, plus same-origin pages of ${show(url)} found in its sitemap and links` : ''}]` : '';
     }
+    if (a === 'layout' && b === 'write') {
+      // LAYOUT D1: the real targets, from the configured AI docs folder taken verbatim (layout.mjs imports this module, so the names are listed here)
+      const ai = readJsonAt(inRepo(dir, '.make-it-ship.json'))?.layout?.docs?.ai ?? '.ai';
+      return ` [files (created if missing; existing ones change only inside MIS markers): ${['index', 'product', 'structure', 'tech', 'conventions', 'decisions'].map((f) => show(`${ai}/${f}.md`, 160)).join(', ')}, AGENTS.md, CLAUDE.md]`;
+    }
     if (a === 'deploy') {
       const c = readJsonAt(inRepo(dir, '.make-it-ship', 'deploy.json')) ?? {};
       if (b === 'setup') for (const [f, k] of Object.entries(DEPLOY_FLAGS)) { const v = flagOf(mis, f); if (v !== undefined) c[k] = v; }

@@ -559,3 +559,15 @@ test('M9 fix1 D6: external-transfer asks name the destination and what goes ther
     rmf(r, { recursive: true, force: true }); rmf(home, { recursive: true, force: true });
   }
 });
+
+test('LAYOUT D1: the mis layout write question names the files it may write, from the configured AI docs folder', () => {
+  const r = storedRepo({ '.make-it-ship.json': { version: 1, checks: {}, layout: { paths: ['**'], docs: { ai: '../escaped-ai' } } } });
+  const a = classify({ tool_name: 'Bash', tool_input: { command: `${M9F} layout write` }, cwd: r }, { ...ctx, repoRoot: r, activeRun: false });
+  assert.equal(a.decision, 'ask');
+  assert.match(a.reason, /\.\.\/escaped-ai\/index\.md/);
+  assert.match(a.reason, /\.\.\/escaped-ai\/decisions\.md/);
+  assert.match(a.reason, /AGENTS\.md/);
+  const plain = storedRepo({ '.make-it-ship.json': { version: 1, checks: {}, layout: { paths: ['**'] } } });
+  assert.match(classify({ tool_name: 'Bash', tool_input: { command: `${M9F} layout write` }, cwd: plain }, { ...ctx, repoRoot: plain }).reason, /\.ai\/structure\.md/);
+  rmf(r, { recursive: true, force: true }); rmf(plain, { recursive: true, force: true });
+});

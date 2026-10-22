@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRepo, write, mis, git } from '../helpers.mjs';
 
@@ -118,4 +118,61 @@ test('end to end: init --write, layout write, then the working tree has no layou
   assert.deepEqual([j.outside, j.missingTranslation], [[], []]);
   assert.ok(existsSync(join(dir, '.ai', 'structure.md')));
   assert.match(git(dir, 'status', '--porcelain', '-uall'), /\?\? \.ai\/index\.md/);
+});
+
+test('D3: an invalid config during a run makes plan set and plan check refuse (fail closed, like start)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  write(dir, { 'zzz.json': { ...PLAN, plannedFiles: ['zzz/x.ts'] }, 'docs/make-it-ship/plans/p.md': DOC('src/greet.js') });
+  ok(mis(dir, ['start', '--input', 'greet']));
+  write(dir, { '.make-it-ship.json': { ...CFG, layout: { ...LAYOUT, docs: { ...LAYOUT.docs, languages: ['ko'] } } } });
+  const r = mis(dir, ['plan', 'set', 'zzz.json']);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /\.make-it-ship\.json invalid: .*languages must include "en"/);
+  assert.equal(ok(mis(dir, ['status', '--json'])).state.plan, null, 'nothing stored');
+  const c = mis(dir, ['plan', 'check', 'docs/make-it-ship/plans/p.md']);
+  assert.equal(c.code, 1);
+  assert.match(c.json.errors.join('\n'), /\.make-it-ship\.json invalid/);
+});
+
+test('D1: mis layout write refuses a target outside the repo (a symlinked .ai) before writing anything', () => {
+  const outside = makeRepo();
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  symlinkSync(outside, join(dir, '.ai'));
+  const r = mis(dir, ['layout', 'write']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.err, /outside the repository/);
+  assert.equal(existsSync(join(outside, 'index.md')), false, 'nothing written outside');
+  assert.equal(existsSync(join(dir, 'AGENTS.md')), false, 'nothing written at all');
+  const dangling = makeRepo({ '.make-it-ship.json': CFG });
+  symlinkSync(join(outside, 'missing'), join(dangling, '.ai'));
+  assert.match(mis(dangling, ['layout', 'write']).err, /outside the repository \(a dangling symlink\)/);
+  assert.equal(existsSync(join(outside, 'missing')), false);
+});
+
+test('D2: the report lists human docs changed in the run that miss a translation (section 6, not the verdict)', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG, 'docs/guide/old.md': '# old\n' });
+  write(dir, { 'p.json': { ...PLAN, tasks: [{ ...PLAN.tasks[0], files: ['src/greet.js', 'docs/guide/g.md', 'docs/guide/g.ko.md'] }] } });
+  ok(mis(dir, ['start', '--input', 'greet']));
+  ok(mis(dir, ['plan', 'set', 'p.json']));
+  write(dir, { 'src/greet.js': '', 'docs/guide/g.md': '# g\n' }); // the translation was planned but never written
+  const r = ok(mis(dir, ['report']));
+  const md = readFileSync(join(dir, r.path), 'utf8');
+  const s6 = md.split('## 6.')[1].split('## 7.')[0];
+  assert.match(s6, /docs\/guide\/g\.md.*docs\/guide\/g\.ko\.md/);
+  assert.doesNotMatch(s6, /old\.md/, 'only files changed in the run');
+  assert.ok(!r.reasons.some((x) => /translation/.test(x)), 'verdict reasons unchanged');
+});
+
+test('D6: init --layout --write adds only "layout" to an existing config; the init hint names it', () => {
+  const dir = makeRepo({ 'package.json': { scripts: { test: 'node --test' } }, 'src/a.js': '', '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['make', 'x'] } } } });
+  const p = ok(mis(dir, ['init']));
+  assert.match(p.message, /mis init --layout --write/);
+  assert.notEqual(mis(dir, ['init', '--write']).code, 0, 'plain --write still never overwrites');
+  ok(mis(dir, ['init', '--layout', '--write']));
+  const cfg = JSON.parse(readFileSync(join(dir, '.make-it-ship.json'), 'utf8'));
+  assert.deepEqual(cfg.checks, { unit: { argv: ['make', 'x'] } }, 'the rest of the config is kept');
+  assert.deepEqual(cfg.layout, p.config.layout);
+  const again = mis(dir, ['init', '--layout', '--write']);
+  assert.notEqual(again.code, 0);
+  assert.match(again.err, /already has a "layout"/);
 });

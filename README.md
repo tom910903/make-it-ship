@@ -82,7 +82,7 @@ The report's ten sections cover the goal, task status, changed files, real check
 |---|---|---|---|
 | `BLOCKED` | could not verify | the run is blocked (limit, missing tool or credentials), or a required check could not run and none failed | fix the reason, then `/make-it-ship:resume` |
 | `FAILED` | verified, and it fails | a required check failed, or a review has blocking issues | read the failure log in the report |
-| `PARTIAL` | nothing failed, but evidence is missing | stale or missing checks, a missing review, unfinished tasks, an unanswered HIGH question, a dependency change without `mis note dep`, an unapproved config change | work through the reasons in the report |
+| `PARTIAL` | nothing failed, but evidence is missing | stale or missing checks, a missing review, unfinished tasks or unmerged task worktrees, an unanswered HIGH question, a dependency change without `mis note dep`, an unapproved config change, no required checks defined | work through the reasons in the report |
 | `VERIFIED` | required checks pass, required reviews exist, every task is done | — | run it as the report describes |
 
 Quick mode requires `required.quick`; Standard and Full require `required.standard` plus every `qa-*` check. Reviews: quality (Quick), spec and quality (Standard, Full), plus security when risk flags (auth, payment, PII, migration, security) are set. Evidence recorded before the code or config changed becomes `STALE`. Run state lives in `.git/make-it-ship/`, so it is never committed.
@@ -109,7 +109,7 @@ It finds the code involved and picks **Quick** mode for a small low-risk fix (no
 ```
 /make-it-ship:run Implement docs/feature-request.md
 ```
-It asks only the questions the code cannot answer, one at a time, then writes a plan that the critic agent reviews. **You approve** the goal, tasks, acceptance criteria and required checks; nothing is built before that. Each task is test-first; with 3+ tasks each gets a fresh subagent, a spec review and a quality review. Add "and prepare a PR" to ship; push and PR creation still ask. `/make-it-ship:plan` plans now and builds later.
+It asks only the questions the code cannot answer, one at a time, then writes a plan that the critic agent reviews. **You approve** the goal, tasks, acceptance criteria and required checks; nothing is built before that, and declining stops the run. Each task is test-first; with 3+ tasks each gets a fresh subagent, a spec review and a quality review. Add "and prepare a PR" to ship; push and PR creation still ask. `/make-it-ship:plan` plans now and builds later.
 
 **3. You only have an idea**
 ```
@@ -205,7 +205,7 @@ Learned skills live in `.make-it-ship/skills/` or `~/.make-it-ship/skills/`. `/m
 }
 ```
 
-Commands run without a shell. A command that is missing or times out counts as `BLOCKED`, never as passed. Per-user settings: `mis config get|set` (`~/.make-it-ship/config.json`).
+Commands run without a shell. A command that is missing or times out counts as `BLOCKED`, never as passed. Going over `limits` makes the run `BLOCKED`; continuing needs your approval. Per-user settings: `mis config get|set` (`~/.make-it-ship/config.json`).
 
 ### Project layout and docs
 
@@ -224,7 +224,7 @@ AGENTS.md         canonical rules + map (CLAUDE.md imports it: @AGENTS.md)
 docs/             for people, one file per language: guide/x.md + guide/x.ko.md
 ```
 
-- `mis init` proposes a `layout` from your top-level folders (written only with `mis init --write`).
+- `mis init` proposes a `layout` from your top-level folders (written only with `mis init --write`; if `.make-it-ship.json` already exists, `mis init --layout --write` adds only `layout`, and during a run that config change needs `mis approve config`). With `layout.docs`, a planned glob over human docs (`docs/**`) is refused: list each doc and its translations. The report lists human docs changed in the run that still miss a translation (section 6; the verdict rules are unchanged).
 - `mis layout` lists files outside the rules and docs missing a translation. `mis layout write` creates missing `.ai/` skeletons (never overwritten), regenerates the marked part of `.ai/structure.md`, and writes a marked section in AGENTS.md and `@AGENTS.md` in CLAUDE.md (asks first). `.ai/` files are read on demand, not imported.
 - At plan time inside a run, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and says how to fix each. Changing the layout is a config change (`mis approve config`).
 

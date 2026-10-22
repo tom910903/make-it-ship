@@ -3,12 +3,12 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
-import { loadConfig, requiredChecks } from './config.mjs';
+import { loadConfig, requiredChecks, validateConfig, CONFIG_FILE } from './config.mjs';
 import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAlive, TERMINAL } from './state.mjs';
 import { evidenceStatus } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
-import { planLayoutErrors, LAYOUT_FIX, proposeLayout, layoutCommand } from './layout.mjs';
+import { planLayoutErrors, LAYOUT_FIX, proposeLayout, layoutCommand, layoutViolations } from './layout.mjs';
 import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
@@ -179,8 +179,13 @@ function planFromDoc(cwd, file) {
   return pl;
 }
 
-/** Plan stage: with a "layout" in the config, refuse planned files outside it (user decision 2026-10-22). */
-const layoutErrors = (cwd, p) => planLayoutErrors(p, loadConfig(repoRoot(cwd)).config?.layout);
+/** Plan stage: with a "layout" in the config, refuse planned files outside it (user decision 2026-10-22).
+ * D3: an invalid config fails closed (its layout cannot be read), as `mis start` does. */
+function layoutErrors(cwd, p) {
+  const c = loadConfig(repoRoot(cwd));
+  if (c.errors.length) return [`.make-it-ship.json invalid: ${c.errors.join('; ')} (the layout cannot be checked; fix the config, then mis approve config during a run)`];
+  return planLayoutErrors(p, c.config?.layout);
+}
 function checkLayout(cwd, p) {
   const errs = layoutErrors(cwd, p);
   if (errs.length) fail(`plan does not follow the project layout (.make-it-ship.json "layout"):\n${errs.map((e) => `- ${e}`).join('\n')}\n${LAYOUT_FIX}`);
@@ -480,6 +485,15 @@ function changedFiles(root, base, tree) {
   return out.split('\n').filter(Boolean).map((l) => { const [st, ...p] = l.split('\t'); return { status: st, path: p.join(' → ') }; });
 }
 
+/** LAYOUT D2: human docs changed in the run whose translation is missing from the reported tree (report §6 only, not the verdict). */
+function changedLayoutGaps(root, tree, changes) {
+  const layout = loadConfig(root).config?.layout;
+  if (!layout?.docs) return [];
+  const all = execFileSync('git', ['ls-tree', '-r', '-z', '--name-only', tree], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\0').filter(Boolean);
+  const changed = new Set(changes.filter((c) => c.status !== 'D').map((c) => c.path.split(' → ').pop()));
+  return layoutViolations(all, layout).missingTranslation.filter((m) => changed.has(m.file));
+}
+
 function report(args, cwd) {
   return mutate(cwd, (run) => {
     const s = run.state;
@@ -494,7 +508,8 @@ function report(args, cwd) {
     if (s.state === 'VERIFYING') transition(s, 'REPORTED');
     const rel = `${REPORT_DIR}/${s.runId}/report.md`;
     mkdirSync(join(root, REPORT_DIR, s.runId), { recursive: true });
-    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes: changedFiles(root, s.baseCommit, ctx.treeHash), debt: shortcutDebt(root), generatedAt: new Date().toISOString() }));
+    const changes = changedFiles(root, s.baseCommit, ctx.treeHash);
+    writeFileSync(join(root, rel), renderReport(TEMPLATE, { state: s, ctx, verdict: v, changes, layout: changedLayoutGaps(root, ctx.treeHash, changes), debt: shortcutDebt(root), generatedAt: new Date().toISOString() }));
     s.lastReport = { path: rel, verdict: v.verdict, treeHash: ctx.treeHash };
     return { event: { type: 'report', verdict: v.verdict, path: rel }, result: { path: rel, verdict: v.verdict, reasons: v.reasons, state: s.state } };
   });
@@ -784,6 +799,21 @@ function init(args, cwd) {
     statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
   };
+  const cfg = loadConfig(root);
+  if (cfg.exists) { // LAYOUT D6: an existing config is never replaced; only a missing "layout" can be added
+    r.layout = proposeLayout(root);
+    r.message = `${CONFIG_FILE} already exists (not replaced). To add only the proposed "layout", show it to the user and after they confirm run \`mis init --layout --write\` (during a run the config change then needs mis approve config).`;
+  }
+  if (args.includes('--layout') && args.includes('--write')) {
+    if (!cfg.exists) fail(`no ${CONFIG_FILE}: run \`mis init --write\` (it includes the layout)`);
+    const raw = JSON.parse(readFileSync(cfg.path, 'utf8'));
+    if (raw.layout !== undefined) fail(`${CONFIG_FILE} already has a "layout"; edit it instead`);
+    const next = { ...raw, layout: r.layout };
+    const errs = validateConfig(next);
+    if (errs.length) fail(`${CONFIG_FILE} would be invalid: ${errs.join('; ')}`);
+    writeFileSync(cfg.path, JSON.stringify(next, null, 2) + '\n');
+    return { written: cfg.path, layout: r.layout };
+  }
   if (args.includes('--write')) {
     if (!r.config) fail(r.message);
     return { written: writeConfig(root, r.config), config: r.config };
