@@ -224,7 +224,7 @@ AGENTS.md         기준 규칙 + 지도(CLAUDE.md가 @AGENTS.md로 가져옴)
 docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
 ```
 
-- `mis init`이 최상위 폴더를 보고 `layout`을 제안합니다(`mis init --write`로만 기록. `.make-it-ship.json`이 이미 있으면 `mis init --layout --write`가 `layout`만 추가하며, run 중이면 이 설정 변경에 `mis approve config`가 필요합니다). `layout.docs`가 있으면 사람용 문서를 덮는 glob(`docs/**`)을 계획에 쓸 수 없습니다. 문서와 번역을 하나씩 적으세요. 보고서는 이번 run에서 바뀐 사람용 문서 중 번역이 아직 없는 것을 6절에 적습니다(판정 규칙은 그대로).
+- `mis init`이 최상위 폴더를 보고 `layout`을 제안합니다(`mis init --write`로만 기록. `.make-it-ship.json`이 이미 있으면 `mis init --layout --write`가 `layout`만 추가하며, run 중이면 이 설정 변경에 `mis approve config`가 필요합니다). `layout.docs.languages`가 두 개 이상이면 사람용 문서를 덮는 glob(`docs/**`)을 계획에 쓸 수 없습니다. 문서와 번역을 하나씩 적으세요. 보고서는 이번 run에서 바뀐 사람용 문서 중 번역이 아직 없는 것을 6절에 적습니다(판정 규칙은 그대로).
 - `mis layout`은 규칙 밖의 파일과 번역이 빠진 문서를 보여 줍니다. `mis layout write`는 없는 `.ai/` 뼈대만 만들고(덮어쓰지 않음), `.ai/structure.md`의 표시된 부분을 다시 만들며, AGENTS.md에 표시된 절과 CLAUDE.md에 `@AGENTS.md`를 씁니다(먼저 묻습니다). `.ai/` 파일은 필요할 때 읽고, import하지 않습니다.
 - run의 계획 단계에서 `mis plan set`은 `paths` 밖의 파일이나 번역이 빠진 사람용 문서가 있는 계획을 거부하고, 위반마다 고치는 방법을 알려 줍니다. 구조를 바꾸는 것은 설정 변경입니다(`mis approve config`).
 

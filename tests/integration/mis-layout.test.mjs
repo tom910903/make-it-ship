@@ -172,6 +172,7 @@ test('D6: init --layout --write adds only "layout" to an existing config; the in
   const cfg = JSON.parse(readFileSync(join(dir, '.make-it-ship.json'), 'utf8'));
   assert.deepEqual(cfg.checks, { unit: { argv: ['make', 'x'] } }, 'the rest of the config is kept');
   assert.deepEqual(cfg.layout, p.config.layout);
+  assert.doesNotMatch(ok(mis(dir, ['init'])).message, /--layout --write/, 'no hint to a command that would refuse');
   const again = mis(dir, ['init', '--layout', '--write']);
   assert.notEqual(again.code, 0);
   assert.match(again.err, /already has a "layout"/);

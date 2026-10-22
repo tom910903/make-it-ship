@@ -224,7 +224,7 @@ AGENTS.md         canonical rules + map (CLAUDE.md imports it: @AGENTS.md)
 docs/             for people, one file per language: guide/x.md + guide/x.ko.md
 ```
 
-- `mis init` proposes a `layout` from your top-level folders (written only with `mis init --write`; if `.make-it-ship.json` already exists, `mis init --layout --write` adds only `layout`, and during a run that config change needs `mis approve config`). With `layout.docs`, a planned glob over human docs (`docs/**`) is refused: list each doc and its translations. The report lists human docs changed in the run that still miss a translation (section 6; the verdict rules are unchanged).
+- `mis init` proposes a `layout` from your top-level folders (written only with `mis init --write`; if `.make-it-ship.json` already exists, `mis init --layout --write` adds only `layout`, and during a run that config change needs `mis approve config`). With two or more `layout.docs.languages`, a planned glob over human docs (`docs/**`) is refused: list each doc and its translations. The report lists human docs changed in the run that still miss a translation (section 6; the verdict rules are unchanged).
 - `mis layout` lists files outside the rules and docs missing a translation. `mis layout write` creates missing `.ai/` skeletons (never overwritten), regenerates the marked part of `.ai/structure.md`, and writes a marked section in AGENTS.md and `@AGENTS.md` in CLAUDE.md (asks first). `.ai/` files are read on demand, not imported.
 - At plan time inside a run, `mis plan set` refuses a plan with files outside `paths` or a human doc without its translation, and says how to fix each. Changing the layout is a config change (`mis approve config`).
 

@@ -187,6 +187,8 @@ function layoutErrors(cwd, p) {
   return planLayoutErrors(p, c.config?.layout);
 }
 function checkLayout(cwd, p) {
+  const c = loadConfig(repoRoot(cwd));
+  if (c.errors.length) fail(`.make-it-ship.json invalid: ${c.errors.join('; ')}`); // D3: same refusal as mis start
   const errs = layoutErrors(cwd, p);
   if (errs.length) fail(`plan does not follow the project layout (.make-it-ship.json "layout"):\n${errs.map((e) => `- ${e}`).join('\n')}\n${LAYOUT_FIX}`);
 }
@@ -800,15 +802,17 @@ function init(args, cwd) {
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
   };
   const cfg = loadConfig(root);
+  const hasLayout = () => { try { return JSON.parse(readFileSync(cfg.path, 'utf8')).layout !== undefined; } catch { return false; } };
   if (cfg.exists) { // LAYOUT D6: an existing config is never replaced; only a missing "layout" can be added
     r.layout = proposeLayout(root);
-    r.message = `${CONFIG_FILE} already exists (not replaced). To add only the proposed "layout", show it to the user and after they confirm run \`mis init --layout --write\` (during a run the config change then needs mis approve config).`;
+    r.message = hasLayout()
+      ? `${CONFIG_FILE} already exists and has a "layout" (not replaced); \`mis layout\` shows it. Change it by editing the config (during a run: mis approve config).`
+      : `${CONFIG_FILE} already exists (not replaced). To add only the proposed "layout", show it to the user and after they confirm run \`mis init --layout --write\` (during a run the config change then needs mis approve config).`;
   }
   if (args.includes('--layout') && args.includes('--write')) {
     if (!cfg.exists) fail(`no ${CONFIG_FILE}: run \`mis init --write\` (it includes the layout)`);
-    const raw = JSON.parse(readFileSync(cfg.path, 'utf8'));
-    if (raw.layout !== undefined) fail(`${CONFIG_FILE} already has a "layout"; edit it instead`);
-    const next = { ...raw, layout: r.layout };
+    if (hasLayout()) fail(`${CONFIG_FILE} already has a "layout"; edit it instead`);
+    const next = { ...JSON.parse(readFileSync(cfg.path, 'utf8')), layout: r.layout };
     const errs = validateConfig(next);
     if (errs.length) fail(`${CONFIG_FILE} would be invalid: ${errs.join('; ')}`);
     writeFileSync(cfg.path, JSON.stringify(next, null, 2) + '\n');
