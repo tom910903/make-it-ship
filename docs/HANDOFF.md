@@ -49,7 +49,14 @@ Make It Ship 하나만 설치하면 OMC·Superpowers·Ponytail·gstack의 기능
 | M9 | 나머지 기능 전부(A~F) | **4차 검증 PASS**, `m9-verified`(`0c5b755`) | `M9-report-r4.md` |
 | M10 | 원본 4종 + control vs MIS 실측 비교, 로컬 HTML | 실험 54회, 1차 검증 FAIL(집계 오류) → 원시 로그로 재계산 → **2차 검증 PASS**, `m10-verified`(`215ffca`) | `docs/m10/report.html`, `M10-report.md`, `M10-report-r2.md` |
 
-M8·M9 검증 태그 이후의 수정(`b9b2c2c` 이후): browse 실행 설정 변수 검사를 모든 `mis` 명령으로 넓힘(pdf·canary·pair-agent), `sudo --chdir`·`env -vC` 처리, 브라우저 시작 대기 60초, README 한국어판과 사용법, `mis help` 문구. 모두 테스트를 붙였다(전체 768/768).
+M8·M9 검증 태그 이후의 수정(`b9b2c2c` 이후): browse 실행 설정 변수 검사를 모든 `mis` 명령으로 넓힘(pdf·canary·pair-agent), `sudo --chdir`·`env -vC` 처리, 브라우저 시작 대기 60초, README 한국어판과 사용법, `mis help` 문구. 모두 테스트를 붙였다(이후 layout 기능까지 전체 792/792).
+
+**2026-10-22 추가 기능 (사용자 요청): 구조화된 폴더와 사람용·AI용 문서 분리.** 독립 검증 2회를 거쳤다(`LAYOUT-report.md`, `LAYOUT-report-r2.md`; r2의 LOW N1·N2는 고침, N3 메시지 가장자리 경우는 남김).
+- `.make-it-ship.json`의 `layout`에 경로 규칙이 있으면, `mis plan set`이 규칙 밖 파일과 번역 짝이 빠진 사람용 문서를 거부한다(계획 단계에서만, run 밖에서는 강제하지 않음).
+- AI용 문서는 `.ai/`(영어, 짧은 사실 목록): index, product, structure(규칙에서 생성), tech, conventions, decisions, modules/. 사람용 문서는 `docs/`에 `x.md` + `x.ko.md`.
+- 루트 `AGENTS.md`가 기준 파일(핵심 규칙 + `.ai/` 지도)이고, `CLAUDE.md`는 `@AGENTS.md` 한 줄만 둔다. 실제 세션에서 로드되는 것을 확인했다(마커 안에 있어도 로드됨).
+- `mis layout`(검사), `mis layout write`(문서·안내 생성, guard가 물음), `mis init --layout --write`(기존 설정에 layout만 추가).
+- README 영문·한국어판은 유사 GitHub 프로젝트 12개의 README 구성을 조사해 다시 짰다. 긴 참조 내용은 `docs/reference.md` + `.ko.md`로 옮겼다.
 
 M10 결과 요약(중앙값, control 대비): MIS는 비용 4.1~6.1배, 턴 2.2~2.6배, 시간 3.1~5.0배. gstack은 비용 7.5~8.2배. 54회 모두 실제 통과·정직한 보고라서 이 데모로는 통과율·정직성 차이를 말할 수 없고 오버헤드만 비교된다. OMC 워크플로는 9회 중 1회, superpowers는 6회만 실제로 실행됐다. 자세한 주의 사항은 보고서 "Read this first"에 있다.
 
