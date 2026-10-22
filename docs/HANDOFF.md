@@ -66,7 +66,7 @@ gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EX
 
 Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람 확인과 결정이다.
 
-1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기, NH-7·8 외부 모델은 "추후 확인 필요". 절차는 `docs/milestones/NEEDS_HUMAN.md`.
+1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기는 "추후 확인 필요"(시뮬레이터 AUTO 통과). NH-7·8은 2026-10-22 실제 codex로 AUTO 통과(gemini 미설치). 절차는 `docs/milestones/NEEDS_HUMAN.md`.
 2. **master 전환**(사용자 결정 후)
    - master를 만들고 **GitHub 기본 브랜치를 master로 바꾼다**(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
    - version은 2026-10-22에 0.2.0으로 올렸다(사용자 결정). MCP 서버는 이제 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
@@ -78,7 +78,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 
 - (결정됨, 2026-10-22) version 0.2.0. master 전환은 NH 사람 확인 뒤.
 - PROPOSALS의 (a)/(b)
-- NH-6~8: 실기기와 사내 정책이 준비되면 유지·닫기·제거 결정
+- NH-6: 실기기가 준비되면 유지·닫기·제거 결정. NH-7·8: 사람 확인 후 닫기 결정
 - (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에는 M8·M9·M10 결과까지 들어 있다.
 
 ## 4-1. 남은 위험 (LOW)
@@ -101,7 +101,8 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 - 고부하(load 20~280)에서 시간 상한에 기대는 테스트가 흔들렸다. 테스트는 이벤트나 파일 게이트로 결정적으로 만든다.
 - 부하 테스트에 `yes`를 쓸 때는 bash 배열과 `trap … EXIT`로 반드시 종료한다. zsh에서 `kill $pids` 문자열로 넘기면 종료되지 않는다.
 - 테스트 env는 `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CONFIG_DIR`를 지우고, `HOME`·`MIS_STATE_HOME`을 임시 디렉터리로 둔다.
-- 외부 모델 CLI(codex/gemini), ngrok, 실제 배포 서비스는 실제로 호출하지 않는다(사내 정책). 테스트는 stub과 localhost만 쓴다.
+- 자동 테스트(`npm test`)는 외부 모델 CLI(codex/gemini), ngrok, 실제 배포 서비스를 호출하지 않는다. stub과 localhost만 쓴다.
+- 외부 모델 CLI(codex/gemini)는 수동 검증(NH 등)에서 실제로 호출해도 된다(2026-10-22 사용자 결정: 개인 프로젝트). 합성 데모 저장소(`evals/setup-demo.mjs`)에만 쓴다.
 - 플러그인 설치를 확인한 뒤 `~/.claude/plugins/cache/<marketplace>`가 남는다. 직접 지운다.
 
 ## 6. 다른 장비에서 시작하기
@@ -133,7 +134,7 @@ docs/HANDOFF.md를 읽고 3장 "다음에 할 일"을 1번부터 이어서 진�
   - 실행하지 않은 검증을 통과로 기록하기
   - Spec과 ADR에 없는 기능 추가(필요하면 PROGRESS.md 제안으로만)
   - 사내 코드·데이터를 테스트에 쓰기
-  - 외부 모델 CLI(codex/gemini) 호출(사내 정책)
+  - 외부 모델 CLI를 합성 데모 저장소 밖에서 호출하기(2026-10-22 사용자 결정으로 사내 정책 금지는 해제)
 - npm 의존성은 ADR-0003에 따라 허용한다. 다만 마켓플레이스 설치는 `npm install`을 하지 않으므로, 런타임 의존성을 넣으려면 배포 방식을 먼저 정해야 한다.
 - 사람이 확인해야 하는 항목은 NEEDS_HUMAN으로 둔다. Claude가 대신 확인한 것은 "AUTO"로만 적는다.
 - 멈추고 물어볼 때: Spec이나 ADR 결정을 바꿔야 할 때, 같은 문제로 3번 시도해도 진전이 없을 때.
