@@ -291,6 +291,7 @@ export const APPROVAL_MIS = [
   [['canary'], 'mis canary loads your deployed site repeatedly in the browser'],
   [['redact', 'file'], 'mis redact file --apply rewrites the file with personal data and secrets replaced', { when: '--apply' }],
   [['ios', 'sync'], 'mis ios sync --apply overwrites the debug bridge files in this project', { when: '--apply' }],
+  [['layout', 'write'], 'mis layout write writes .ai/ doc skeletons and marked sections in .ai/structure.md, the project AGENTS.md and CLAUDE.md'],
 ];
 const hit = (mis) => ([prefix, , o = {}]) => prefix.every((w, i) => mis[i] === w) && (!o.when || mis.includes(o.when)) && (!o.unless || !mis.includes(o.unless));
 function externalMis(mis, dir = '.', text = '', env = []) {
@@ -332,6 +333,11 @@ function detail(mis, dir, text, env = []) {
       const url = mis.slice(1).find((w, i, xs) => /^https?:\/\//.test(w) && !['--pages', '--interval', '--checks', '--max-pages'].includes(xs[i - 1]));
       const pages = String(flagOf(mis, '--pages') ?? (mis.includes('--discover') ? '' : '/')).split(',').filter(Boolean);
       return url ? ` [targets: ${list(pages.map((p) => { try { return new URL(p, url).href; } catch { return p; } }))}${mis.includes('--discover') ? `, plus same-origin pages of ${show(url)} found in its sitemap and links` : ''}]` : '';
+    }
+    if (a === 'layout' && b === 'write') {
+      // LAYOUT D1: the real targets, from the configured AI docs folder taken verbatim (layout.mjs imports this module, so the names are listed here)
+      const ai = readJsonAt(inRepo(dir, '.make-it-ship.json'))?.layout?.docs?.ai ?? '.ai';
+      return ` [files (created if missing; existing ones change only inside MIS markers): ${['index', 'product', 'structure', 'tech', 'conventions', 'decisions'].map((f) => show(`${ai}/${f}.md`, 160)).join(', ')}, AGENTS.md, CLAUDE.md]`;
     }
     if (a === 'deploy') {
       const c = readJsonAt(inRepo(dir, '.make-it-ship', 'deploy.json')) ?? {};

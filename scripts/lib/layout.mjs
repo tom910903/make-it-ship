@@ -1,0 +1,194 @@
+// Project layout (user decision 2026-10-22): `layout` in .make-it-ship.json lists the path globs new files may use and
+// the doc folders (human docs in every language, AI docs in English). Checked by `mis plan set` and `mis layout`.
+import { execFileSync } from 'node:child_process';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
+import { globToRegExp } from './policy.mjs';
+import { REPORT_DIR, repoRoot } from './tree-hash.mjs';
+import { CONFIG_FILE, loadConfig } from './config.mjs';
+
+/** File names inside the AI docs folder: change them here only. */
+export const AI_DOCS = { index: 'index.md', product: 'product.md', structure: 'structure.md', tech: 'tech.md', conventions: 'conventions.md', decisions: 'decisions.md', modules: 'modules' };
+export const DEFAULT_DOCS = { human: 'docs', ai: '.ai', languages: ['en', 'ko'] };
+
+/** `mis init` proposal: each tracked top-level entry (`dir/**` or the file), then the doc folders and the files MIS writes. */
+export function proposeLayout(root) {
+  const tops = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\0').filter(Boolean)
+    .map((f) => (f.includes('/') ? `${f.split('/')[0]}/**` : f));
+  const extra = [`${DEFAULT_DOCS.ai}/**`, `${DEFAULT_DOCS.human}/**`, CONFIG_FILE, '.make-it-ship/**', 'CLAUDE.md', 'AGENTS.md'];
+  return { paths: [...new Set([...[...new Set(tops)].sort(), ...extra])], docs: { ...DEFAULT_DOCS } };
+}
+
+const isGlob = (p) => /[*?]/.test(p);
+const under = (file, dir) => file.startsWith(`${dir}/`);
+
+/** A file (or a planned glob, taken literally) is inside the layout when some layout glob matches it. */
+const inside = (file, layout) => layout.paths.some((g) => globToRegExp(g).test(file));
+
+/** The other-language files a human doc needs: en is `<name>.md`, every other language `<name>.<lang>.md`. */
+function translations(file, docs) {
+  const langs = docs?.languages ?? [];
+  if (!docs?.human || langs.length < 2 || isGlob(file) || !under(file, docs.human) || !file.endsWith('.md')) return [];
+  if (under(file, REPORT_DIR) || (docs.ai && under(file, docs.ai))) return []; // MIS's own English artefacts; AI docs
+  const m = file.match(/^(.*)\.([a-z]{2,3}(?:-[a-z0-9]+)?)\.md$/);
+  const base = m && langs.includes(m[2]) && m[2] !== 'en' ? m[1] : file.slice(0, -3);
+  return langs.map((l) => (l === 'en' ? `${base}.md` : `${base}.${l}.md`)).filter((f) => f !== file);
+}
+
+/** A two-letter suffix (`x.ja.md`) that is not in languages: probably a language the config does not list (D5). */
+const unknownLang = (file, docs) => { const m = file.match(/\.([a-z]{2}(?:-[a-z0-9]+)?)\.md$/); return m && !(docs?.languages ?? []).includes(m[1]) ? m[1] : null; };
+
+/** {outside: files no layout glob matches, missingTranslation: [{file, missing, unknownLanguage?}] for human docs without every language}. */
+export function layoutViolations(files, layout) {
+  const set = new Set(files);
+  const outside = files.filter((f) => !inside(f, layout));
+  const missingTranslation = files.flatMap((f) => translations(f, layout.docs).filter((t) => !set.has(t))
+    .map((missing) => { const u = unknownLang(f, layout.docs); return u ? { file: f, missing, unknownLanguage: u } : { file: f, missing }; }));
+  return { outside, missingTranslation };
+}
+
+/** D2: a planned glob that can match a human doc (pairs cannot be checked for a glob).
+ * shortcut: tests sample paths built from the glob, not real glob overlap; upgrade if a doc glob slips through. */
+function coversHumanDocs(glob, docs) {
+  if (!isGlob(glob) || !docs?.human || (docs.languages ?? []).length < 2) return false;
+  const re = globToRegExp(glob), g = glob.replace(/\*\*|[*?]/g, 'a');
+  // `?` can hide part of a doc name (`x.m?`, `x.??`): also try the characters of ".md" in each `?` (at most 4^3 names)
+  let qs = [glob.replace(/\*\*|\*/g, 'a')];
+  for (let k = 0; k < 3 && qs.some((q) => q.includes('?')); k++) qs = qs.flatMap((q) => (q.includes('?') ? ['m', 'd', '.', 'a'].map((c) => q.replace('?', c)) : [q]));
+  return [g, `${g}.md`, `${g}/x.md`, `${docs.human}/x.md`, `${docs.human}/a/x.md`, `${docs.human}/a/b/x.md`, ...qs].some((f) => re.test(f) && translations(f, docs).length > 0);
+}
+
+/** A planned glob is broader than an allowed path when it matches a sample file under that path (`src/**` vs `src/lib/**`).
+ * shortcut: one sample per allowed glob, not real glob overlap; enough for the hint, upgrade if hints mislead. */
+const broader = (f, layout) => isGlob(f) && layout.paths.some((g) => globToRegExp(f).test(g.replace(/\*\*|[*?]/g, 'a')));
+
+/** Plan-stage check: every plannedFiles and tasks[].files entry; [] when the layout is off. */
+export function planLayoutErrors(plan, layout) {
+  if (!layout) return [];
+  const all = [...new Set([...(plan.plannedFiles ?? []), ...(plan.tasks ?? []).flatMap((t) => t.files ?? [])])];
+  const where = [...(plan.plannedFiles ?? []).map((f) => [f, 'plannedFiles']), ...(plan.tasks ?? []).flatMap((t, i) => (t.files ?? []).map((f) => [f, `tasks[${i}].files`]))];
+  const errs = [];
+  const { missingTranslation } = layoutViolations(all, layout);
+  for (const [f, at] of where) {
+    if (!inside(f, layout)) errs.push(`${at}: ${f} is outside the layout (allowed: ${layout.paths.join(', ')}); ${broader(f, layout) ? 'narrow the glob to an allowed path' : 'move it under an allowed path or change the layout'}`);
+    if (coversHumanDocs(f, layout.docs)) errs.push(`${at}: ${f} is a glob that covers human docs under ${layout.docs.human}/; list each doc and its translations explicitly (e.g. ${layout.docs.languages.map((l) => `${layout.docs.human}/guide/x${l === 'en' ? '' : `.${l}`}.md`).join(' + ')}) so every pair is checked`);
+    const ms = missingTranslation.filter((x) => x.file === f), u = ms[0]?.unknownLanguage;
+    if (u) errs.push(`${at}: ${f} has an unknown language suffix "${u}" (languages: ${layout.docs.languages.join(', ')}); add "${u}" to layout.docs.languages, or if ".${u}" is part of the name add ${ms.map((m) => m.missing).join(' + ')}`);
+    else for (const m of ms) errs.push(`${at}: ${f} needs its translation ${m.missing} in the plan (human docs are written in ${layout.docs.languages.join(', ')})`);
+  }
+  return errs;
+}
+
+export const LAYOUT_FIX = 'Fix: change the plan (move the files under an allowed path, add the missing translations), or change "layout" in .make-it-ship.json — a config change the user must approve (mis approve config during a run).';
+
+/** The generated part of .ai/structure.md, from the config only (no dates: an unchanged config changes nothing). */
+export function renderStructure(layout) {
+  const d = layout.docs ?? {};
+  const lines = ['Generated by `mis layout write` from "layout" in .make-it-ship.json; change the config, not this section.', '',
+    '## Allowed paths', 'New and changed files must match one of these globs (`mis plan set` refuses a plan that does not).', '',
+    ...layout.paths.map((p) => `- \`${p}\`${layout.purposes?.[p] ? ` — ${layout.purposes[p]}` : ''}`), '', '## Docs', ...docRules(d),
+    '', '## Checks', '- `mis plan set` refuses planned files outside the allowed paths and human docs without every translation.', '- `mis layout` lists violations in the working tree.'];
+  return lines.join('\n');
+}
+
+function docRules(d) {
+  const langs = d.languages ?? ['en'];
+  const out = [];
+  if (d.ai) out.push(`- \`${d.ai}/\`, English only: AI docs, terse facts (paths, commands, rules, invariants). Per-module docs: \`${d.ai}/${AI_DOCS.modules}/<dir path>.md\`.`);
+  if (d.human) {
+    out.push(langs.length > 1
+      ? `- \`${d.human}/\`: human docs, one file per language (${langs.join(', ')}): ${langs.map((l) => `\`${d.human}/guide/x${l === 'en' ? '' : `.${l}`}.md\``).join(' + ')}; change every language together.`
+      : `- \`${d.human}/\`: human docs (${langs.join(', ')}).`);
+    out.push(`- \`${REPORT_DIR}/\` (Make It Ship plans and reports) is English only.`);
+  }
+  return out.length ? out : ['- No doc rules.'];
+}
+
+// ---------------------------------------------------------------- mis layout [--json] | write
+
+/** The marked section replaced in place, or appended; nothing else in the file changes. */
+function upsertBlock(text, tag, body) {
+  const start = `<!-- MIS:${tag}:START -->`, end = `<!-- MIS:${tag}:END -->`;
+  const re = new RegExp(`${start}[\\s\\S]*?${end}`);
+  const block = `${start}\n${body}\n${end}`;
+  if (re.test(text)) return text.replace(re, () => block);
+  return `${text}${text && !text.endsWith('\n') ? '\n' : ''}${text ? '\n' : ''}${block}\n`;
+}
+
+/** "Before X read .ai/<file>": the map in AGENTS.md and .ai/index.md. */
+const docMap = (ai) => [
+  ['starting any task', AI_DOCS.index], ['changing product behavior or scope', AI_DOCS.product], ['running, building, testing or adding dependencies', AI_DOCS.tech],
+  ['adding or moving files', AI_DOCS.structure], ['writing code', AI_DOCS.conventions], ['making a design decision (append one line)', AI_DOCS.decisions],
+  ['working inside a module', `${AI_DOCS.modules}/<dir path>.md`],
+].map(([when, f]) => `- before ${when}: \`${ai}/${f}\``);
+
+/** AGENTS.md section (read by Codex, Cursor, Copilot, Windsurf, Kiro; CLAUDE.md imports it): core rules inline plus the map. */
+function agentsSection(layout, ai) {
+  return ['## Project rules for AI agents', 'Generated by `mis layout write` from "layout" in .make-it-ship.json.', '',
+    `- New and changed files go under: ${layout.paths.map((p) => `\`${p}\``).join(', ')} (details: \`${ai}/${AI_DOCS.structure}\`).`,
+    ...docRules(layout.docs ?? {}),
+    '- Check with `mis layout` (files outside the layout, docs missing a translation); inside a Make It Ship run `mis plan set` refuses a plan that breaks these rules.',
+    '', `Read on demand (English, terse):`, ...docMap(ai)].join('\n');
+}
+
+const SKELETONS = {
+  index: (ai) => `# AI index\n\nOne-screen map. Read the file for the task at hand, not all of them.\n\n${docMap(ai).slice(1).join('\n')}\n`,
+  product: () => '# Product\n\n## Purpose\n\n## Users\n\n## Scope\n- In:\n- Out:\n',
+  tech: () => '# Tech\n\nPoint to the source of truth (package.json scripts, Makefile, CI config) instead of copying it.\n\n## Stack\n\n## Commands\n- build:\n- test:\n- lint:\n',
+  structure: () => '# Structure\n',
+  conventions: () => '# Conventions\n\n## Style\n\n## Forbidden\n',
+  decisions: () => '# Decisions\n\nOne line per decision, newest last: `YYYY-MM-DD — decision — why`.\n',
+};
+
+const files = (root) => execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+  .split('\0').filter((f) => f && existsSync(join(root, f))).sort(); // deleted-but-tracked files are gone
+
+const lexists = (p) => { try { lstatSync(p); return true; } catch { return false; } };
+
+function writeDocs(root, layout) {
+  const ai = layout.docs?.ai ?? DEFAULT_DOCS.ai;
+  const pending = [];
+  const read = (rel) => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), 'utf8') : null);
+  const put = (rel, next) => { if (read(rel) !== next) pending.push([rel, next]); };
+  // Skeletons only where missing; structure.md's marked part always follows the config.
+  for (const [k, make] of Object.entries(SKELETONS)) if (k !== 'structure' && read(`${ai}/${AI_DOCS[k]}`) === null) put(`${ai}/${AI_DOCS[k]}`, make(ai));
+  const structure = `${ai}/${AI_DOCS.structure}`;
+  put(structure, upsertBlock(read(structure) ?? SKELETONS.structure(), 'STRUCTURE', renderStructure(layout)));
+  put('AGENTS.md', upsertBlock(read('AGENTS.md') ?? '', 'LAYOUT', agentsSection(layout, ai)));
+  // Claude Code reads CLAUDE.md, not AGENTS.md, but follows @imports; .ai/ files are never imported (they would all load at start).
+  put('CLAUDE.md', upsertBlock(read('CLAUDE.md') ?? '', 'LAYOUT', '@AGENTS.md'));
+  // D1 defence in depth: every target, symlinks resolved, must stay in the repo; checked before the first write.
+  const real = realpathSync(root);
+  for (const [rel] of pending) {
+    let p = resolve(root, rel);
+    while (!lexists(p)) p = dirname(p);
+    let r = null;
+    try { r = realpathSync(p); } catch { /* dangling symlink: refused below */ }
+    if (r === null || (r !== real && !r.startsWith(real + sep))) throw new Error(`${rel} resolves outside the repository (${r ?? 'a dangling symlink'}); nothing written. Fix layout.docs.ai or the symlink.`);
+  }
+  for (const [rel, next] of pending) {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), next);
+  }
+  return { written: pending.map(([rel]) => rel) };
+}
+
+export function layoutCommand([sub, ...rest], cwd) {
+  const root = repoRoot(cwd);
+  const cfg = loadConfig(root);
+  if (cfg.errors.length) throw new Error(`.make-it-ship.json invalid: ${cfg.errors.join('; ')}`);
+  const layout = cfg.config?.layout ?? null;
+  if (sub === 'write' && !rest.length) {
+    if (!layout) throw new Error('no "layout" in .make-it-ship.json; `mis init` proposes one (add it with the user\'s approval)');
+    return writeDocs(root, layout);
+  }
+  if (!(sub === undefined || (sub === '--json' && !rest.length))) throw new Error('usage: mis layout [--json] | write');
+  const json = sub === '--json';
+  if (!layout) return json ? { layout: null } : 'no "layout" in .make-it-ship.json: layout rules are off. `mis init` proposes one.';
+  const all = files(root);
+  const v = layoutViolations(all, layout);
+  if (json) return { layout, files: all.length, ...v };
+  return ['# Layout', '', renderStructure(layout), '', `## Working tree (${all.length} files)`,
+    `Outside the layout (${v.outside.length}):`, ...v.outside.map((f) => `- ${f}`),
+    `Human docs missing a translation (${v.missingTranslation.length}):`, ...v.missingTranslation.map((m) => `- ${m.file} → ${m.missing}${m.unknownLanguage ? ` (or "${m.unknownLanguage}" is a language missing from layout.docs.languages)` : ''}`)].join('\n');
+}

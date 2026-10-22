@@ -23,7 +23,7 @@ const KEYWORDS = [
   K('clarify', null,
     'The request asks to execute but names no goal, scope or acceptance criteria (OMC ralplan gate). Unless this conversation already settled them (an approved plan, an active run, or the user said to proceed with defaults), invoke /make-it-ship:interview first and turn the request into testable acceptance criteria before writing code.'),
   K('deepinit', /\bdeepinit\b|딥\s?이닛/i,
-    `Hierarchical AGENTS.md (OMC deepinit): read ${fileURLToPath(new URL('../../skills/run/phases/discover.md', import.meta.url))} and follow its deepinit step — deepinit_manifest diff, write AGENTS.md only for changed directories, then deepinit_manifest save.`),
+    `Hierarchical AGENTS.md (OMC deepinit): read ${fileURLToPath(new URL('../../skills/run/phases/discover.md', import.meta.url))} and follow its deepinit step — deepinit_manifest diff, write AGENTS.md only for changed directories (when .make-it-ship.json sets layout.docs.ai: \`.ai/modules/<dir path>.md\` instead, the root as \`.ai/modules/_root.md\`, never over \`.ai/index.md\`), then deepinit_manifest save.`),
   K('autoplan', /\bautoplan\b|오토플랜/i,
     'Invoke /make-it-ship:plan-review in autoplan mode: CEO, design, eng and DX lenses in order, intermediate questions auto-decided by the six decision principles, every auto-decision logged, taste decisions left to the user.'),
   K('office-hours', /\boffice[\s-]hours\b|오피스\s?아워/i,
