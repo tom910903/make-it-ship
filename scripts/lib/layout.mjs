@@ -52,7 +52,10 @@ export function layoutViolations(files, layout) {
 function coversHumanDocs(glob, docs) {
   if (!isGlob(glob) || !docs?.human || (docs.languages ?? []).length < 2) return false;
   const re = globToRegExp(glob), g = glob.replace(/\*\*|[*?]/g, 'a');
-  return [g, `${g}.md`, `${g}/x.md`, `${docs.human}/x.md`, `${docs.human}/a/x.md`, `${docs.human}/a/b/x.md`].some((f) => re.test(f) && translations(f, docs).length > 0);
+  // `?` can hide part of a doc name (`x.m?`, `x.??`): also try the characters of ".md" in each `?` (at most 4^3 names)
+  let qs = [glob.replace(/\*\*|\*/g, 'a')];
+  for (let k = 0; k < 3 && qs.some((q) => q.includes('?')); k++) qs = qs.flatMap((q) => (q.includes('?') ? ['m', 'd', '.', 'a'].map((c) => q.replace('?', c)) : [q]));
+  return [g, `${g}.md`, `${g}/x.md`, `${docs.human}/x.md`, `${docs.human}/a/x.md`, `${docs.human}/a/b/x.md`, ...qs].some((f) => re.test(f) && translations(f, docs).length > 0);
 }
 
 /** A planned glob is broader than an allowed path when it matches a sample file under that path (`src/**` vs `src/lib/**`).
@@ -62,7 +65,7 @@ const broader = (f, layout) => isGlob(f) && layout.paths.some((g) => globToRegEx
 /** Plan-stage check: every plannedFiles and tasks[].files entry; [] when the layout is off. */
 export function planLayoutErrors(plan, layout) {
   if (!layout) return [];
-  const all = [...(plan.plannedFiles ?? []), ...(plan.tasks ?? []).flatMap((t) => t.files ?? [])];
+  const all = [...new Set([...(plan.plannedFiles ?? []), ...(plan.tasks ?? []).flatMap((t) => t.files ?? [])])];
   const where = [...(plan.plannedFiles ?? []).map((f) => [f, 'plannedFiles']), ...(plan.tasks ?? []).flatMap((t, i) => (t.files ?? []).map((f) => [f, `tasks[${i}].files`]))];
   const errs = [];
   const { missingTranslation } = layoutViolations(all, layout);

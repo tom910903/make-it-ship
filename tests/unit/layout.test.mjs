@@ -77,6 +77,11 @@ test('config: layout doc folders must be repo-relative and stay inside the repo 
 test('planLayoutErrors: a glob covering human docs is refused (list each doc and its translations); report and .ai/ globs pass (D2)', () => {
   const errs = (f) => planLayoutErrors({ plannedFiles: [f], tasks: [] }, LAYOUT);
   for (const f of ['docs/**', 'docs/guide/*.md', 'docs/guide/**', 'docs/*']) assert.match(errs(f).join('\n'), /plannedFiles: .* is a glob that covers human docs under docs\/; list each doc and its translations explicitly/, f);
+  // r2 N1: `?` hiding part of a doc name
+  for (const f of ['docs/guide/x.m?', 'docs/guide/x?md', 'docs/guide/x.??']) assert.match(errs(f).join('\n'), /is a glob that covers human docs/, f);
+  // r2 N2: an entry listed in plannedFiles and in a task reports each problem once per place, never twice in one line
+  const dup = planLayoutErrors({ plannedFiles: ['docs/guide/x.md'], tasks: [{ files: ['docs/guide/x.md'] }] }, LAYOUT);
+  assert.equal(new Set(dup).size, dup.length);
   for (const f of ['docs/make-it-ship/**', 'docs/make-it-ship/plans/*.md', '.ai/**', '.ai/modules/*.md', 'src/**', 'docs/img/*.png']) assert.deepEqual(errs(f), [], f);
   assert.deepEqual(planLayoutErrors({ plannedFiles: ['docs/**'], tasks: [] }, { paths: ['docs/**'] }), [], 'no doc rules: globs are fine');
 });
