@@ -147,7 +147,7 @@ Headless screenshots and console errors from your installed browser. In local-on
 | Teams | `/make-it-ship:team`, `/make-it-ship:session` |
 | Skills | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
 | Setup and help | `/make-it-ship:setup`, `/make-it-ship:help`, `/make-it-ship:reference` |
-| Outside services (ask first) | `/make-it-ship:ask`, `/make-it-ship:research`, `/make-it-ship:deploy`, `/make-it-ship:ops`, `/make-it-ship:ios`, `/make-it-ship:telemetry`, `/make-it-ship:gbrain`, `/make-it-ship:design-images`, `/make-it-ship:pair-agent`, `/make-it-ship:writer-memory` |
+| Outside services (ask first) | `/make-it-ship:ask`, `/make-it-ship:research`, `/make-it-ship:deploy`, `/make-it-ship:ops`, `/make-it-ship:ios`, `/make-it-ship:android`, `/make-it-ship:telemetry`, `/make-it-ship:gbrain`, `/make-it-ship:design-images`, `/make-it-ship:pair-agent`, `/make-it-ship:writer-memory` |
 
 ### Key `mis` commands
 

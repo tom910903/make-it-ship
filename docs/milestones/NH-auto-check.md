@@ -194,3 +194,17 @@ MIS ▸ REPORTED · T1/1 · unit✓ · VERIFIED · $0.00
 - 승인 단계: Codex는 "Please run this in the repository terminal: `mis approve plan`"이라고 요청하고 멈췄다. `approve` 이벤트는 1건이고, 시각(03:23:42Z)은 사용자 역할로 터미널에서 직접 실행한 시점이다.
 - 최종: Codex 보고 "Make It Ship verdict: VERIFIED"는 `mis verdict` 출력(`VERIFIED`, unit PASS)과 일치한다. `npm test` 5/5 통과.
 - 참고: 리뷰어가 만든 `.omc/` 실행 디렉터리를 Codex가 스스로 지웠다고 보고했다(사용자 환경의 OMC 훅이 만든 것).
+
+## NH-10 Android — AUTO(에뮬레이터) PASS, 실기기 미확인 (2026-10-22)
+
+이미 실행 중이던 `Medium_Phone`(emulator-5554, sdk_gphone64_arm64)으로 실제 SDK에 대해 확인했다. 실기기는 연결되어 있지 않다.
+
+1. `mis android avds` → `["Medium_Phone"]`. `mis android devices` → `emulator: true`, `blocked: "no connected Android device ... emulator results do not count as device verification"`.
+2. **발견한 버그(수정함):** 같은 AVD가 이미 실행 중이면 `mis android boot`가 새 serial만 기다리다 400초 시간 초과로 실패했다. 이제 `adb emu avd name`으로 AVD를 맞춰 이미 부팅된 것을 `alreadyRunning: true`로 돌려주고, 새로 띄운 emulator 프로세스가 부팅 전에 끝나면 바로 실패한다. 회귀 테스트: `mis-android.test.mjs` "avds and boot".
+3. `launch com.android.settings` → `ui`가 설정 항목 텍스트와 탭 좌표를 돌려줬다(Network & internet 394,615 등). 그 좌표로 `tap` → 하위 화면(Internet, AndroidWifi, SIMs...). `key KEYCODE_BACK` → 원래 목록.
+4. 검색창 `tap` 후 `type "hotspot"` → 입력란에 `hotspot`. 탭 직후 화면이 바뀌기 전에 입력하면 글자가 들어가지 않는다(앱 전환 타이밍). 스킬 문서대로 `ui`로 화면을 확인한 뒤 입력하면 된다.
+5. `type '$(reboot)'` → 종료 코드 1, adb 호출 없음.
+6. `shot` → 1080x2400 PNG.
+7. relay(`daemon start --port 0`): `/healthz` → `{"ok":true,"serial":"emulator-5554"}`, `/screenshot` 200(211852B), `/ui` 78개 노드, `POST /key` 200, `POST /text {"$(reboot)"}` 400, `POST /shell` 404. `daemon stop` → `running: false`.
+8. 검토에서 나온 보안 수정(MEDIUM, 수정함): 루프백 리스너는 토큰이 없어서, 브라우저의 웹 페이지가 preflight 없는 `text/plain` POST나 DNS rebinding으로 기기를 조작하거나 화면을 읽을 수 있었다. 이제 JSON이 아닌 POST는 415, 루프백·tailnet 주소가 아닌 Host는 403이다. 실제 에뮬레이터에서 재확인: JSON `POST /key` 200, content-type 없는 POST 415, `Host: evil.example` 403.
+9. 실제 확인하지 않은 것: tailnet 경로(tailscale 미사용; stub 테스트만), `qa-android`의 `./gradlew connectedDebugAndroidTest`(Android 프로젝트 없음; stub 테스트만), `install`.

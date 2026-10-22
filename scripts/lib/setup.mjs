@@ -20,7 +20,7 @@ const FIRST_TASK = {
 /** First-task type (absorbs gstack-first-task-detect): web | cli | library | unknown. File checks only, no toolchain probes. */
 export function projectType(root) {
   const surfaces = detectQa(root, { surfacesOnly: true }).profiles.map((p) => p.profile);
-  const type = surfaces.includes('web') || surfaces.includes('api') || surfaces.includes('ios') ? 'web'
+  const type = surfaces.includes('web') || surfaces.includes('api') || surfaces.includes('ios') || surfaces.includes('android') ? 'web'
     : surfaces.includes('cli') ? 'cli' : MANIFESTS.some((f) => has(root, f)) ? 'library' : 'unknown';
   return { projectType: type, firstTask: FIRST_TASK[type] };
 }

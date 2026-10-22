@@ -422,11 +422,12 @@ test('M9-D: every external or approval-gated mis subcommand asks with and withou
   const external = ['ask codex "q"', 'ask gemini "q" --file a.md', 'ccg "q"', 'benchmark-models "p" --models codex,gemini', 'interop',
     'telemetry sync', 'telemetry dashboard community', 'gbrain init', 'gbrain import docs', 'gbrain sync', 'gbrain query "x"',
     'gbrain restore git@x:y.git', 'gbrain artifacts-init git@x:y.git', 'gbrain ingest', 'design generate "brief"', 'design variants "b" --count 3',
-    'design iterate s1 "darker"', 'design evolve shot.png "b"', 'pair-agent start', 'pair-agent start --local', 'ios daemon start --tailnet --target http://d', 'ios mint agent1'];
+    'design iterate s1 "darker"', 'design evolve shot.png "b"', 'pair-agent start', 'pair-agent start --local', 'ios daemon start --tailnet --target http://d', 'ios mint agent1',
+    'android daemon start --tailnet', 'android mint agent1'];
   const approval = ['approve proposal p1', 'deploy setup --write --url https://x', 'deploy run', 'deploy run --auto-revert', 'canary https://example.com --checks 2', 'canary https://example.com --discover', 'ios sync --apply', 'redact file notes.md --apply', 'layout write'];
   const readOnly = ['second-opinion detect', 'second-opinion probe', 'telemetry status', 'telemetry on', 'telemetry log --skill qa', 'analytics',
     'gbrain detect', 'gbrain ingest --probe', 'gbrain policy get', 'gbrain enqueue a.md', 'gbrain uninstall', 'design compare', 'design gallery', 'pair-agent stop', 'pair-agent status',
-    'ios daemon start --target http://127.0.0.1:9', 'ios daemon stop', 'ios sync', 'deploy setup', 'deploy status', 'deploy run --dry-run', 'landing-report', 'mission-board',
+    'ios daemon start --target http://127.0.0.1:9', 'ios daemon stop', 'ios sync', 'android daemon start', 'android tap 1 2', 'android boot Medium_Phone', 'deploy setup', 'deploy status', 'deploy run --dry-run', 'landing-report', 'mission-board',
     'wait --seconds 1', 'wait detect', 'wait auto --pane %3', 'detach -- npm test', 'detach --lock evals -- npm test', 'redact file notes.md', 'redact scan --pii --legal', 'research list', 'autoresearch status m', 'self-improve list', 'writer-memory status', 'layout', 'layout --json'];
   for (const c of [ctx, { ...ctx, activeRun: false }]) {
     for (const cmd of external) {
@@ -439,7 +440,7 @@ test('M9-D: every external or approval-gated mis subcommand asks with and withou
   }
   // the registry itself: deleting an entry fails here
   const names = (list) => list.map(([p]) => p.join(' '));
-  for (const p of ['ask', 'ccg', 'benchmark-models', 'interop', 'telemetry sync', 'telemetry dashboard', 'gbrain sync', 'gbrain ingest', 'design generate', 'pair-agent start', 'ios daemon start', 'ios mint']) assert.ok(names(EXTERNAL_MIS).includes(p), p);
+  for (const p of ['ask', 'ccg', 'benchmark-models', 'interop', 'telemetry sync', 'telemetry dashboard', 'gbrain sync', 'gbrain ingest', 'design generate', 'pair-agent start', 'ios daemon start', 'ios mint', 'android daemon start', 'android mint']) assert.ok(names(EXTERNAL_MIS).includes(p), p);
   for (const p of ['approve proposal', 'deploy setup', 'deploy run', 'canary', 'ios sync', 'redact file', 'layout write']) assert.ok(names(APPROVAL_MIS).includes(p), p);
   assert.match(classify(bash(`${M} deploy run --auto-revert`), ctx).reason, /rolls back/, 'the question names the revert');
 });

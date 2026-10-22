@@ -52,6 +52,18 @@ test('qa detect: iOS project → simulator xcodebuild test check (or BLOCKED wit
   assert.deepEqual(s.ios.check.argv, ['xcodebuild', 'test', '-project', 'App.xcodeproj', '-scheme', 'App', '-destination', 'platform=iOS Simulator,name=iPhone 16']);
 });
 
+test('qa detect: Android app → connected instrumentation tests via gradlew (emulator; BLOCKED with nothing online)', () => {
+  const files = { 'settings.gradle.kts': '', 'gradlew': '#!/bin/sh\n', 'app/build.gradle.kts': 'plugins { id("com.android.application") }\n' };
+  const r = by(detectQa(makeRepo(files), { android: { online: true } }));
+  assert.equal(r.android.surface, 'Android app (emulator)');
+  assert.deepEqual(r.android.check.argv, ['./gradlew', 'connectedDebugAndroidTest']);
+  assert.match(r.android.how, /emulator results do not count as device verification/i);
+  assert.match(by(detectQa(makeRepo(files), { android: { online: false } })).android.blocked, /no online Android device or emulator.*mis android boot/);
+  const { gradlew, ...noWrapper } = files;
+  assert.match(by(detectQa(makeRepo(noWrapper), { android: { online: true } })).android.blocked, /gradlew/);
+  assert.equal(by(detectQa(makeRepo({ 'build.gradle': 'apply plugin: "java"\n' }))).android, undefined);
+});
+
 test('qa detect: library without a runtime surface → no profiles', () => {
   assert.deepEqual(detectQa(makeRepo({ 'package.json': { name: 'lib', main: 'index.js' } })).profiles, []);
 });

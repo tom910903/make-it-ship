@@ -18,7 +18,7 @@
 3. **계획과 모드 선택.** 모드는 Quick, Standard, Full 중 하나이며 선택 이유를 함께 밝힙니다. 위험 플래그(인증, 결제, 개인정보, 마이그레이션, 보안)가 있으면 Standard 이상이 됩니다.
 4. **계획 비평과 사용자 승인.** Standard와 Full에서 진행합니다. 위험 플래그가 없는 Quick 변경은 승인을 건너뜁니다.
 5. **구현.** 테스트를 먼저 쓰고, 필요한 만큼만 바꿉니다.
-6. **검증과 QA.** `mis check`가 check를 실행합니다. `mis qa detect`가 찾은 CLI, API, 웹 UI, iOS 시뮬레이터 화면에 대한 실사용 QA check(`qa-*`)도 포함합니다. 읽기 전용 리뷰어 에이전트(spec과 quality, 위험한 변경이면 security 추가)가 변경을 검토합니다.
+6. **검증과 QA.** `mis check`가 check를 실행합니다. `mis qa detect`가 찾은 CLI, API, 웹 UI, iOS 시뮬레이터, Android 에뮬레이터 화면에 대한 실사용 QA check(`qa-*`)도 포함합니다. 읽기 전용 리뷰어 에이전트(spec과 quality, 위험한 변경이면 security 추가)가 변경을 검토합니다.
 7. **보고.** 보고서는 `docs/make-it-ship/<run>/report.md`에 씁니다. 목표, 작업 상태, 변경 파일, 실제 check 결과, 검증하지 못한 부분과 이유, 무효가 된 증거, 사용자가 결정할 일, 결과 실행 방법을 담습니다.
 8. **배포(요청 시, 또는 Full).** 문서와 변경 기록 수정은 검증 전에 합니다. 보고 뒤 `mis ship`이 PR 초안, 변경 기록 초안, 릴리스 체크리스트를 씁니다(VERIFIED가 아니면 `NOT READY`). push와 PR은 사용자가 승인한 뒤에만 합니다.
 
@@ -27,7 +27,7 @@
 - `mis retro`는 여러 run의 지표를 모읍니다.
 - `mis learn add|list`는 프로젝트에서 배운 점을 기록합니다.
 - 다른 모델의 의견(second opinion)이 필요하면 `mis second-opinion detect`가 codex/gemini CLI를 찾습니다. 호출하면 코드가 외부 서비스로 나가므로 사용자가 승인해야만 실행합니다.
-- iOS 실기기 QA는 `templates/ios-debug-bridge/`의 DEBUG 전용 브리지를 씁니다. `mis ios devices`는 기기 목록을, `mis ios bridge-scan`은 남은 브리지 코드를 보여 줍니다.
+- iOS 실기기 QA는 `templates/ios-debug-bridge/`의 DEBUG 전용 브리지를 씁니다. `mis ios devices`는 기기 목록을, `mis ios bridge-scan`은 남은 브리지 코드를 보여 줍니다. Android는 브리지가 필요 없습니다. `mis android`가 adb로 기기와 에뮬레이터를 다룹니다.
 - Codex 사용자는 `adapters/codex/AGENTS.md`를 보세요. 흐름은 같지만 guard가 강제하지는 않습니다.
 
 run 상태는 `.git/make-it-ship/`에 있으므로 커밋되지 않고 코드 해시에도 영향을 주지 않습니다.
@@ -128,6 +128,7 @@ run 상태는 `.git/make-it-ship/`에 있으므로 커밋되지 않고 코드 �
 - **연구:** `/make-it-ship:research` — `mis research`(태그된 증거와 한계를 갖춘 병렬 scientist 단계), `mis autoresearch init|start|eval|status|stop`(미션 하나, 평가기는 `{"pass": bool, "score"?: n}`을 출력해야 함, 최대 실행 시간이나 반복 횟수에서 멈춤, 결정 기록), `mis self-improve propose|tournament|list|show|reject`(프로세스와 스킬 파일만. `mis approve proposal <id>`로만 적용하며 항상 물음). `/make-it-ship:writer-memory` — `mis writer-memory` 스토리 바이블.
 - **다른 모델(물음):** `/make-it-ship:ask` — `mis ask codex|gemini|claude "<q>"`(`.make-it-ship/ask/second-opinion-*.md`에 쓰며 판정은 바꾸지 않음), `mis ccg`, `mis benchmark-models`, `mis interop`(tmux에서 Claude+Codex). `mis second-opinion probe`는 아무것도 보내지 않고 버전과 로그인 상태만 보여 줍니다.
 - **배포와 운영:** `/make-it-ship:deploy` — `mis deploy setup [--write]`, `mis deploy run [--auto-revert]`(VERSION 불일치 확인, CI 대기, 병합, 배포, 상태 확인, 선택적 롤백), `mis canary <url> [--discover]`(상태, 콘솔 오류, 기준 대비 로드 시간, 스크린샷)(모두 물음). `/make-it-ship:ops` — `mis mission-board`와 `mis landing-report`(읽기 전용 스냅숏), `mis wait detect|auto [--watch]`(사용량 한도에서 멈춘 tmux 창을 찾아 한도가 풀리면 재개. `mis detach` 아래의 `--watch`는 미리 걸어 둠) 또는 `mis wait --until <time> -- <resume cmd>`, `mis detach [--lock name] -- <cmd>`(SIGTERM에도 살아남음, 기기 전체 잠금, macOS에서 caffeinate, 로그에 EXIT 표식).
+- **Android 기기와 에뮬레이터:** `/make-it-ship:android` — 연결된 폰이 없으면 실기기 QA는 BLOCKED(에뮬레이터 결과는 실기기 검증이 아님). `mis android avds|boot|ui|shot|tap|type|key|launch|install`, `mis android daemon start [--tailnet]`(고정 API의 루프백 중계. tailnet은 묻고 `mis android mint <agent>` 토큰이 필요).
 - **iOS 기기:** `/make-it-ship:ios` — 연결된 기기가 없으면 BLOCKED. `mis ios sync [--apply]`(템플릿 diff, apply는 물음), `mis ios daemon start --target <bridge url> [--tailnet]`(루프백 중계. tailnet은 묻고 `mis ios mint <agent>` 토큰이 필요).
 - **텔레메트리:** `/make-it-ship:telemetry` — `mis telemetry on|off|status|log`, `mis analytics`(로컬 JSONL만). `mis telemetry sync`와 `dashboard`는 사용자가 정한 엔드포인트로 보내며 묻습니다.
 - **gbrain(물음):** `/make-it-ship:gbrain` — 사용자 자신의 `gbrain` CLI를 쓰는 핵심 흐름(없으면 BLOCKED): detect, init, policy, 비공개 산출물 저장소로 enqueue/sync, ingest `--probe`, query, restore, uninstall. Supabase 프로비저닝, 원격 MCP 점검, brain 캐시/소비자는 포함하지 않습니다.

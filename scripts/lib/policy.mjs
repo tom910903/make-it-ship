@@ -281,6 +281,8 @@ export const EXTERNAL_MIS = [
   [['pair-agent', 'start'], 'mis pair-agent start lets another AI agent drive your browser (and opens a public tunnel unless --local)'],
   [['ios', 'daemon', 'start'], 'mis ios daemon start --tailnet exposes the iOS QA relay on your tailnet', { when: '--tailnet' }],
   [['ios', 'mint'], 'mis ios mint grants a remote agent a token for the iOS QA relay on your tailnet'],
+  [['android', 'daemon', 'start'], 'mis android daemon start --tailnet exposes the Android QA relay (screen and input) on your tailnet', { when: '--tailnet' }],
+  [['android', 'mint'], 'mis android mint grants a remote agent a token for the Android QA relay on your tailnet'],
 ];
 // M9-D: local actions that change the project or touch a deployment only after the user confirms (never silently).
 export const APPROVAL_MIS = [

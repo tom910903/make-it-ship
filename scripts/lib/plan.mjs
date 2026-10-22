@@ -14,7 +14,7 @@ export function validatePlan(p) {
   for (const k of ['constraints', 'nonGoals', 'acceptance', 'plannedFiles', 'howToRun']) {
     if (p[k] !== undefined && !strArr(p[k])) errs.push(`${k} must be an array of non-empty strings`);
   }
-  if (p.ui !== undefined && typeof p.ui !== 'boolean') errs.push('ui must be true or false (UI project: Web or iOS screens)');
+  if (p.ui !== undefined && typeof p.ui !== 'boolean') errs.push('ui must be true or false (UI project: Web, iOS or Android screens)');
   if (p.riskFlags !== undefined && !(strArr(p.riskFlags) && p.riskFlags.every((f) => RISK_FLAGS.includes(f)))) {
     errs.push(`riskFlags must be a subset of ${RISK_FLAGS.join(', ')}`);
   }

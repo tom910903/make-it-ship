@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { findChrome } from './browse/chrome.mjs';
+import { listDevices } from './android.mjs';
 
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
@@ -67,6 +68,15 @@ export function detectQa(root, probe) {
       const target = xcodeproj ? ['-project', xcodeproj] : [];
       profiles.push({ ...base, check: { name: 'qa-ios', argv: ['xcodebuild', 'test', ...target, '-scheme', p.scheme, '-destination', `platform=iOS Simulator,name=${p.simulator}`], timeoutSec: 1800 } });
     }
+  }
+  const gradle = ['build.gradle', 'build.gradle.kts', 'app/build.gradle', 'app/build.gradle.kts'].map((f) => join(root, f)).filter(existsSync);
+  if (gradle.some((f) => /com\.android\.application/.test(readFileSync(f, 'utf8')))) {
+    const p = probe?.surfacesOnly ? { online: true } : probe?.android ?? { online: listDevices().devices.some((d) => d.state === 'device') };
+    const base = { profile: 'android', surface: 'Android app (emulator)',
+      how: 'Run the instrumentation tests on an emulator (mis android avds, mis android boot <avd>); drive flows with mis android ui/tap/shot. Emulator results do not count as device verification (BLOCKED without a device).' };
+    if (!existsSync(join(root, 'gradlew'))) profiles.push({ ...base, check: null, blocked: 'no ./gradlew wrapper in the project; Android QA is BLOCKED' });
+    else if (!p.online) profiles.push({ ...base, check: null, blocked: 'no online Android device or emulator: start one with mis android boot <avd> (mis android avds)' });
+    else profiles.push({ ...base, check: { name: 'qa-android', argv: ['./gradlew', 'connectedDebugAndroidTest'], timeoutSec: 1800 } });
   }
   return { profiles };
 }

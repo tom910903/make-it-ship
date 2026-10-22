@@ -18,7 +18,7 @@ What happens:
 3. **Plan and choose a mode.** The mode is Quick, Standard, or Full, and the plugin gives a reason for its choice. Risk flags (auth, payment, PII, migration, security) force Standard or higher.
 4. **Plan critique and your approval.** These happen in Standard and Full. A Quick change with no risk flags skips approval.
 5. **Implement.** Work is test-first and uses the smallest complete change.
-6. **Verify and QA.** `mis check` runs the checks, including real-use QA checks (`qa-*`) for a CLI, API, web UI, or iOS simulator surface that `mis qa detect` finds. Read-only reviewer agents (spec and quality, plus security for risky changes) review the change.
+6. **Verify and QA.** `mis check` runs the checks, including real-use QA checks (`qa-*`) for a CLI, API, web UI, iOS simulator, or Android emulator surface that `mis qa detect` finds. Read-only reviewer agents (spec and quality, plus security for risky changes) review the change.
 7. **Report.** The report goes to `docs/make-it-ship/<run>/report.md`. It covers the goal, task status, changed files, real check results, what could not be verified and why, invalidated evidence, decisions left to you, and how to run the result.
 8. **Ship (on request, or Full).** Doc and changelog edits happen before verify. After the report, `mis ship` writes a PR draft, a changelog draft and a release checklist (`NOT READY` unless VERIFIED). Push or PR happens only after your approval.
 
@@ -27,7 +27,7 @@ More tools:
 - `mis retro` aggregates metrics across runs.
 - `mis learn add|list` records project learnings.
 - For a second opinion from another model, `mis second-opinion detect` finds codex/gemini CLIs. Calling them sends code to an external service, so it happens only with your approval.
-- iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`. `mis ios devices` lists devices and `mis ios bridge-scan` finds leftover bridge code.
+- iOS device QA uses the DEBUG-only bridge in `templates/ios-debug-bridge/`. `mis ios devices` lists devices and `mis ios bridge-scan` finds leftover bridge code. Android needs no bridge: `mis android` drives devices and emulators over adb.
 - Codex users: see `adapters/codex/AGENTS.md`. Its flow is the same, but no guard enforces it.
 
 Run state lives in `.git/make-it-ship/`, so it is never committed and never affects the code hash.
@@ -128,6 +128,7 @@ Commands that send data off this machine always ask you first (with or without a
 - **Research:** `/make-it-ship:research` — `mis research` (parallel scientist stages with tagged evidence and limits), `mis autoresearch init|start|eval|status|stop` (one mission, evaluator must print `{"pass": bool, "score"?: n}`, stops at max runtime or iterations, decision log), `mis self-improve propose|tournament|list|show|reject` (process and skill files only; applied only by `mis approve proposal <id>`, which always asks). `/make-it-ship:writer-memory` — `mis writer-memory` story bible.
 - **Other models (asks):** `/make-it-ship:ask` — `mis ask codex|gemini|claude "<q>"` (writes `.make-it-ship/ask/second-opinion-*.md`, never changes a verdict), `mis ccg`, `mis benchmark-models`, `mis interop` (tmux Claude+Codex); `mis second-opinion probe` shows versions and login state without sending anything.
 - **Deploy and ops:** `/make-it-ship:deploy` — `mis deploy setup [--write]`, `mis deploy run [--auto-revert]` (VERSION drift check, CI wait, merge, deploy, health check, optional rollback), `mis canary <url> [--discover]` (status, console errors, load time vs baseline, screenshots) (all ask). `/make-it-ship:ops` — `mis mission-board` and `mis landing-report` (read-only snapshots), `mis wait detect|auto [--watch]` (finds tmux panes stopped at a usage limit and resumes them when it resets; `--watch` under `mis detach` arms it ahead of time) or `mis wait --until <time> -- <resume cmd>`, `mis detach [--lock name] -- <cmd>` (survives SIGTERM, machine-wide lock, caffeinate on macOS, EXIT sentinel in the log).
+- **Android devices and emulators:** `/make-it-ship:android` — no connected phone means device QA is BLOCKED (emulator results do not count); `mis android avds|boot|ui|shot|tap|type|key|launch|install`, `mis android daemon start [--tailnet]` (loopback relay with a fixed API; tailnet asks and needs `mis android mint <agent>` tokens).
 - **iOS devices:** `/make-it-ship:ios` — no connected device means BLOCKED; `mis ios sync [--apply]` (template diff; apply asks), `mis ios daemon start --target <bridge url> [--tailnet]` (loopback relay; tailnet asks and needs `mis ios mint <agent>` tokens).
 - **Telemetry:** `/make-it-ship:telemetry` — `mis telemetry on|off|status|log`, `mis analytics` (local JSONL only); `mis telemetry sync` and `dashboard` go to an endpoint you set and ask.
 - **gbrain (asks):** `/make-it-ship:gbrain` — core flow over your own `gbrain` CLI (BLOCKED without it): detect, init, policy, enqueue/sync to a private artifacts repo, ingest `--probe`, query, restore, uninstall. Supabase provisioning, remote MCP checks and brain cache/consumers are not included.

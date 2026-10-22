@@ -2,7 +2,7 @@
 
 Absorbs: gstack design-consultation, design-shotgun, design-html, design-review · OMC designer · Superpowers brainstorming visual companion.
 
-Full mode with a UI (plan `"ui": true`, Web or iOS); in Standard only when the user asks. `mis approve plan` refuses a Full UI plan until a design choice is recorded with `mis note design`.
+Full mode with a UI (plan `"ui": true`, Web, iOS or Android); in Standard only when the user asks. `mis approve plan` refuses a Full UI plan until a design choice is recorded with `mis note design`.
 
 0. `mis taste show` lists what this user approved and rejected before (fonts, palettes, layouts); let it steer the proposal and the variants, and say so.
 1. **Design system proposal** (`DESIGN.md`, gstack design-consultation): product context, aesthetic, typography (up to 3 fonts with roles), color tokens (hex), spacing scale, layout, motion — with a one-line reason each, which choices are SAFE (category baseline) and at least two deliberate RISKS. Reuse an existing design system if the project has one. Avoid default-looking output (Inter/Roboto/Arial as the only type, purple gradients, uniform card grids).

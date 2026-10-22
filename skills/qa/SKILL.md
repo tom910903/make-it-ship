@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Make It Ship real-use QA on its own - detects the CLI, API, web (built-in browser, no Playwright needed), iOS (simulator; device via the debug bridge) surfaces, designs user scenarios, turns them into runnable qa-* checks, and reports BLOCKED where something cannot be exercised. Also report-only QA, design review with live screenshots, and page benchmarks.
+description: Make It Ship real-use QA on its own - detects the CLI, API, web (built-in browser, no Playwright needed), iOS (simulator; device via the debug bridge), Android (emulator or device over adb) surfaces, designs user scenarios, turns them into runnable qa-* checks, and reports BLOCKED where something cannot be exercised. Also report-only QA, design review with live screenshots, and page benchmarks.
 ---
 
 Run the qa phase standalone. `mis` = the shell function `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` (define it in the same Bash call, or type the full `node` command; not a variable: `M="node …"; $M` fails in zsh).

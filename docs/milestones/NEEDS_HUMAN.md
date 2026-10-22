@@ -24,6 +24,7 @@ NH-1~5는 Claude가 tmux 대화형 세션으로 자동 확인했다(`NH-auto-che
 | NH-7 | AUTO(tmux) 통과(codex만; gemini 미설치) · 사람 미확인 | 2026-10-22 `3d8d799` (Claude) | 사용자 결정(2026-10-22): 개인 프로젝트라 외부 모델 호출 허용. `NH-auto-check.md` NH-7 절 |
 | NH-8 | AUTO(tmux) 통과 · 사람 미확인 | 2026-10-22 `3d8d799` (Claude) | 사용자 결정(2026-10-22): 개인 프로젝트라 외부 모델 호출 허용. `NH-auto-check.md` NH-8 절 |
 | NH-9 | 해당 없음 — 기능 제거 | 2026-10-20 | 사용자 결정으로 BSP QA 프로파일 삭제 |
+| NH-10 | AUTO(Android 에뮬레이터) 통과 · **실기기 미확인** | 2026-10-22 (Claude) | 사용자 결정(2026-10-22): Android를 iOS 수준으로 추가. 에뮬레이터 결과는 기기 검증으로 세지 않는다(`NH-auto-check.md` NH-10 절) |
 
 ## NH-1 대화형 승인 확인 창 (`mis approve plan`)
 
@@ -122,6 +123,18 @@ PASS 조건: 3번 `claude plugin list`에 활성 상태로 보이고, 4번에서
 7. 다시 run을 VERIFIED까지 진행해 `mis ship`이 READY인지 확인한다.
 
 PASS 조건: 4번 세 엔드포인트가 응답하고, 5번 NOT READY, 6번 세 확인, 7번 READY가 모두 기대대로다.
+
+## NH-10 Android 실기기
+
+준비물: 개발자 옵션과 USB 디버깅이 켜진 Android 폰(USB 연결, "이 컴퓨터 허용" 승인), Android SDK platform-tools.
+
+1. `node $MIS/scripts/mis.mjs android devices`에서 폰이 `emulator: false`, `state: device`로 보이고 `blocked`가 없는지 확인한다.
+2. 에뮬레이터도 켜져 있으면 serial 없는 `mis android tap 1 1`이 `--serial`을 요구하는지 확인한다.
+3. 폰에서 `mis android launch com.android.settings` → `mis android ui`(설정 항목 텍스트) → 항목 하나를 `center`로 `tap` → `key KEYCODE_BACK` → `shot --out phone.png`(PNG)를 차례로 확인한다.
+4. `mis android daemon start --serial <phone>` 후 `/healthz`, `/screenshot`, `/ui`가 응답하고 `POST /text {"text":"$(reboot)"}`가 400인지 확인한다. `mis android daemon stop`.
+5. (선택, tailscale 있을 때) `--tailnet` 시작과 `mint`에 확인 창이 뜨는지, 토큰 없이 401인지 확인한다.
+
+PASS 조건: 1~4가 기대대로다.
 
 ## NH-7 second opinion 실제 호출
 

@@ -66,12 +66,12 @@ gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EX
 
 Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람 확인과 결정이다.
 
-1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기는 "추후 확인 필요"(시뮬레이터 AUTO 통과). NH-7·8은 2026-10-22 실제 codex로 AUTO 통과(gemini 미설치). 절차는 `docs/milestones/NEEDS_HUMAN.md`.
+1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기는 "추후 확인 필요"(시뮬레이터 AUTO 통과). NH-7·8은 2026-10-22 실제 codex로 AUTO 통과(gemini 미설치). NH-10 Android 실기기도 "추후 확인 필요"(에뮬레이터 AUTO 통과). 절차는 `docs/milestones/NEEDS_HUMAN.md`.
 2. **master 전환**(사용자 결정 후)
    - master를 만들고 **GitHub 기본 브랜치를 master로 바꾼다**(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
    - version은 2026-10-22에 0.2.0으로 올렸다(사용자 결정). MCP 서버는 이제 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
    - 전환 시점: **사람 확인(NH) 뒤**(사용자 결정, 2026-10-22).
-   - 0.2.0 push 이후 `.ai/` layout 기능이 추가됐다. 이미 0.2.0을 설치한 사용자는 version을 올리기 전까지 받지 못한다. **version은 master 전환 때 올린다**(사용자 결정, 2026-10-22; 새 기능이라 0.3.0 권장).
+   - 0.2.0 push 이후 `.ai/` layout 기능과 Android 기기·에뮬레이터 지원(`mis android`, 2026-10-22 사용자 결정)이 추가됐다. 이미 0.2.0을 설치한 사용자는 version을 올리기 전까지 받지 못한다. **version은 master 전환 때 올린다**(사용자 결정, 2026-10-22; 새 기능이라 0.3.0 권장).
 3. **선택 개선(PROGRESS PROPOSALS)**: 모델이 review 전에 `mis report`를 실행하면 리뷰를 다시 기록할 수 없다. (a) 안내 문구 추가 또는 (b) Spec 상태 전이 변경(사용자 결정).
 
 ## 4. 열린 결정

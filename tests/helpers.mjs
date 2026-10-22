@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 // A developer shell's CLAUDE_CONFIG_DIR would point every spawned mis at a real config dir: tests set it or use HOME/.claude.
 delete process.env.CLAUDE_CONFIG_DIR;
+// Same for the Android SDK: tests use a stub adb on PATH, never the real SDK.
+delete process.env.ANDROID_HOME; delete process.env.ANDROID_SDK_ROOT;
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MIS = join(ROOT, 'scripts', 'mis.mjs');

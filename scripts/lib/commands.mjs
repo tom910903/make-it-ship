@@ -42,6 +42,7 @@ import { modelCommands, probeModels } from './commands-models.mjs';
 import { researchCommands, approveProposal } from './commands-research.mjs';
 import { opsCommands } from './commands-ops.mjs';
 import { iosExtra } from './commands-ios.mjs';
+import { android } from './commands-android.mjs';
 import { telemetryCommands } from './telemetry.mjs';
 import { gbrainCommands } from './commands-gbrain.mjs';
 import { designCommands } from './commands-design.mjs';
@@ -827,7 +828,7 @@ function init(args, cwd) {
 
 
 /** Commands by the module that defines them (`mis help` groups by this); later groups override earlier ones. */
-export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, block, cancel, layout: layoutCommand },
+export const commandGroups = { core: { init, start, plan, mode, interview, approve, review, task, check, verdict: verdictCmd, status, report, note, resume, parallel, worktree, qa, ship, retro, learn, 'second-opinion': secondOpinion, bench, ios, android, block, cancel, layout: layoutCommand },
   always: alwaysCommands, browse: browseCommands, team: teamCommands, setup: setupCommands, skill: skillCommands, tty: ttyCommands, flow: flowCommands, models: modelCommands,
   research: researchCommands, ops: opsCommands, telemetry: telemetryCommands, gbrain: gbrainCommands, design: designCommands, pair: pairCommands, help: helpCommands };
 export const commands = Object.assign({}, ...Object.values(commandGroups));

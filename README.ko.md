@@ -147,7 +147,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 | 팀 | `/make-it-ship:team`, `/make-it-ship:session` |
 | 스킬 관리 | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
 | 설정과 도움말 | `/make-it-ship:setup`, `/make-it-ship:help`, `/make-it-ship:reference` |
-| 외부 서비스(먼저 물음) | `/make-it-ship:ask`, `/make-it-ship:research`, `/make-it-ship:deploy`, `/make-it-ship:ops`, `/make-it-ship:ios`, `/make-it-ship:telemetry`, `/make-it-ship:gbrain`, `/make-it-ship:design-images`, `/make-it-ship:pair-agent`, `/make-it-ship:writer-memory` |
+| 외부 서비스(먼저 물음) | `/make-it-ship:ask`, `/make-it-ship:research`, `/make-it-ship:deploy`, `/make-it-ship:ops`, `/make-it-ship:ios`, `/make-it-ship:android`, `/make-it-ship:telemetry`, `/make-it-ship:gbrain`, `/make-it-ship:design-images`, `/make-it-ship:pair-agent`, `/make-it-ship:writer-memory` |
 
 ### 주요 `mis` 명령
 

@@ -16,7 +16,7 @@ const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'secu
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
 const SKILLS = ['run', 'plan', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
-  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent', 'help', 'reference'];
+  'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'android', 'telemetry', 'gbrain', 'design-images', 'pair-agent', 'help', 'reference'];
 
 for (const a of AGENTS) {
   test(`agent ${a}: read-only tools allowlist, untrusted-input warning`, () => {
@@ -321,8 +321,8 @@ test('M9-B features are blended into phases with triggers, artifact paths and re
 });
 
 test('M9-D: external-transfer skills say company policy may forbid it; the scientist agent is read-only with python_repl', () => {
-  for (const s of ['ask', 'ios', 'telemetry', 'gbrain', 'design-images', 'pair-agent']) assert.match(read(`skills/${s}/SKILL.md`), /company policy may forbid/i, s);
-  for (const [s, re] of [['research', /mis approve proposal/], ['research', /ONE message/], ['deploy', /mis canary/], ['telemetry', /off by default/i], ['gbrain', /BLOCKED/], ['ios', /BLOCKED/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
+  for (const s of ['ask', 'ios', 'android', 'telemetry', 'gbrain', 'design-images', 'pair-agent']) assert.match(read(`skills/${s}/SKILL.md`), /company policy may forbid/i, s);
+  for (const [s, re] of [['research', /mis approve proposal/], ['research', /ONE message/], ['deploy', /mis canary/], ['telemetry', /off by default/i], ['gbrain', /BLOCKED/], ['ios', /BLOCKED/], ['android', /BLOCKED/]]) assert.match(read(`skills/${s}/SKILL.md`), re, s);
   const sci = read('agents/scientist.md'), fm = frontmatter(sci);
   assert.equal(fm.tools, 'Read, Grep, Glob, Bash, mcp__plugin_make-it-ship_mis__python_repl');
   for (const re of [/untrusted/i, /\[FINDING:/, /\[EVIDENCE:/, /\[CONFIDENCE:/, /Do not modify/, /\.git\/make-it-ship\//]) assert.match(sci, re);
