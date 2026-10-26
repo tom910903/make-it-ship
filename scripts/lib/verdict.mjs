@@ -13,7 +13,7 @@ const latestBy = (items, key) => {
   return m;
 };
 
-const PLAN_REVIEWS = ['plan-critic', 'product']; // gate plan approval (bound to the plan hash), not the code verdict
+export const PLAN_REVIEWS = ['plan-critic', 'product']; // gate plan approval (bound to the plan hash), not the code verdict
 
 /** Latest code review per kind that was made on the current tree. */
 export function currentReviews(state, treeHash) {

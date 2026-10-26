@@ -5,7 +5,7 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig, requiredChecks, validateConfig, CONFIG_FILE } from './config.mjs';
 import { createRun, loadRun, saveState, withLock, transition, setCurrent, pidAlive, TERMINAL } from './state.mjs';
-import { evidenceStatus } from './verdict.mjs';
+import { evidenceStatus, PLAN_REVIEWS } from './verdict.mjs';
 import { treeHash, repoRoot } from './tree-hash.mjs';
 import { validatePlan, hashPlan } from './plan.mjs';
 import { planLayoutErrors, LAYOUT_FIX, proposeLayout, layoutCommand, layoutViolations } from './layout.mjs';
@@ -346,14 +346,18 @@ function review([sub, kind, file], cwd) {
   const counts = parseReview(text);
   return mutate(cwd, (run) => {
     const s = run.state;
-    if (TERMINAL.includes(s.state)) fail(`run is ${s.state}`);
+    const reopen = s.state === 'REPORTED' && !PLAN_REVIEWS.includes(kind);
+    if (TERMINAL.includes(s.state) && !reopen) fail(`run is ${s.state}`);
+    if (reopen) transition(s, 'VERIFYING');
     const n = s.reviews.length + 1;
     mkdirSync(join(run.dir, 'reviews'), { recursive: true });
     const dest = `reviews/${n}-${kind}.md`;
     writeFileSync(join(run.dir, dest), text);
     const rec = { kind, treeHash: treeHash(cwd), planHash: s.planHash, ...counts, file: dest, at: new Date().toISOString() };
     s.reviews.push(rec);
-    return { event: { type: 'review', kind, ...counts }, result: rec };
+    if (!reopen) return { event: { type: 'review', kind, ...counts }, result: rec };
+    const reopened = 'REPORTED -> VERIFYING';
+    return { event: { type: 'review', kind, ...counts, reopened }, result: { ...rec, reopened, next: 'the reported run was reopened for this review; run mis report again for the final verdict' } };
   });
 }
 

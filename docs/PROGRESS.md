@@ -187,9 +187,10 @@ VERIFY: PENDING — 같은 합성 데모로 원본 4종과 MIS를 실제 실행(
 ## BLOCKED
 
 ## PROPOSALS
-- (2026-10-21, M10 스모크에서 관찰) 모델이 review 단계 전에 `mis report`를 실행하면, run이 REPORTED가 되어 그 뒤의 `mis review add`가 거부된다. 결과 판정은 정직하게 PARTIAL(리뷰 누락)로 남지만 품질 리뷰는 빠진다. M9 4차 dogfood에서는 순서가 지켜졌다. 제안: (a) 필수 리뷰가 없을 때 `mis report`가 "review 단계가 남았다"는 next 안내를 출력한다(상태 전이는 바꾸지 않음), 또는 (b) Spec 상태 전이에 REPORTED → VERIFYING 재개를 추가한다. (b)는 Spec 변경이라 사용자 결정이 필요하다.
+- (2026-10-21 제안, 2026-10-26 해결) review 전에 `mis report`를 실행해 리뷰가 거부되던 문제: 사용자가 (b)를 선택했다. SPEC_CHANGES 참고.
 
 ## SPEC_CHANGES
+- (사용자 결정, 2026-10-26, PROPOSALS b) Spec §5.3 상태 전이에 **REPORTED → VERIFYING 재개**를 추가했다. 현재 run이 REPORTED일 때 코드 리뷰(`spec|quality|security|design`)를 `mis review add`로 기록하면 run이 VERIFYING으로 다시 열리고, 결과에 `reopened`와 "mis report를 다시 실행" 안내가 나온다(이벤트 `review`에 `reopened` 기록). 계획 리뷰(plan-critic·product)는 다시 열지 않는다. BLOCKED·CANCELLED에서는 어떤 전이도 없다. REPORTED에서 그 밖의 명령(`mis check` 등)은 여전히 거부된다. Spec 본문은 수정하지 않았다. 테스트: `state.test.mjs` 전이표, `mis-report.test.mjs` 재개 2건.
 - (M6 9차, 구조 변경) 해로운 오판(잘못 끄기·잘못 켜기)이 구조적으로 불가능하도록: cancel은 닫힌 목록의 완성된 끄기 단어만(부정 활용형은 목록에 없음), 접두형도 본문에 끄기 어간이 있으면 자동 loop 대신 모델 힌트. 판단이 갈리면 항상 모델에게 넘긴다.
 - (M6 6차, 같은 원칙 적용) cancel도 프롬프트 전체가 짧은 끄기 요청일 때만 자동 실행하고, 그 밖의 문장은 `loop-hint`로 모델이 판단한다(힌트에 `mis loop cancel` 안내 포함). 접두형 검사는 정리 전 원문 기준.
 - (사용자 결정, 2026-10-20, M9 B0) 원본의 계획·리뷰·디자인·문서 기능(office-hours, plan-*-review, spec, autoplan, design-*, document-generate 등)은 단독 명령 약 30개로 만들지 않고 **개발 흐름에 녹인다**: `/make-it-ship:run`의 해당 단계에서 상황(모드·UI·신규 제품 여부 등)에 따라 자동으로 쓰이고, run 밖에서는 자연어 요청이 기존 스킬(plan-review, review, qa, ship 등)과 키워드 라우터로 연결된다. 새 최상위 명령은 꼭 필요한 것만 둔다.

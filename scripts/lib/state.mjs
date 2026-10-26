@@ -22,9 +22,11 @@ const NEXT = {
   VERIFYING: ['EXECUTING', 'REPORTED'],
 };
 export const TERMINAL = ['REPORTED', 'BLOCKED', 'CANCELLED'];
+// SPEC_CHANGES (PROPOSALS b): a code review recorded after the report reopens it; nothing else leaves a terminal state.
+const REOPEN = { REPORTED: ['VERIFYING'] };
 
 export function canTransition(from, to) {
-  if (TERMINAL.includes(from)) return false;
+  if (TERMINAL.includes(from)) return (REOPEN[from] ?? []).includes(to);
   return to === 'BLOCKED' || to === 'CANCELLED' || (NEXT[from] ?? []).includes(to);
 }
 

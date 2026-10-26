@@ -72,12 +72,12 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
    - version은 2026-10-22에 0.2.0으로 올렸다(사용자 결정). MCP 서버는 이제 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
    - 전환 시점: **사람 확인(NH) 뒤**(사용자 결정, 2026-10-22).
    - 0.2.0 push 이후 `.ai/` layout 기능과 Android 기기·에뮬레이터 지원(`mis android`, 2026-10-22 사용자 결정)이 추가됐다. 이미 0.2.0을 설치한 사용자는 version을 올리기 전까지 받지 못한다. **version은 master 전환 때 올린다**(사용자 결정, 2026-10-22; 새 기능이라 0.3.0 권장).
-3. **선택 개선(PROGRESS PROPOSALS)**: 모델이 review 전에 `mis report`를 실행하면 리뷰를 다시 기록할 수 없다. (a) 안내 문구 추가 또는 (b) Spec 상태 전이 변경(사용자 결정).
+3. ~~선택 개선(PROPOSALS)~~ 2026-10-26 (b)로 해결: 보고 뒤 코드 리뷰를 기록하면 run이 REPORTED → VERIFYING으로 다시 열린다(PROGRESS SPEC_CHANGES).
 
 ## 4. 열린 결정
 
 - (결정됨, 2026-10-22) version 0.2.0. master 전환은 NH 사람 확인 뒤.
-- PROPOSALS의 (a)/(b)
+- (결정됨, 2026-10-26) PROPOSALS (b) 적용.
 - NH-6: 실기기가 준비되면 유지·닫기·제거 결정. NH-7·8: 사람 확인 후 닫기 결정
 - (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에는 M8·M9·M10 결과까지 들어 있다.
 
