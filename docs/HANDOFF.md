@@ -1,14 +1,15 @@
-# 작업 인계 (HANDOFF) — 2026-10-22
+# 작업 인계 (HANDOFF) — 2026-10-30
 
 새 세션은 이 문서부터 읽는다. 원본 기록은 `docs/PROGRESS.md`, `git log`, `docs/milestones/*-report*.md`다.
 
 ## 0. 통합 라인
 
-- **개발은 `feature/make-it-ship-m1-m5` 한 라인에서 끝낸 뒤 master로 만든다**(사용자 결정, 2026-10-21).
-  - 로컬과 원격 모두 `feature/make-it-ship-m1-m5` 브랜치 하나만 쓴다(로컬 브랜치가 원격을 추적).
+- **2026-10-30 master로 전환했다**(사용자 결정: NH 사람 확인 전에 전환). 이제 개발 라인과 GitHub 기본 브랜치는 `master`이고, version은 0.3.0이다. 마켓플레이스 설치도 master에서 받는다.
+  - 이전 라인 `feature/make-it-ship-m1-m5`는 원격에 그대로 남아 있다(master 전환 시점과 같은 내용까지만). 지울지는 사용자가 정한다.
+- (이전 기록) 개발은 `feature/make-it-ship-m1-m5` 한 라인에서 끝낸 뒤 master로 만든다(사용자 결정, 2026-10-21).
   - 작업 worktree: `~/orca/workspaces/make-it-ship/make-it-ship`
   - 저장소 본체 `~/Dev/Git/tools/make-it-ship`(main worktree, `.git`이 있는 곳)는 detached HEAD로 둔다. 같은 브랜치를 두 곳에서 checkout할 수 없기 때문이다.
-  - 원격: `github.com/tom910903/make-it-ship` (비공개). 이 브랜치가 원격 기본 브랜치이고, 마켓플레이스 설치도 이 브랜치에서 받는다.
+  - 원격: `github.com/tom910903/make-it-ship` (비공개).
 - 2026-10-21에 모든 작업 브랜치를 이 라인으로 병합하고 정리했다.
   - 병합 순서: `develop`(M6·M7 검증 PASS, 병합 검증 PASS) → `m9-fix4` → `m9-fix3` → `m8-wip`.
   - 병합 당시 M8·M9는 검증 FAIL 상태였다. 이후 이 라인에서 고쳐 둘 다 4차 검증 PASS(2026-10-21)를 받았다.
@@ -67,16 +68,14 @@ gap-matrix(병합 전 m9-wip 기준): ABSORBED 341 / PARTIAL 23 / MISSING 8 / EX
 Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람 확인과 결정이다.
 
 1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기는 "추후 확인 필요"(시뮬레이터 AUTO 통과). NH-7·8은 2026-10-22 실제 codex로 AUTO 통과(gemini 미설치). NH-10 Android 실기기도 "추후 확인 필요"(에뮬레이터 AUTO 통과). 절차는 `docs/milestones/NEEDS_HUMAN.md`.
-2. **master 전환**(사용자 결정 후)
-   - master를 만들고 **GitHub 기본 브랜치를 master로 바꾼다**(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
-   - version은 2026-10-22에 0.2.0으로 올렸다(사용자 결정). MCP 서버는 이제 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
-   - 전환 시점: **사람 확인(NH) 뒤**(사용자 결정, 2026-10-22).
-   - 0.2.0 push 이후 `.ai/` layout 기능과 Android 기기·에뮬레이터 지원(`mis android`, 2026-10-22 사용자 결정)이 추가됐다. 이미 0.2.0을 설치한 사용자는 version을 올리기 전까지 받지 못한다. **version은 master 전환 때 올린다**(사용자 결정, 2026-10-22; 새 기능이라 0.3.0 권장).
+2. **master 전환 — 완료(2026-10-30, 사용자 결정으로 NH 사람 확인 전에 진행)**
+   - master를 만들고 GitHub 기본 브랜치를 master로 바꿨다(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
+   - version 0.3.0: 0.2.0 이후의 `.ai/` layout, Android 기기·에뮬레이터 지원(`mis android`), HUD 요금제 사용량(5h/7d). MCP 서버는 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
 3. **선택 개선(PROGRESS PROPOSALS)**: 모델이 review 전에 `mis report`를 실행하면 리뷰를 다시 기록할 수 없다. (a) 안내 문구 추가 또는 (b) Spec 상태 전이 변경(사용자 결정).
 
 ## 4. 열린 결정
 
-- (결정됨, 2026-10-22) version 0.2.0. master 전환은 NH 사람 확인 뒤.
+- (결정됨, 2026-10-30) master 전환과 version 0.3.0은 NH 사람 확인 전에 진행했다(이전 결정 "NH 뒤"를 대체).
 - PROPOSALS의 (a)/(b)
 - NH-6: 실기기가 준비되면 유지·닫기·제거 결정. NH-7·8: 사람 확인 후 닫기 결정
 - (2026-10-21 push함, 사용자 결정) 원격 기본 브랜치에는 M8·M9·M10 결과까지 들어 있다.
@@ -109,7 +108,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 
 ```sh
 git clone git@github.com:tom910903/make-it-ship.git && cd make-it-ship
-git checkout feature/make-it-ship-m1-m5
+git checkout master
 node --version              # 22 이상
 npm test                    # 실패 0 기대
 claude plugin validate .claude-plugin/plugin.json   # 통과 기대
