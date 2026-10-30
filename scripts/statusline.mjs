@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // HUD (Spec §14.2 hud, M6 §6.2): the one status line — run progress when a run exists, plus style level, loop,
-// subagents (5 min = stale), todos, branch, model and context use (absorbs the OMC HUD core and Ponytail's level badge). Registered by the user as statusLine.
+// subagents (5 min = stale), todos, branch, model, context use and plan usage (5-hour / 7-day limits) (absorbs the OMC HUD core and Ponytail's level badge). Registered by the user as statusLine.
 // shortcut: recomputes the tree hash on every refresh; fine for small/medium repos, cache by index mtime if it gets slow.
 import { pathToFileURL } from 'node:url';
 import { verdict, evidenceStatus } from './lib/verdict.mjs';
@@ -16,7 +16,9 @@ export function renderHud(s, ctx, cost) {
   return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}${usd}`;
 }
 
-export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct }) {
+const pct = (w) => (typeof w?.used_percentage === 'number' ? `${Math.round(w.used_percentage)}%` : null);
+
+export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits }) {
   return [
     style && style !== 'off' ? `style ${style === 'ultra' ? 'ULTRA' : style}` : null,
     loop?.active ? `loop ${loop.iteration}/${loop.max}` : null,
@@ -26,6 +28,8 @@ export function renderExtras({ style, loop, frozen, agents, todo, branch, model,
     branch || null,
     model || null,
     ctxPct ? `ctx ${ctxPct}%` : null,
+    pct(limits?.five_hour) && `5h ${pct(limits.five_hour)}`,
+    pct(limits?.seven_day) && `7d ${pct(limits.seven_day)}`,
   ].filter(Boolean).map((p) => ` · ${p}`).join('');
 }
 
@@ -52,6 +56,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       todo: await part(async () => (await import('./lib/tracking.mjs')).todoCounts((await import('./lib/home.mjs')).readSession(input.session_id).todos)),
       model: input.model?.display_name,
       ctxPct: contextPercent(input.transcript_path),
+      limits: input.rate_limits,
       frozen: await part(async () => {
         const f = (await import('./lib/home.mjs')).readHome('freeze.json');
         const { realpathSync } = await import('node:fs');

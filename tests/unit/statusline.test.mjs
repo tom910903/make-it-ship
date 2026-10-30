@@ -90,3 +90,9 @@ test('M9-F1: agents (with stale count) and todos sit between frozen and the bran
   assert.equal(renderExtras({ style: 'full', agents: { running: 1, stale: 0 }, branch: 'main' }), ' · style full · agents 1 · main');
   assert.equal(renderExtras({ style: 'full', agents: { running: 0, stale: 0 }, todo: null, branch: 'main' }), ' · style full · main', 'M6 format unchanged without agents/todos');
 });
+
+test('plan usage: 5-hour and 7-day rate limits from the status line input follow the context; absent windows are skipped', () => {
+  assert.equal(renderExtras({ ctxPct: 42, limits: { five_hour: { used_percentage: 23.5 }, seven_day: { used_percentage: 41.2 } } }), ' · ctx 42% · 5h 24% · 7d 41%');
+  assert.equal(renderExtras({ ctxPct: 42, limits: { seven_day: { used_percentage: 0 } } }), ' · ctx 42% · 7d 0%');
+  assert.equal(renderExtras({ ctxPct: 42 }), ' · ctx 42%', 'API key users have no rate_limits');
+});
