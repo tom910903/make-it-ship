@@ -4,7 +4,7 @@ Absorbs: gstack ship, document-release, document-generate, land-and-deploy (prep
 
 On request in Quick/Standard; always in Full. Shipping **prepares**; it never pushes, opens a PR, or deploys by itself — those are remote writes the guard asks the user to approve.
 
-The phase has two parts because a reported run is final (`mis check` is refused after REPORTED):
+The phase has two parts because a reported run is final (`mis check` is refused after REPORTED; only a code review recorded afterwards reopens it, see the review phase):
 - **Part A — before verify** (steps 1-2): every file change for shipping (docs, changelog) happens while the run is still executing, so the final checks, reviews, and verdict cover it.
 - **Part B — after the report** (steps 3-5): drafts, commits, and finishing the branch; no more file edits. If something must change after the report, that is a follow-up run: `mis start --input "follow-up to <run id>: <what>"` (Quick, low risk).
 

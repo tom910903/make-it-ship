@@ -13,7 +13,7 @@ const latestBy = (items, key) => {
   return m;
 };
 
-const PLAN_REVIEWS = ['plan-critic', 'product']; // gate plan approval (bound to the plan hash), not the code verdict
+export const PLAN_REVIEWS = ['plan-critic', 'product']; // gate plan approval (bound to the plan hash), not the code verdict
 
 /** Latest code review per kind that was made on the current tree. */
 export function currentReviews(state, treeHash) {
@@ -64,7 +64,7 @@ export function verdict(state, ctx) {
   }
   if (ctx.configChangedUnapproved) {
     partial.push(state.state === 'REPORTED'
-      ? '.make-it-ship.json changed after the report: a reported run is final — start a follow-up run (mis start) to verify with the new config'
+      ? '.make-it-ship.json changed after the report: a reported run is final (only a later code review reopens it) — start a follow-up run (mis start) to verify with the new config'
       : '.make-it-ship.json changed during the run without approval (ask the user: mis approve config)');
   }
   if (ctx.dependencyChanged && !(state.notes ?? []).some((n) => n.kind === 'dep')) partial.push('dependency manifest changed without a recorded reason (mis note dep)');

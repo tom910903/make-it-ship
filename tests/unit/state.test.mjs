@@ -43,10 +43,11 @@ test('loadRun without a run returns null', () => {
 
 test('transition table: allowed and refused', () => {
   const ok = [['PLANNING', 'AWAITING_APPROVAL'], ['PLANNING', 'EXECUTING'], ['AWAITING_APPROVAL', 'EXECUTING'],
-    ['AWAITING_APPROVAL', 'PLANNING'], ['EXECUTING', 'VERIFYING'], ['VERIFYING', 'EXECUTING'], ['VERIFYING', 'REPORTED'],
+    ['AWAITING_APPROVAL', 'PLANNING'], ['EXECUTING', 'VERIFYING'], ['VERIFYING', 'EXECUTING'], ['VERIFYING', 'REPORTED'], ['REPORTED', 'VERIFYING'],
     ['EXECUTING', 'BLOCKED'], ['PLANNING', 'CANCELLED'], ['VERIFYING', 'BLOCKED']];
   const bad = [['PLANNING', 'VERIFYING'], ['PLANNING', 'REPORTED'], ['AWAITING_APPROVAL', 'VERIFYING'],
-    ['EXECUTING', 'REPORTED'], ['REPORTED', 'EXECUTING'], ['CANCELLED', 'PLANNING'], ['REPORTED', 'BLOCKED']];
+    ['EXECUTING', 'REPORTED'], ['REPORTED', 'EXECUTING'], ['CANCELLED', 'PLANNING'], ['REPORTED', 'BLOCKED'],
+    ['REPORTED', 'CANCELLED'], ['BLOCKED', 'VERIFYING'], ['CANCELLED', 'VERIFYING']];
   for (const [a, b] of ok) assert.ok(canTransition(a, b), `${a}->${b}`);
   for (const [a, b] of bad) assert.ok(!canTransition(a, b), `${a}-/->${b}`);
   const s = { state: 'PLANNING' };

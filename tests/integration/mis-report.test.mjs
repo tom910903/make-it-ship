@@ -123,3 +123,32 @@ test('quick mode: a detected user-facing surface without real-use QA is listed a
   const s6 = readFileSync(join(dir, r.path), 'utf8').split('## 6. ')[1].split('## 7. ')[0];
   assert.match(s6, /web.*실사용 QA.*qa-web/);
 });
+
+test('code review after the report reopens the run to VERIFYING; report again (PROPOSALS b)', () => {
+  const dir = quickRun();
+  ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  let r = ok(mis(dir, ['report']));
+  assert.equal(r.verdict, 'PARTIAL');
+  assert.equal(r.state, 'REPORTED');
+  write(dir, { '../rev.md': REVIEW });
+  assert.notEqual(mis(dir, ['review', 'add', 'plan-critic', '../rev.md']).code, 0, 'plan reviews never reopen a reported run');
+  const rec = ok(mis(dir, ['review', 'add', 'quality', '../rev.md']));
+  assert.equal(rec.reopened, 'REPORTED -> VERIFYING');
+  assert.match(rec.next, /mis report/);
+  assert.equal(ok(mis(dir, ['status', '--json'])).state.state, 'VERIFYING');
+  r = ok(mis(dir, ['report']));
+  assert.equal(r.verdict, 'VERIFIED', r.reasons.join());
+  assert.equal(r.state, 'REPORTED');
+  const events = readFileSync(join(dir, '.git/make-it-ship/runs', r.path.split('/')[2], 'events.jsonl'), 'utf8');
+  assert.match(events, /"type":"review","kind":"quality".*"reopened":"REPORTED -> VERIFYING"/);
+});
+
+test('BLOCKED and CANCELLED runs are not reopened by a review', () => {
+  const dir = quickRun();
+  ok(mis(dir, ['block', 'needs', 'a', 'decision']));
+  write(dir, { '../rev.md': REVIEW });
+  const res = mis(dir, ['review', 'add', 'quality', '../rev.md']);
+  assert.notEqual(res.code, 0);
+  assert.match(res.err, /run is BLOCKED/);
+});

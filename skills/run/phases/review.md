@@ -20,6 +20,7 @@ MIS
 
 4. **Receiving the review**: verify each finding against the code before acting. Fix BLOCKING findings now (each fix test-first), then MAJOR ones that are in scope; push back with evidence on findings that are wrong. No performative agreement.
 5. Any fix changes the code: re-run the affected checks (verify phase) and re-run the reviews, because reviews are bound to the code hash.
+6. **Reported too early?** If `mis report` already ran, `mis review add <spec|quality|security|design>` reopens the run (REPORTED → VERIFYING; plan reviews never do). Then run `mis report` again so the report and verdict include the review.
 
 ## Optional: second opinion (another model)
 
