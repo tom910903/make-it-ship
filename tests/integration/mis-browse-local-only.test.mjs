@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis } from '../helpers.mjs';
+import { browserLock, makeRepo, mis } from '../helpers.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 
 const chrome = findChrome();
@@ -33,7 +33,9 @@ const reset = () => execFileSync(process.execPath, ['-e', `fetch('${base}/reset'
 const chromeCmd = () => execFileSync('ps', ['-ww', '-p', String(ok(b('status')).chromePid), '-o', 'command='], { encoding: 'utf8' });
 const attack = (kind) => `${base}/attack?kind=${kind}&t=${encodeURIComponent(JSON.stringify(targets))}&udp=${LAN}:${port.udp}`;
 
+let unlock = () => {};
 before(async () => {
+  unlock = await browserLock();
   assert.ok(LAN, 'this test needs a non-loopback IPv4 interface to stand in for a remote host');
   dir = makeRepo();
   secret = join(dir, 'secret.txt'); writeFileSync(secret, 'SECRET-TOKEN-42');
@@ -44,9 +46,11 @@ before(async () => {
   targets = [`http://${LAN}:${port.tcp}`, `http://lan.test:${port.tcp}`];
 });
 after(() => {
-  if (chrome) b('stop');
-  server.kill();
-  rmSync(HOME, { recursive: true, force: true });
+  try {
+    if (chrome) b('stop');
+    server.kill();
+    rmSync(HOME, { recursive: true, force: true });
+  } finally { unlock(); }
 });
 
 // event waits end as soon as the event happens; the bound only matters under heavy load (load avg 20-60 exceeded 20 s)

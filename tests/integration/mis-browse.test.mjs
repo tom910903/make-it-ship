@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, statSync, mkdtempSync, rmSync 
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis } from '../helpers.mjs';
+import { browserLock, makeRepo, mis } from '../helpers.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 import { decodePng } from '../../scripts/lib/png.mjs';
 
@@ -23,7 +23,9 @@ const ok = (r) => { assert.equal(r.code, 0, `exit ${r.code}\n${r.err}${r.out}`);
 const failed = (r, re) => { assert.notEqual(r.code, 0, r.out); assert.match(r.err, re); return r; };
 const blocked = (r) => failed(r, /BLOCKED: no Chrome, Chromium or Edge/);
 
+let unlock = () => {};
 before(async () => {
+  unlock = await browserLock();
   dir = makeRepo();
   out = mkdtempSync(join(tmpdir(), 'mis-browse-out-'));
   // own process: the mis() helper uses spawnSync, which blocks this process's event loop (an in-process server would hang)
@@ -32,9 +34,11 @@ before(async () => {
   base = `http://127.0.0.1:${String(line).trim()}`;
 });
 after(() => {
-  if (chrome) b('stop');
-  server.kill();
-  for (const d of [HOME, out]) rmSync(d, { recursive: true, force: true }); // M8 D11: no temp dirs left behind
+  try {
+    if (chrome) b('stop');
+    server.kill();
+    for (const d of [HOME, out]) rmSync(d, { recursive: true, force: true }); // M8 D11: no temp dirs left behind
+  } finally { unlock(); }
 });
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 /** poll a sync check until it returns truthy (generous deadline: the machine may be loaded) */

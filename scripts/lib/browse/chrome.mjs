@@ -77,6 +77,9 @@ export async function launchChrome({ exe, userDataDir, headless, extraArgs = [],
     // no phoning home: the org forbids sending data out, and background traffic would pollute `network`/`perf`
     '--disable-background-networking', '--disable-sync', '--disable-component-update', '--disable-default-apps',
     '--disable-domain-reliability', '--disable-client-side-phishing-detection', '--metrics-recording-only',
+    // keep pages at full speed while another Chrome window is in front (measured on macOS: with a visible Chrome up, headless
+    // CDP calls and pagehide beacons timed out; these flags made that rarer but not gone)
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     // never the user's Keychain; extensions only for `connect` (loaded over the pipe with Extensions.loadUnpacked)
     '--password-store=basic', '--use-mock-keychain', ...(extensions ? ['--enable-unsafe-extension-debugging'] : ['--disable-extensions']),
     // cross-origin iframes stay in-process so `frame` can reach them through one session

@@ -1,16 +1,18 @@
-import { test, after } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, write, mis } from '../helpers.mjs';
+import { browserLock, makeRepo, write, mis } from '../helpers.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 import { encodePng, decodePng } from '../../scripts/lib/png.mjs';
 
 const chrome = findChrome();
 const ENV = { MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-pdf-home-')), MIS_BROWSE_IDLE_MS: '120000' };
 const dir = makeRepo();
-after(() => { if (chrome) mis(dir, ['browse', 'stop'], { env: ENV }); });
+let unlock = () => {};
+before(async () => { unlock = await browserLock(); });
+after(() => { try { if (chrome) mis(dir, ['browse', 'stop'], { env: ENV }); } finally { unlock(); } });
 
 const solid = (w, h, rgb) => encodePng({ width: w, height: h, data: new Uint8Array(w * h * 4).map((_, i) => (i % 4 === 3 ? 255 : rgb[i % 4])) });
 

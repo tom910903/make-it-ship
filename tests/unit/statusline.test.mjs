@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { renderHud, renderExtras } from '../../scripts/statusline.mjs';
-import { makeRepo, mis, ROOT } from '../helpers.mjs';
+import { fakeHome, makeRepo, mis, ROOT } from '../helpers.mjs';
 
 const T = 't', C = 'c';
 const state = {
@@ -38,10 +38,20 @@ test('statusline script: idle line without a run, run line plus extras with one'
 
 test('mis init proposes the HUD statusLine (user applies it)', () => {
   const dir = makeRepo({ 'package.json': { scripts: { test: 'node --test' } } });
-  const r = mis(dir, ['init']);
+  const { env } = fakeHome();
+  const r = mis(dir, ['init'], { env });
   assert.equal(r.json.hud.statusLine.type, 'command');
   assert.match(r.json.hud.statusLine.command, /scripts\/statusline\.mjs/);
   assert.match(r.json.hud.how, /settings\.json/);
+});
+
+test('mis init does not propose the HUD when settings.json already runs a Make It Ship status line', () => {
+  const dir = makeRepo({ 'package.json': { scripts: { test: 'node --test' } } });
+  const { env, claude } = fakeHome();
+  writeFileSync(join(claude, 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'node "/x/plugins/cache/make-it-ship/make-it-ship/0.1.0/scripts/statusline.mjs"' } }));
+  assert.equal(mis(dir, ['init'], { env }).json.hud, undefined);
+  writeFileSync(join(claude, 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'my-own-statusline' } }));
+  assert.ok(mis(dir, ['init'], { env }).json.hud, 'another status line: still offered (mis setup chains it)');
 });
 
 test('HUD shows the session cost when the host provides it (display only, no enforcement)', () => {
