@@ -223,7 +223,9 @@ const handlers = {
     const { repoRoot } = await import('./lib/tree-hash.mjs');
     const { realpathSync } = await import('node:fs');
     const text = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : lastAssistantText(input.agent_transcript_path);
-    const missing = T.missingDeliverables(text, cwd, realpathSync(repoRoot(cwd)));
+    let root;
+    try { root = realpathSync(repoRoot(cwd)); } catch { return null; } // outside a repo: only repository paths are checked
+    const missing = T.missingDeliverables(text, cwd, root);
     if (!missing.length) return null;
     return { decision: 'block', reason: `[MAKE IT SHIP] Your report says you created or wrote ${missing.join(', ')}, but ${missing.length > 1 ? 'these files do' : 'that file does'} not exist. Create ${missing.length > 1 ? 'them' : 'it'} now, or correct your report so it names only files that exist.` };
   },

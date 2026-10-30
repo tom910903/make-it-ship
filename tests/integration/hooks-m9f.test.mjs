@@ -45,6 +45,14 @@ test('F1: SubagentStart/Stop count running agents, 5+ minutes is stale, the stat
   assert.ok(!existsSync(join(h, 'agents', 'S')), 'session end clears the tracking');
 });
 
+test('SubagentStop outside a git repository skips the deliverables check without recording a hook error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mis-nogit-')), h = home();
+  const r = hook('SubagentStop', { session_id: 'S', agent_id: 'a1', cwd: dir, last_assistant_message: 'Created src/missing.js' }, { MIS_STATE_HOME: h });
+  assert.equal(r.code, 0); assert.equal(r.out, '');
+  const trace = existsSync(join(h, 'trace.jsonl')) ? readFileSync(join(h, 'trace.jsonl'), 'utf8') : '';
+  assert.doesNotMatch(trace, /"error"/, trace);
+});
+
 test('F2: SubagentStop blocks once when files the agent reports creating are missing', () => {
   const dir = makeRepo({ 'src/a.js': 'x' }), E = { MIS_STATE_HOME: home() };
   const msg = 'Done. Created `src/missing.js` and wrote src/a.js. Also see https://example.com/x.js and /etc/hosts.txt (created).';
