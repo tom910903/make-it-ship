@@ -6,30 +6,58 @@ import { pathToFileURL } from 'node:url';
 import { verdict, evidenceStatus } from './lib/verdict.mjs';
 
 const MARK = { PASS: '✓', FAIL: '✗', STALE: '~', BLOCKED: '⊘', MISSING: '·' };
+const MARK_COLOR = { PASS: 'green', FAIL: 'red', STALE: 'yellow', BLOCKED: 'red', MISSING: 'dim' };
+const VERDICT_COLOR = { VERIFIED: 'green', PARTIAL: 'yellow', BLOCKED: 'red', FAILED: 'red' };
+const SGR = { bold: 1, dim: 2, red: 31, green: 32, yellow: 33, magenta: 35, cyan: 36 };
 
-export function renderHud(s, ctx, cost) {
+/** ANSI painter; with color off it returns the text unchanged, so plain and colored lines read the same. */
+const painter = (on) => (c, s) => (on ? `${c.split('+').map((k) => `\x1b[${SGR[k]}m`).join('')}${s}\x1b[0m` : s);
+// Thresholds follow the OMC HUD: green below 70%, yellow below 85%, red above.
+const level = (p) => (p >= 85 ? 'red' : p >= 70 ? 'yellow' : 'green');
+
+export function renderHud(s, ctx, cost, color = false) {
+  const c = painter(color);
   const tasks = s.plan?.tasks ?? [];
   const latest = new Map((s.evidence ?? []).map((e) => [e.check, e]));
-  const checks = ctx.required.map((n) => `${n}${MARK[latest.has(n) ? evidenceStatus(latest.get(n), ctx) : 'MISSING']}`).join(' ');
+  const checks = ctx.required.map((n) => {
+    const st = latest.has(n) ? evidenceStatus(latest.get(n), ctx) : 'MISSING';
+    return `${n}${c(MARK_COLOR[st], MARK[st])}`;
+  }).join(' ');
   const done = tasks.filter((t) => t.status === 'DONE').length;
   const usd = typeof cost?.total_cost_usd === 'number' ? ` · $${cost.total_cost_usd.toFixed(2)}` : '';
-  return `MIS ▸ ${s.state} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${verdict(s, ctx).verdict}${usd}`;
+  const v = verdict(s, ctx).verdict;
+  return `${c('bold+cyan', 'MIS ▸')} ${c('cyan', s.state)} · T${done}/${tasks.length} · ${checks || 'no checks'} · ${c(`${VERDICT_COLOR[v]}+bold`, v)}${usd}`;
 }
 
-const pct = (w) => (typeof w?.used_percentage === 'number' ? `${Math.round(w.used_percentage)}%` : null);
+/** 10-cell bar plus percentage, e.g. `ctx ████░░░░░░ 42%`, colored by threshold. */
+function gauge(c, label, p, suffix = '') {
+  const n = Math.min(10, Math.max(0, Math.round(p / 10)));
+  return `${label} ${c(level(p), '█'.repeat(n))}${c('dim', '░'.repeat(10 - n))} ${c(level(p), `${Math.round(p)}%`)}${suffix}`;
+}
 
-export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits }) {
+/** Time until a rate-limit window resets (`resets_at` is Unix seconds), as `(3h42m)` or `(2d5h)`. */
+function untilReset(resetsAt, now) {
+  if (typeof resetsAt !== 'number') return '';
+  const m = Math.max(0, Math.round((resetsAt * 1000 - now) / 60000));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+  return ` (${d ? `${d}d${h}h` : `${h}h${m % 60}m`})`;
+}
+
+const limit = (c, label, w, now) => (typeof w?.used_percentage === 'number' ? gauge(c, label, w.used_percentage, untilReset(w.resets_at, now)) : null);
+
+export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits, color = false, now = Date.now() }) {
+  const c = painter(color);
   return [
-    style && style !== 'off' ? `style ${style === 'ultra' ? 'ULTRA' : style}` : null,
-    loop?.active ? `loop ${loop.iteration}/${loop.max}` : null,
-    frozen ? `frozen ${frozen}` : null,
-    agents?.running ? `agents ${agents.running}${agents.stale ? ` (${agents.stale} stale)` : ''}` : null,
-    todo?.total ? `todo ${todo.done}/${todo.total}` : null,
-    branch || null,
-    model || null,
-    ctxPct ? `ctx ${ctxPct}%` : null,
-    pct(limits?.five_hour) && `5h ${pct(limits.five_hour)}`,
-    pct(limits?.seven_day) && `7d ${pct(limits.seven_day)}`,
+    style && style !== 'off' ? `style ${c('magenta', style === 'ultra' ? 'ULTRA' : style)}` : null,
+    loop?.active ? `loop ${c(level((loop.iteration / loop.max) * 100), `${loop.iteration}/${loop.max}`)}` : null,
+    frozen ? `frozen ${c('yellow', frozen)}` : null,
+    agents?.running ? `agents ${c('cyan', agents.running)}${agents.stale ? ` ${c('yellow', `(${agents.stale} stale)`)}` : ''}` : null,
+    todo?.total ? `todo ${c(todo.done === todo.total ? 'green' : 'cyan', `${todo.done}/${todo.total}`)}` : null,
+    branch ? c('cyan', branch) : null,
+    model ? c('magenta', model) : null,
+    ctxPct ? gauge(c, 'ctx', ctxPct) : null,
+    limit(c, '5h', limits?.five_hour, now),
+    limit(c, '7d', limits?.seven_day, now),
   ].filter(Boolean).map((p) => ` · ${p}`).join('');
 }
 
@@ -39,6 +67,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     for await (const c of process.stdin) raw += c;
     const input = raw ? JSON.parse(raw) : {};
     const cwd = input.workspace?.current_dir ?? input.cwd ?? process.cwd();
+    const color = !process.env.NO_COLOR; // https://no-color.org
     const part = async (f) => { try { return await f(); } catch { return null; } };
     const { currentStyle } = await import('./lib/style.mjs');
     const { readLoop } = await import('./lib/loop.mjs');
@@ -46,8 +75,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const { execFileSync } = await import('node:child_process');
     const run = await part(async () => (await import('./lib/state.mjs')).loadRun(cwd));
     const head = run && run.state.state !== 'CANCELLED'
-      ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), input.cost)
-      : 'MIS ▸ idle';
+      ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), input.cost, color)
+      : `${painter(color)('bold+cyan', 'MIS ▸')} idle`;
     const extras = renderExtras({
       style: await part(() => currentStyle(input.session_id)),
       loop: await part(() => { const l = readLoop(cwd); return !l.session || !input.session_id || l.session === input.session_id ? l : null; }),
@@ -57,6 +86,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       model: input.model?.display_name,
       ctxPct: contextPercent(input.transcript_path),
       limits: input.rate_limits,
+      color,
       frozen: await part(async () => {
         const f = (await import('./lib/home.mjs')).readHome('freeze.json');
         const { realpathSync } = await import('node:fs');

@@ -23,7 +23,7 @@ test('HUD one-liner format', () => {
 test('statusline script: idle line without a run, run line plus extras with one', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
   const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')), CLAUDE_CODE_SESSION_ID: 'S' };
-  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, session_id: 'S', ...extra }), encoding: 'utf8', env });
+  const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, session_id: 'S', ...extra }), encoding: 'utf8', env: { ...env, NO_COLOR: '1' } });
   assert.equal(sl(dir).stdout, 'MIS ▸ idle · style full · main\n');
   mis(dir, ['start', '--input', 'x']);
   assert.match(sl(dir).stdout, /^MIS ▸ PLANNING · T0\/0 · unit· · PARTIAL · style full · main\n?$/);
@@ -70,7 +70,7 @@ test('doctor states that token budgets are not enforceable by a plugin', () => {
 test('M6 D11: freeze shows in the line; statusLine.chain appends another status line command', () => {
   const dir = makeRepo({ 'src/a.js': '' });
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
-  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
   mis(dir, ['freeze', 'src'], { env });
   writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('OTHER '+JSON.parse(s).model.display_name))\"" } }));
   const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, model: { display_name: 'M' } }), encoding: 'utf8', env });
@@ -86,7 +86,7 @@ test('M6 R2-4: a chain that points back at this status line does not recurse', (
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const self = `MIS_STATE_HOME=${home} node ${join(ROOT, 'scripts', 'statusline.mjs')}`;
   writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: self } }));
-  const env = { ...process.env, MIS_STATE_HOME: home }; delete env.CLAUDE_CODE_SESSION_ID;
+  const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env, timeout: 10000 });
   assert.ok(Date.now() - t0 < 3000, 'returns quickly');
@@ -101,8 +101,31 @@ test('M9-F1: agents (with stale count) and todos sit between frozen and the bran
   assert.equal(renderExtras({ style: 'full', agents: { running: 0, stale: 0 }, todo: null, branch: 'main' }), ' · style full · main', 'M6 format unchanged without agents/todos');
 });
 
-test('plan usage: 5-hour and 7-day rate limits from the status line input follow the context; absent windows are skipped', () => {
-  assert.equal(renderExtras({ ctxPct: 42, limits: { five_hour: { used_percentage: 23.5 }, seven_day: { used_percentage: 41.2 } } }), ' · ctx 42% · 5h 24% · 7d 41%');
-  assert.equal(renderExtras({ ctxPct: 42, limits: { seven_day: { used_percentage: 0 } } }), ' · ctx 42% · 7d 0%');
-  assert.equal(renderExtras({ ctxPct: 42 }), ' · ctx 42%', 'API key users have no rate_limits');
+test('gauges: context and 5-hour / 7-day plan usage render as 10-cell bars with time to reset; absent windows are skipped', () => {
+  const now = 1_000_000_000_000;
+  const limits = { five_hour: { used_percentage: 23.5, resets_at: now / 1000 + 3 * 3600 + 42 * 60 }, seven_day: { used_percentage: 41.2, resets_at: now / 1000 + 2 * 86400 + 5 * 3600 } };
+  assert.equal(renderExtras({ ctxPct: 42, limits, now }), ' · ctx ████░░░░░░ 42% · 5h ██░░░░░░░░ 24% (3h42m) · 7d ████░░░░░░ 41% (2d5h)');
+  assert.equal(renderExtras({ ctxPct: 42, limits: { seven_day: { used_percentage: 0 } } }), ' · ctx ████░░░░░░ 42% · 7d ░░░░░░░░░░ 0%');
+  assert.equal(renderExtras({ ctxPct: 42 }), ' · ctx ████░░░░░░ 42%', 'API key users have no rate_limits');
+  assert.equal(renderExtras({ ctxPct: 130 }), ' · ctx ██████████ 130%', 'the bar never overflows');
+});
+
+test('colors: threshold colors on gauges (green < 70 <= yellow < 85 <= red), status colors on checks and verdict; plain without color', () => {
+  const g = (p) => renderExtras({ ctxPct: p, color: true });
+  assert.match(g(42), /\x1b\[32m████/);
+  assert.match(g(75), /\x1b\[33m████████/);
+  assert.match(g(90), /\x1b\[31m█████████/);
+  const line = renderHud(state, { treeHash: T, configHash: C, required: ['unit', 'lint'], dependencyChanged: false }, null, true);
+  assert.match(line, /unit\x1b\[32m✓/);
+  assert.match(line, /lint\x1b\[31m✗/);
+  assert.match(line, /\x1b\[31m\x1b\[1mFAILED/);
+  assert.equal(line.replace(/\x1b\[[\d;]*m/g, ''), renderHud(state, { treeHash: T, configHash: C, required: ['unit', 'lint'], dependencyChanged: false }), 'colors add no text');
+});
+
+test('statusline script colors its output unless NO_COLOR is set', () => {
+  const dir = makeRepo();
+  const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NO_COLOR;
+  const run = (e) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env: e }).stdout;
+  assert.match(run(env), /\x1b\[/);
+  assert.doesNotMatch(run({ ...env, NO_COLOR: '1' }), /\x1b\[/);
 });
