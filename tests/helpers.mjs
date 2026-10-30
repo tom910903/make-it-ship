@@ -1,5 +1,5 @@
 // Test helpers: throwaway git repos in the OS temp dir (never this project's .git).
-import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -53,4 +53,20 @@ export function fakeHome() {
   mkdirSync(claude, { recursive: true }); mkdirSync(bin);
   const env = { HOME: home, CLAUDE_CONFIG_DIR: claude, MIS_STATE_HOME: state, CLAUDE_PLUGIN_ROOT: '', PATH: `${bin}:${process.env.PATH}` };
   return { home, claude, state, bin, env };
+}
+
+/**
+ * Cross-file lock for test files that drive Chrome: node --test runs files in parallel, and while the connect test's visible
+ * Chrome is up, CDP calls and beacons in other Chromes time out (measured on macOS; each file alone always passes).
+ * Waits for the lock and returns its release function; a lock left by a dead test process is taken over.
+ */
+export async function browserLock() {
+  const lock = join(tmpdir(), 'mis-test-browser.lock'), pidFile = join(lock, 'pid');
+  for (;;) {
+    try { mkdirSync(lock); writeFileSync(pidFile, String(process.pid)); return () => rmSync(lock, { recursive: true, force: true }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+    let pid = 0; try { pid = Number(readFileSync(pidFile, 'utf8')); } catch { /* being written, or its owner died before writing */ }
+    const dead = pid ? (() => { try { process.kill(pid, 0); return false; } catch (e) { return e.code !== 'EPERM'; } })() : (() => { try { return Date.now() - statSync(lock).mtimeMs > 60000; } catch { return false; } })();
+    if (dead) rmSync(lock, { recursive: true, force: true });
+    else await new Promise((r) => setTimeout(r, 200));
+  }
 }

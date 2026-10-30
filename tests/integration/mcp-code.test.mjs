@@ -157,7 +157,9 @@ test('python_repl: persistent state, captured output, timeout keeps the session,
 });
 
 test('clangd: real document symbols, definition and diagnostics when installed, else BLOCKED', async () => {
-  const dir = makeRepo({ 'm.c': 'int add(int a, int b) { return a + b; }\nint main(void) { return add(1, 2) + missing; }\n' });
+  // The undeclared name sits in its own statement: in C mode clang drops a whole expression with an undeclared operand
+  // from the AST (Apple clang 21 does), so `add` inside that expression would resolve to nothing.
+  const dir = makeRepo({ 'm.c': 'int add(int a, int b) { return a + b; }\nint main(void) { int x = add(1, 2); return x + missing; }\n' });
   const s = await mcpSession(dir);
   try {
     const sym = await s.call('lsp_document_symbols', { file: 'm.c' });

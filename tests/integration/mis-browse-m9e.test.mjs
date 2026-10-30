@@ -10,7 +10,7 @@ import { createCipheriv, createHash, pbkdf2Sync } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, statSync, mkdtempSync, mkdirSync, rmSync, chmodSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir, hostname } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis, fakeHome } from '../helpers.mjs';
+import { browserLock, makeRepo, mis, fakeHome } from '../helpers.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 import { decodePng } from '../../scripts/lib/png.mjs';
 import { lintSkill } from '../../scripts/lib/skills.mjs';
@@ -32,7 +32,9 @@ const until = (fn, what, ms = 30000) => {
 };
 const echo = () => { const r = ok(b('text')); return typeof r === 'string' ? JSON.parse(r) : r; };
 
+let unlock = () => {};
 before(async () => {
+  unlock = await browserLock();
   dir = makeRepo();
   out = mkdtempSync(join(tmpdir(), 'mis-browse-m9e-out-'));
   server = spawn(process.execPath, [SITE], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -41,9 +43,11 @@ before(async () => {
   site = base.replace('127.0.0.1', 'shop.test');
 });
 after(() => {
-  if (chrome) b('stop');
-  server.kill();
-  for (const d of [H.home, out, dir]) rmSync(d, { recursive: true, force: true });
+  try {
+    if (chrome) b('stop');
+    server.kill();
+    for (const d of [H.home, out, dir]) rmSync(d, { recursive: true, force: true });
+  } finally { unlock(); }
 });
 
 test('media, inspect and ux-audit return JSON about the page', () => {

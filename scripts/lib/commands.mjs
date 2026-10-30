@@ -28,6 +28,9 @@ import { bridgeScan, listDevices } from './ios.mjs';
 import { stateRoot } from './state.mjs';
 import { alwaysCommands } from './commands-always.mjs';
 import { setupCommands, cancelAll } from './commands-setup.mjs';
+import { isOurStatusLine } from './install.mjs';
+import { readJson } from './cli-util.mjs';
+import { claudeDir } from './home.mjs';
 import { browseCommands } from './commands-browse.mjs';
 import { teamCommands, excludeWorktrees } from './commands-team.mjs';
 import { skillCommands } from './commands-skill.mjs';
@@ -802,7 +805,7 @@ function init(args, cwd) {
   const root = repoRoot(cwd);
   const r = { ...detectConfig(root), ...projectType(root) };
   if (r.config) r.config.layout = proposeLayout(root); // only here: setup team and memory reuse detectConfig without a layout
-  r.hud = {
+  if (!isOurStatusLine(readJson(join(claudeDir(), 'settings.json'))?.statusLine?.command)) r.hud = { // already set up: nothing to offer
     statusLine: { type: 'command', command: `node "${fileURLToPath(new URL('../statusline.mjs', import.meta.url))}"` },
     how: 'Optional HUD: with the user\'s OK, set this as "statusLine" in ~/.claude/settings.json (plugins cannot register it themselves), then restart Claude Code.',
   };
