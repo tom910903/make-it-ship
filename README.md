@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 0.3.2](https://img.shields.io/badge/version-0.3.2-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 

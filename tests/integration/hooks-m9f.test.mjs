@@ -23,7 +23,7 @@ const hook = (event, input, env = {}) => {
 };
 const statusline = (cwd, sid, h) => {
   const env = { ...process.env, MIS_STATE_HOME: h }; delete env.CLAUDE_CODE_SESSION_ID;
-  return spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd, session_id: sid }), encoding: 'utf8', env }).stdout;
+  return spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd, session_id: sid }), encoding: 'utf8', env: { ...env, NO_COLOR: '1' } }).stdout;
 };
 
 test('F1: SubagentStart/Stop count running agents, 5+ minutes is stale, the status line shows agents and todos', () => {

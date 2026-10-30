@@ -72,6 +72,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
    - master를 만들고 GitHub 기본 브랜치를 master로 바꿨다(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
    - 0.3.1(2026-10-30): git 저장소 밖에서 SubagentStop 훅이 오류를 기록하던 문제 수정.
    - 0.3.2(2026-10-30): HUD가 이미 설정되어 있으면 `mis init`이 다시 제안하지 않음. 헤드리스 Chrome의 백그라운드 감속 해제. clangd 테스트 예제 수정, Chrome 테스트 파일 간 잠금으로 동시 실행 시 시간 초과 해결.
+   - 0.3.3(2026-10-30): HUD를 OMC처럼 시각화. ctx·5h·7d를 10칸 막대로 표시하고 리셋까지 남은 시간을 붙임. 70%부터 노랑, 85%부터 빨강. 검사 표시·판정·브랜치·모델에 색. `NO_COLOR`면 색 없음.
    - version 0.3.0: 0.2.0 이후의 `.ai/` layout, Android 기기·에뮬레이터 지원(`mis android`), 보고 뒤 리뷰로 run 다시 열기(PROPOSALS b), HUD 요금제 사용량(5h/7d). MCP 서버는 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
 3. ~~선택 개선(PROPOSALS)~~ 2026-10-26 (b)로 해결: 보고 뒤 코드 리뷰를 기록하면 run이 REPORTED → VERIFYING으로 다시 열린다(PROGRESS SPEC_CHANGES).
 
