@@ -70,6 +70,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 1. **사람 확인**(사용자가 직접): NH-1~5 확인 창 누르기. NH-6 iPhone 실기기는 "추후 확인 필요"(시뮬레이터 AUTO 통과). NH-7·8은 2026-10-22 실제 codex로 AUTO 통과(gemini 미설치). NH-10 Android 실기기도 "추후 확인 필요"(에뮬레이터 AUTO 통과). 절차는 `docs/milestones/NEEDS_HUMAN.md`.
 2. **master 전환 — 완료(2026-10-30, 사용자 결정으로 NH 사람 확인 전에 진행)**
    - master를 만들고 GitHub 기본 브랜치를 master로 바꿨다(`marketplace add tom910903/make-it-ship`는 기본 브랜치에서 설치).
+   - 0.3.1(2026-10-30): git 저장소 밖에서 SubagentStop 훅이 오류를 기록하던 문제 수정.
    - version 0.3.0: 0.2.0 이후의 `.ai/` layout, Android 기기·에뮬레이터 지원(`mis android`), 보고 뒤 리뷰로 run 다시 열기(PROPOSALS b), HUD 요금제 사용량(5h/7d). MCP 서버는 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
 3. ~~선택 개선(PROPOSALS)~~ 2026-10-26 (b)로 해결: 보고 뒤 코드 리뷰를 기록하면 run이 REPORTED → VERIFYING으로 다시 열린다(PROGRESS SPEC_CHANGES).
 
