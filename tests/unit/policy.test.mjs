@@ -428,7 +428,8 @@ test('M9-D: every external or approval-gated mis subcommand asks with and withou
   const readOnly = ['second-opinion detect', 'second-opinion probe', 'telemetry status', 'telemetry on', 'telemetry log --skill qa', 'analytics',
     'gbrain detect', 'gbrain ingest --probe', 'gbrain policy get', 'gbrain enqueue a.md', 'gbrain uninstall', 'design compare', 'design gallery', 'pair-agent stop', 'pair-agent status',
     'ios daemon start --target http://127.0.0.1:9', 'ios daemon stop', 'ios sync', 'android daemon start', 'android tap 1 2', 'android boot Medium_Phone', 'deploy setup', 'deploy status', 'deploy run --dry-run', 'landing-report', 'mission-board',
-    'wait --seconds 1', 'wait detect', 'wait auto --pane %3', 'detach -- npm test', 'detach --lock evals -- npm test', 'redact file notes.md', 'redact scan --pii --legal', 'research list', 'autoresearch status m', 'self-improve list', 'writer-memory status', 'layout', 'layout --json'];
+    'wait --seconds 1', 'wait detect', 'wait auto --pane %3', 'detach -- npm test', 'detach --lock evals -- npm test', 'redact file notes.md', 'redact scan --pii --legal', 'research list', 'autoresearch status m', 'self-improve list', 'writer-memory status', 'layout', 'layout --json',
+    'diagram design/a.mmd --out design', 'chart data.csv --out design', 'chart design/share.mmd'];
   for (const c of [ctx, { ...ctx, activeRun: false }]) {
     for (const cmd of external) {
       const r = classify(bash(`${M} ${cmd}`), c);
