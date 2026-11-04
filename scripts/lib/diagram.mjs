@@ -216,6 +216,7 @@ const base = (id, type, x, y, w, h, extra = {}) => ({ id, type, x, y, width: w, 
   fillStyle: 'solid', strokeWidth: 2, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [], roundness: null, seed: 1, version: 1,
   versionNonce: 1, isDeleted: false, boundElements: null, updated: 1, link: null, locked: false, ...extra });
 
+// shortcut: every node is an Excalidraw rectangle (the SVG draws the real shapes); map shapes to diamond/ellipse when someone edits them there.
 export function toExcalidraw(g) {
   const { pos, W, H, frames } = layout(g);
   const elements = frames.map((f) => base(`frame-${f.id}`, 'frame', f.x, f.y, f.w, f.h, { name: f.title }));
@@ -292,7 +293,8 @@ export function toSvg(g) {
     // end at the box border: shorten by the half-size along the dominant axis
     const hz = Math.abs(x2 - x1) > Math.abs(y2 - y1), cut = (x, y, ox, oy, [hw, hh]) => (hz ? [x + Math.sign(ox - x) * hw, y] : [x, y + Math.sign(oy - y) * hh]);
     let [sx, sy] = cut(x1, y1, x2, y2, half(e.from)), [ex, ey] = cut(x2, y2, x1, y1, half(e.to));
-    // A→B and B→A: each runs 12px to its own side with its label outside, so neither line nor label overlaps the other
+    // A→B and B→A: each runs 12px to its own side with its label outside, so neither line nor label overlaps the other.
+    // shortcut: a back edge over several layers (C→A in A→B→C→A) is still a straight line across B; route it around when such cycles get common.
     const side = pair.has(`${e.to}>${e.from}`) ? (e.from < e.to ? 1 : -1) : 0, anchor = side < 0 ? 'end' : 'start';
     if (hz) { sy += 12 * side; ey += 12 * side; } else { sx += 12 * side; ex += 12 * side; }
     parts.push(`<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" class="${cls}"${marks(e)}/>`);
