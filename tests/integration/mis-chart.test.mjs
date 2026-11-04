@@ -76,3 +76,9 @@ test('mis chart / diagram: an output file that is a symlink (even dangling) or a
   }
   assert.deepEqual(readdirSync(outside), ['x.csv']);
 });
+
+test('mis chart: --type hbar is reported as hbar', () => {
+  const dir = makeRepo();
+  write(dir, { 'd.csv': 'k,v\na,1\nb,3\n' });
+  assert.equal(ok(mis(dir, ['chart', 'd.csv', '--type', 'hbar'])).type, 'hbar');
+});

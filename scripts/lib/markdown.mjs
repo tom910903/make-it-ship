@@ -61,7 +61,7 @@ function render(md, { allowNetwork = false, comment, image, marp = false } = {})
     image({ href, text, title }) {
       if (/^https?:/i.test(href) && !allowNetwork) return `<span class="blocked">[remote image blocked: ${esc(text || href)}] (use --allow-network)</span>`;
       const src = /^(https?|data):/i.test(href) ? href : local(href);
-      if (!src) return `<span class="blocked">[local image blocked: ${esc(text || href)}] (outside the repository or not found)</span>`;
+      if (!src) return `<span class="blocked">[local image blocked: ${esc(text || href)}] (outside the repository, not found, or over 10 MB)</span>`;
       // Marp decks: `w:640` `height:30cm` keywords in the alt text size the image (CSS lengths only)
       const size = [], alt = !marp ? text : text.replace(/(^|\s)(w|width|h|height):(auto|\d+(?:\.\d+)?(?:px|cm|mm|in|pt|pc|em|rem|%)?)(?=\s|$)/g, (m, sp, k, v) => {
         size.push(`${k[0] === 'w' ? 'width' : 'height'}:${/\d$/.test(v) ? `${v}px` : v}`);
@@ -157,7 +157,7 @@ const NAV = "(()=>{const s=[...document.querySelectorAll('.slide')],c=document.g
 const SLIDES_CSS = `
 html, body { background: #444; } .notes { display: none; }
 .slide { box-sizing: border-box; position: relative; width: 100vw; height: 56.25vw; max-width: 177.78vh; max-height: 100vh; margin: 0 auto 1vh; padding: 4% 6%;
-  overflow: hidden; background: #fff; color: #111; font-size: min(2.6vw, 4.62vh); display: flex; flex-direction: column; justify-content: center; }
+  overflow: hidden; background: #fff; color: #111; font-size: min(2.6vw, 4.62vh); display: flex; flex-direction: column; justify-content: safe center; }
 .slide h1 { font-size: 2.2em; break-before: auto; margin: 0 0 .4em; } .slide h2 { font-size: 1.6em; margin: 0 0 .4em; } .slide h3 { font-size: 1.25em; }
 .slide pre, .slide :not(pre) > code { font-size: .75em; } .slide figure.visual { margin: .4em 0; text-align: center; } .slide svg { max-width: 100%; height: auto; max-height: min(36vw, 64vh); }
 .slide > .page, .slide > .mfoot, .slide > .mhead { position: absolute; font-size: .55em; color: #888; } .slide > .page { right: 3%; bottom: 3%; }
@@ -172,7 +172,7 @@ body.present { height: 100vh; overflow: hidden; } body.present .slide { display:
 `;
 
 /** Marp-style deck → one self-contained HTML. Supported: front matter and comment directives marp, title, lang, paginate, header, footer, class
- * (`_x` for one slide) and `<!-- notes -->`. shortcut: theme, size, backgrounds and the other Marp directives are ignored and header/footer are
+ * (`_x` for one slide) and `<!-- notes -->`. shortcut: theme, size, backgrounds (directives and `![bg]` images, drawn inline) and the other Marp directives are ignored and header/footer are
  * plain text; render with Marp itself when a deck needs them. */
 export function markdownToSlides(md, { baseDir, baseHref, title, image } = {}) {
   const { front, slides } = splitSlides(md), state = Object.fromEntries(LOCAL.map((k) => [k, front[k]]));

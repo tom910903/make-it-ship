@@ -367,7 +367,7 @@ function chart([file, ...args], cwd) {
   writeFileSync(svg, s + '\n');
   writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(model.title || name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#0d1117}}</style></head><body>${s}</body></html>\n`);
   const pie = model.kind === 'pie';
-  return { type: pie ? 'pie' : [...new Set(model.series.map((t) => t.type))].join('+'), series: pie ? 1 : model.series.length, points: pie ? model.slices.length : model.categories.length,
+  return { type: pie ? 'pie' : [...new Set(model.series.map((t) => (model.horizontal && t.type === 'bar' ? 'hbar' : t.type)))].join('+'), series: pie ? 1 : model.series.length, points: pie ? model.slices.length : model.categories.length,
     files: [relative(cwd, svg), relative(cwd, html)],
     png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg stands)` };
 }

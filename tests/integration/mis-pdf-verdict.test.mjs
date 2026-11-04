@@ -66,3 +66,13 @@ test('mis pdf: an output path that is a symlink is refused before Chrome runs (a
   assert.match(r.err, /symlink/);
   assert.ok(!existsSync(join(outside, 'pwn.pdf')));
 });
+
+test('mis pdf: -o inside the repository through a symlinked folder is refused; -o outside the repository is the user\'s choice', () => {
+  const dir = makeRepo({ 'notes.md': '# Notes\n' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-pdf-dir-'));
+  symlinkSync(outside, join(dir, 'linkdir'));
+  const r = mis(dir, ['pdf', 'notes.md', '-o', 'linkdir/o.pdf']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.err, /outside the repository/);
+  assert.ok(!existsSync(join(outside, 'o.pdf')));
+});

@@ -83,3 +83,10 @@ test('sequence: a self-message label stays inside the SVG', () => {
   const [, x, t] = s.match(/<text x="([\d.]+)" y="[\d.]+" class="label">(Verify[^<]*)</);
   assert.ok(Number(x) + t.length * 7 <= width, `label ends at ${Number(x) + t.length * 7}, svg is ${width} wide`);
 });
+
+test('sequenceDiagram: <br> in messages and notes is a line break, as on GitHub', () => {
+  const { svg } = renderDiagram('sequenceDiagram\nA->>B: l1<br/>l2\nNote over A: n1<br>n2');
+  assert.doesNotMatch(svg, /&lt;br/);
+  assert.match(svg, /<tspan[^>]*>l1<\/tspan><tspan[^>]*>l2<\/tspan>/);
+  assert.match(svg, /<tspan[^>]*>n1<\/tspan><tspan[^>]*>n2<\/tspan>/);
+});

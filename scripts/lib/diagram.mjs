@@ -91,12 +91,12 @@ function parseSequence(lines) {
     if (line === 'autonumber') auto = true;
     else if ((m = line.match(/^(participant|actor)\s+([A-Za-z_]\w*)(?:\s+as\s+(.+))?$/))) Object.assign(parts.get(who(m[2])), { label: m[3]?.trim() ?? m[2], actor: m[1] === 'actor' });
     else if ((m = line.match(/^([A-Za-z_]\w*)\s*(-->>|->>|--x|-x|-->|->)\s*([A-Za-z_]\w*)\s*:(.*)$/))) {
-      const msg = { from: who(m[1]), to: who(m[3]), arrow: m[2], text: m[4].trim() };
+      const msg = { from: who(m[1]), to: who(m[3]), arrow: m[2], text: decode(m[4].trim(), line) };
       edges.push(msg); rows.push({ type: 'msg', msg, n: edges.length }); touch(msg.from, msg.to);
     } else if ((m = line.match(/^note\s+(left of|right of|over)\s+([A-Za-z_]\w*)(?:\s*,\s*([A-Za-z_]\w*))?\s*:(.*)$/i))) {
       if (m[3] && m[1].toLowerCase() !== 'over') throw cannot(line);
       const ids = [who(m[2]), ...(m[3] ? [who(m[3])] : [])];
-      rows.push({ type: 'note', side: m[1].toLowerCase(), ids, text: m[4].trim() }); touch(...ids);
+      rows.push({ type: 'note', side: m[1].toLowerCase(), ids, text: decode(m[4].trim(), line) }); touch(...ids);
     } else if ((m = line.match(/^(loop|alt|opt)\b\s*(.*)$/))) { const b = { type: 'open', kind: m[1], text: m[2].trim(), cols: new Set(), elses: [] }; open.push(b); rows.push(b); }
     else if ((m = line.match(/^else\b\s*(.*)$/))) { const b = open.at(-1); if (b?.kind !== 'alt') throw cannot(line); const r = { type: 'else', text: m[1].trim() }; b.elses.push(r); rows.push(r); }
     else if (line === 'end') { const b = open.pop(); if (!b) throw cannot(line); rows.push({ type: 'close', block: b }); }

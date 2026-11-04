@@ -123,8 +123,10 @@ async function pdf(argv, cwd) {
   if (!existsSync(md)) throw new Error(`no such file: ${file}`);
   const out = resolve(cwd, o.out ?? join(dirname(md), `${basename(md).replace(/\.(md|markdown)$/i, '')}.pdf`));
   const { html, title, visuals, errors } = markdownToHtml(readFileSync(md, 'utf8'), { baseDir: dirname(md), title: o.title, allowNetwork: o.allowNetwork, image: images(cwd, md) });
-  // -o may point anywhere the user chooses; a symlink at the path (e.g. committed next to the .md) must not redirect the write
+  // -o may name a path outside the repository on purpose; a path inside it gets the full check, so a committed symlink (file or folder) cannot redirect the write
   if (lstatSync(out, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${relative(cwd, out) || out} is a symlink; refusing to write through it`);
+  let root = null; try { root = repoRoot(cwd); } catch { /* not a git repository: only the symlink check above applies */ }
+  if (root && !relative(root, out).startsWith('..')) outFiles(cwd, out);
   mkdirSync(dirname(out), { recursive: true });
   const tmp = mkdtempSync(join(tmpdir(), 'mis-pdf-'));
   const htmlFile = join(tmp, 'doc.html');
@@ -142,9 +144,11 @@ const images = (cwd, md) => (href) => {
   try {
     const p = realpathSync(resolve(dirname(md), path));
     inRepo(cwd, p);
+    if (statSync(p).size > IMAGE_MAX) return null; // inlined as base64: a huge image would exhaust memory
     return type && `data:${type};base64,${readFileSync(p).toString('base64')}`;
   } catch { return null; }
 };
+const IMAGE_MAX = 10 * 1024 * 1024;
 
 /** The one Chrome PDF path (mis pdf, doc, slides): print an HTML file through the browse daemon, network blocked unless allowed. */
 const printHtml = (cwd, htmlFile, out, opts) => send(browseDir(cwd), { cmd: '_render-pdf', cwd, args: [{ html: pathToFileURL(htmlFile).href, out, opts }] });
