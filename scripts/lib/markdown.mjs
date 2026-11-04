@@ -131,7 +131,7 @@ html, body { background: #444; } .notes { display: none; }
 .slide { box-sizing: border-box; position: relative; width: 100vw; height: 56.25vw; max-width: 177.78vh; max-height: 100vh; margin: 0 auto 1vh; padding: 4% 6%;
   overflow: hidden; background: #fff; color: #111; font-size: min(2.6vw, 4.62vh); display: flex; flex-direction: column; justify-content: center; }
 .slide h1 { font-size: 2.2em; break-before: auto; margin: 0 0 .4em; } .slide h2 { font-size: 1.6em; margin: 0 0 .4em; } .slide h3 { font-size: 1.25em; }
-.slide pre, .slide code { font-size: .75em; } .slide figure.visual { margin: .4em 0; text-align: center; } .slide svg { max-width: 100%; height: auto; max-height: min(36vw, 64vh); }
+.slide pre, .slide :not(pre) > code { font-size: .75em; } .slide figure.visual { margin: .4em 0; text-align: center; } .slide svg { max-width: 100%; height: auto; max-height: min(36vw, 64vh); }
 .slide > .page, .slide > .mfoot, .slide > .mhead { position: absolute; font-size: .55em; color: #888; } .slide > .page { right: 3%; bottom: 3%; }
 .slide > .mfoot { left: 6%; bottom: 3%; } .slide > .mhead { left: 6%; top: 3%; }
 body.present { height: 100vh; overflow: hidden; } body.present .slide { display: none; position: absolute; inset: 0; margin: auto; } body.present .slide.active { display: flex; }

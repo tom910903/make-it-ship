@@ -50,7 +50,7 @@ test('mis pdf: markdown → tagged PDF through the built-in browser (or BLOCKED 
   assert.equal(r.json.title, 'Part one');
   assert.ok(r.json.pages >= 2, `chapter break per H1, got ${r.json.pages} pages`);
   assert.equal(readFileSync(r.json.pdf).subarray(0, 5).toString(), '%PDF-');
-  assert.match(readFileSync(r.json.pdf).toString('latin1'), /\/Subtype\s*\/Image/, 'the local image renders under the CSP');
+  assert.match(readFileSync(r.json.pdf).toString('latin1'), /\/Subtype\s*\/Image[^>]*\/Width\s+20\b|\/Width\s+20\b[^>]*\/Subtype\s*\/Image/, 'the 20x20 local image renders under the CSP (not a broken-image icon)');
   const o = mis(dir, ['pdf', 'docs/guide.md', '-o', 'out/g.pdf', '--page-size', 'a4', '--no-page-numbers'], { env: ENV });
   assert.equal(o.code, 0, o.err);
   assert.ok(existsSync(join(dir, 'out/g.pdf')));

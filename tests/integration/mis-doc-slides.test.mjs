@@ -77,7 +77,7 @@ test('mis doc / slides --pdf through the built-in browser: local images load und
   writeFileSync(join(dir, 'pics/dot.png'), png);
   const d = ok(mis(dir, ['doc', 'pics/p.md', '--pdf'], { env: ENV }));
   assert.equal(d.docs[0].pdf, 'pics/p.pdf');
-  assert.match(readFileSync(join(dir, 'pics/p.pdf')).toString('latin1'), /\/Subtype\s*\/Image/, 'the local image rendered');
+  assert.match(readFileSync(join(dir, 'pics/p.pdf')).toString('latin1'), /\/Subtype\s*\/Image[^>]*\/Width\s+20\b|\/Width\s+20\b[^>]*\/Subtype\s*\/Image/, 'the 20x20 local image rendered (not a broken-image icon)');
   const s = ok(mis(dir, ['slides', 'talk/deck.md', '--pdf'], { env: ENV }));
   assert.equal(s.pdf, 'talk/deck.pdf');
   assert.equal(s.pages, 3);

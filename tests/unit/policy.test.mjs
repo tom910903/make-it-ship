@@ -228,8 +228,8 @@ test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser exe
     }
     assert.equal(d(bash('node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/'), c), 'allow');
   }
-  // M8 r4 N1: pdf, canary and pair-agent start the same browser daemon
-  for (const cmd of ['MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs pdf doc.md', "MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs canary http://127.0.0.1:5/",
+  // M8 r4 N1: pdf, doc/slides --pdf, canary and pair-agent start the same browser daemon
+  for (const cmd of ['MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs pdf doc.md', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs doc doc.md --pdf', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs slides deck.md --pdf', "MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs canary http://127.0.0.1:5/",
     'export MIS_BROWSER_EXE=/tmp/c; node /p/scripts/mis.mjs pair-agent start --local']) assert.equal(d(bash(cmd), idle), 'ask', cmd);
   assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
 });
