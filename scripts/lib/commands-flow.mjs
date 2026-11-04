@@ -308,7 +308,7 @@ ${cards}
 }
 
 /** Input and output paths of generated visuals must stay in the repository, symlinks resolved; checked before anything is read or created. */
-function inRepo(cwd, ...paths) {
+export function inRepo(cwd, ...paths) {
   const root = realpathSync(repoRoot(cwd));
   for (const p of paths) {
     let q = p;

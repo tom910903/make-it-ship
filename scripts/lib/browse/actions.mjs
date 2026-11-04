@@ -197,7 +197,7 @@ export async function printPdf(b, tab, o = {}) {
   const [w, h] = PAPER[o.format ?? 'letter'] ?? (() => { throw new Error(`unknown page format ${o.format} (letter|a4|legal)`); })();
   const m = o.margins !== undefined ? toInches(o.margins) : 0.4;
   const { data } = await b.send(tab, 'Page.printToPDF', {
-    paperWidth: w, paperHeight: h, landscape: !!o.landscape, printBackground: true, preferCSSPageSize: false,
+    paperWidth: w, paperHeight: h, landscape: !!o.landscape, printBackground: true, preferCSSPageSize: !!o.preferCSSPageSize, // mis slides: the deck's @page size wins
     marginTop: m, marginBottom: m, marginLeft: m, marginRight: m, generateTaggedPDF: true, generateDocumentOutline: true,
     displayHeaderFooter: !!(o.header || o.footer), headerTemplate: o.header ?? '<span></span>', footerTemplate: o.footer ?? '<span></span>',
   }, 120000);

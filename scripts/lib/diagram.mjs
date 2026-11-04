@@ -203,16 +203,16 @@ export function toExcalidraw(g) {
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-// Colors only through classes so the dark-mode media query reaches every mark.
-const STYLE = `.bg{fill:#fff}.node{fill:#f4f6fb;stroke:#1e1e1e;stroke-width:2}.edge{stroke:#1e1e1e;stroke-width:2;fill:none}.dashed{stroke-dasharray:6 4}.thick{stroke-width:4}
+// Colors only through classes so the dark-mode media query reaches every mark. `.dg` scopes the rules that would also hit a chart inlined in the same page.
+const STYLE = `.dg .bg{fill:#fff}.node{fill:#f4f6fb;stroke:#1e1e1e;stroke-width:2}.edge{stroke:#1e1e1e;stroke-width:2;fill:none}.dashed{stroke-dasharray:6 4}.thick{stroke-width:4}
 .life{stroke:#999;stroke-width:1;stroke-dasharray:4 4}.solid{fill:#1e1e1e}.hollow{fill:#fff;stroke:#1e1e1e;stroke-width:1.5}.frame{fill:#8882;stroke:#888;stroke-width:1.5}
-.note{fill:#fff5c4;stroke:#aa9;stroke-width:1}text{fill:#1e1e1e;font-size:15px}.label{fill:#444;font-size:13px}.title{font-weight:600}
-@media (prefers-color-scheme: dark){.bg{fill:#1e1e1e}.node{fill:#2a2f3a;stroke:#ddd}.edge{stroke:#ddd}.solid{fill:#ddd}.hollow{fill:#1e1e1e;stroke:#ddd}
-.note{fill:#4a4630;stroke:#887}text{fill:#eee}.label{fill:#bbb}}`;
+.note{fill:#fff5c4;stroke:#aa9;stroke-width:1}.dg text{fill:#1e1e1e;font-size:15px}.label{fill:#444;font-size:13px}.title{font-weight:600}
+@media (prefers-color-scheme: dark){.dg .bg{fill:#1e1e1e}.node{fill:#2a2f3a;stroke:#ddd}.edge{stroke:#ddd}.solid{fill:#ddd}.hollow{fill:#1e1e1e;stroke:#ddd}
+.note{fill:#4a4630;stroke:#887}.dg text{fill:#eee}.label{fill:#bbb}}`;
 const mk = (id, d, cls) => `<marker id="${id}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="${d}" class="${cls}"/></marker>`;
 const DEFS = `<defs>${mk('arrow', 'M0,0 L10,5 L0,10 z', 'solid')}${mk('open', 'M0,0 L10,5 L0,10', 'edge')}${mk('tri', 'M0,0 L10,5 L0,10 z', 'hollow')}${
   mk('diamond', 'M0,5 L5,1 L10,5 L5,9 z', 'solid')}${mk('odiamond', 'M0,5 L5,1 L10,5 L5,9 z', 'hollow')}${mk('cross', 'M0,0 L10,10 M0,10 L10,0', 'edge')}</defs>`;
-const svgDoc = (w, h, body) => [`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="system-ui, sans-serif">`,
+const svgDoc = (w, h, body) => [`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="system-ui, sans-serif" class="dg">`,
   `<style>${STYLE}</style>`, DEFS, '<rect width="100%" height="100%" class="bg"/>', ...body, '</svg>'].join('\n');
 const marks = (e) => `${e.start ? ` marker-start="url(#${e.start})"` : ''}${(e.end === undefined ? 'arrow' : e.end) ? ` marker-end="url(#${e.end ?? 'arrow'})"` : ''}`;
 const text = (x, y, s, cls = '', anchor = 'middle') => `<text x="${x}" y="${y}"${anchor === 'start' ? '' : ` text-anchor="${anchor}"`}${cls ? ` class="${cls}"` : ''}>${esc(s)}</text>`;
