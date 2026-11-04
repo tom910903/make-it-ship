@@ -3,9 +3,9 @@
 // Storage: per-repo private data (contexts, goals, questions, taste) under the state root (shared by worktrees, outside
 // the code hash); team-shared append-only ledgers (decisions, health) under docs/make-it-ship/*.jsonl.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
@@ -16,7 +16,8 @@ import { shortcutDebt, renderDebt } from './debt.mjs';
 import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
 import { bumpVersion, currentVersion, nextVersion, diffScope, repoMode, LEVELS } from './release.mjs';
 import { QID, validateQuestionLog, deriveProfile } from './questions.mjs';
-import { parseMermaid, toExcalidraw, toSvg } from './diagram.mjs';
+import { esc, parseMermaid, toExcalidraw, toSvg } from './diagram.mjs';
+import { parseChart, chartFromData, chartToSvg, parseCsv } from './chart.mjs';
 
 const fail = (msg) => { throw new Error(msg); };
 function flag(args, name) {
@@ -321,6 +322,38 @@ function diagram([file, ...args], cwd) {
     png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg and .excalidraw stand)` };
 }
 
+/** Data chart (user decision 2026-11-04): CSV/JSON rows or mermaid pie/xychart-beta → <name>.svg + <name>.html, only inside the repository. */
+function chart([file, ...args], cwd) {
+  if (!file || !/\.(csv|json|mmd)$/i.test(file)) fail('usage: mis chart <file.csv|file.json|file.mmd> [--type bar|line|pie] [--x col] [--y col1,col2] [--title t] [--out dir]');
+  const root = repoRoot(cwd), inside = (p) => { const r = relative(root, p); return r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r); };
+  if (!existsSync(resolve(cwd, file))) fail(`no file ${file}`);
+  const src = realpathSync(resolve(cwd, file));
+  if (!inside(src)) fail(`${file} is outside the repository (${root}); mis chart reads and writes only inside it`);
+  const type = flag(args, '--type'), x = flag(args, '--x'), y = flag(args, '--y')?.split(',').map((c) => c.trim()).filter(Boolean), title = flag(args, '--title');
+  const out = flag(args, '--out'), outDir = resolve(cwd, out ?? dirname(file));
+  if (!inside(outDir)) fail(`--out ${out} is outside the repository (${root}); mis chart writes only inside it`);
+  const text = readFileSync(src, 'utf8');
+  let model;
+  if (/\.mmd$/i.test(file)) {
+    if (type || x || y) fail('--type, --x and --y apply to CSV/JSON; a .mmd chart sets them itself');
+    model = parseChart(text);
+  } else {
+    let rows;
+    try { rows = /\.json$/i.test(file) ? JSON.parse(text) : parseCsv(text); } catch (e) { fail(`${file}: ${e.message}`); }
+    model = chartFromData(rows, { type, x, y });
+  }
+  if (title) model.title = title;
+  mkdirSync(outDir, { recursive: true });
+  if (!inside(realpathSync(outDir))) fail(`--out ${out} resolves outside the repository through a symlink`);
+  const name = basename(file).replace(/\.(csv|json|mmd)$/i, ''), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`), s = chartToSvg(model);
+  writeFileSync(svg, s + '\n');
+  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(model.title || name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#0d1117}}</style></head><body>${s}</body></html>\n`);
+  const pie = model.kind === 'pie';
+  return { type: pie ? 'pie' : [...new Set(model.series.map((t) => t.type))].join('+'), series: pie ? 1 : model.series.length, points: pie ? model.slices.length : model.categories.length,
+    files: [relative(cwd, svg), relative(cwd, html)],
+    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg stands)` };
+}
+
 // ---------------------------------------------------------------- B8 decisions, JSONL merge driver
 
 const decisionsFile = (cwd) => join(repoRoot(cwd), REPORT_DIR, 'decisions.jsonl');
@@ -396,4 +429,4 @@ function jsonlMerge(args, cwd) {
 }
 
 export const flowCommands = { debt, redact, health, 'version-bump': versionBump, 'next-version': nextVersionCmd, 'diff-scope': diffScopeCmd,
-  'repo-mode': repoModeCmd, context, goal, question, profile, taste, 'design-board': designBoard, diagram, decision, 'jsonl-merge': jsonlMerge };
+  'repo-mode': repoModeCmd, context, goal, question, profile, taste, 'design-board': designBoard, diagram, chart, decision, 'jsonl-merge': jsonlMerge };

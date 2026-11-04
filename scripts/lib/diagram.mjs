@@ -68,7 +68,7 @@ export function toExcalidraw(g) {
   return { type: 'excalidraw', version: 2, source: 'make-it-ship', elements, appState: { viewBackgroundColor: '#ffffff', gridSize: null }, files: {} };
 }
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export function toSvg(g) {
   const { pos, W, H } = layout(g);
