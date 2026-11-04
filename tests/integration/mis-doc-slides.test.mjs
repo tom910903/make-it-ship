@@ -27,7 +27,9 @@ test('mis doc: x.md + x.ko.md → two HTML files with lang en/ko; a configured l
     '.make-it-ship.json': { version: 1, checks: { test: { argv: ['true'] } }, layout: { paths: ['**'], docs: { human: 'docs', languages: ['en', 'ko', 'ja'] } } },
     'docs/guide.md': `# Guide\n\n${FLOW}\n\`\`\`mermaid\nnot a diagram\n\`\`\`\n`, 'docs/guide.ko.md': `# 안내\n\n${FLOW}`,
   });
-  const r = ok(mis(dir, ['doc', 'docs/guide.ko.md'], { env: NOCHROME }));
+  const run = mis(dir, ['doc', 'docs/guide.ko.md'], { env: NOCHROME });
+  assert.equal(run.code, 1, 'a broken mermaid block fails the command; the files and the report are still written'); // as visual-verdict: JSON + exit 1
+  const r = run.json;
   assert.deepEqual(r.docs.map((d) => [d.lang, d.source, d.html]), [['en', 'docs/guide.md', 'docs/guide.html'], ['ko', 'docs/guide.ko.md', 'docs/guide.ko.html']]);
   assert.deepEqual(r.missingTranslations, ['docs/guide.ja.md']);
   assert.equal(r.visuals, 2);
@@ -100,8 +102,14 @@ test('mis slides: Marp deck → one HTML with a section per slide; --pdf without
   const h = readFileSync(join(dir, 'talk/deck.html'), 'utf8');
   assert.equal((h.match(/<section class="slide"/g) ?? []).length, 3);
   assert.doesNotMatch(h, /https?:\/\/(?!www\.w3\.org)/);
-  const d = ok(mis(dir, ['doc', 'docs/guide.md', '--pdf'], { env: NOCHROME }));
+  const dr = mis(dir, ['doc', 'docs/guide.md', '--pdf'], { env: NOCHROME }), d = dr.json;
+  assert.equal(dr.code, 1, 'guide.md still has its broken mermaid block');
   assert.ok(d.docs.every((x) => x.pdf === null && /BLOCKED: no Chrome/.test(x.blocked)));
+  write(dir, { 'talk/bad.md': '# Bad\n\n```mermaid\nnot a diagram\n```\n' });
+  const bad = mis(dir, ['slides', 'talk/bad.md'], { env: NOCHROME });
+  assert.equal(bad.code, 1);
+  assert.deepEqual(bad.json.errors.map((e) => e.slide), [1]);
+  assert.ok(existsSync(join(dir, 'talk/bad.html')));
 });
 
 test('mis doc / slides --pdf through the built-in browser: local images load under the CSP, one page per slide (or BLOCKED without one)', () => {

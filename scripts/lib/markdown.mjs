@@ -53,16 +53,21 @@ const visual = (src) => (/^(?:\s*%%.*\n)*\s*(pie|xychart-beta)\b/.test(src) ? ch
 
 /** Lex + render one markdown text. A broken mermaid block keeps its source plus an error box and lands in errors (never thrown).
  * comment(text) receives every whole HTML comment (slides: notes and directives), which is then dropped from the output. */
-function render(md, { allowNetwork = false, comment, image } = {}) {
+function render(md, { allowNetwork = false, comment, image, marp = false } = {}) {
   const marked = new Marked({ gfm: true }), errors = [], lines = [];
   let visuals = 0, n = 0;
   const local = (href) => !SCHEME.test(href) && image?.(href);
   marked.use({ renderer: {
     image({ href, text, title }) {
-      if (/^https?:/i.test(href)) return allowNetwork ? false : `<span class="blocked">[remote image blocked: ${esc(text || href)}] (use --allow-network)</span>`;
-      if (/^data:/i.test(href)) return false;
-      const src = local(href);
-      return src ? `<img src="${esc(src)}" alt="${esc(text)}"${title ? ` title="${esc(title)}"` : ''}>` : `<span class="blocked">[local image blocked: ${esc(text || href)}] (outside the repository or not found)</span>`;
+      if (/^https?:/i.test(href) && !allowNetwork) return `<span class="blocked">[remote image blocked: ${esc(text || href)}] (use --allow-network)</span>`;
+      const src = /^(https?|data):/i.test(href) ? href : local(href);
+      if (!src) return `<span class="blocked">[local image blocked: ${esc(text || href)}] (outside the repository or not found)</span>`;
+      // Marp decks: `w:640` `height:30cm` keywords in the alt text size the image (CSS lengths only)
+      const size = [], alt = !marp ? text : text.replace(/(^|\s)(w|width|h|height):(auto|\d+(?:\.\d+)?(?:px|cm|mm|in|pt|pc|em|rem|%)?)(?=\s|$)/g, (m, sp, k, v) => {
+        size.push(`${k[0] === 'w' ? 'width' : 'height'}:${/\d$/.test(v) ? `${v}px` : v}`);
+        return '';
+      }).trim();
+      return `<img src="${esc(src)}" alt="${esc(alt)}"${title ? ` title="${esc(title)}"` : ''}${size.length ? ` style="${size.join(';')}"` : ''}>`;
     },
     html({ text }) {
       if (NAVIGATES.test(text)) return esc(text);
@@ -112,16 +117,24 @@ export function markdownToHtml(md, { baseDir, baseHref, title, allowNetwork = fa
 
 const keyValues = (lines) => Object.fromEntries(lines.map((l) => l.match(/^\s*([\w-]+)\s*:\s*(.*?)\s*$/)).filter(Boolean).map((m) => [m[1], m[2].replace(/^(["'])(.*)\1$/, '$2')]));
 
-/** Front matter (`---` … `---` from line 1) and the slides, split on `---` lines outside code fences. */
+// CommonMark thematic breaks (Marpit splits on all of them); `-` only ones directly under paragraph text are setext underlines (an <h2>) instead.
+const RULER = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/, UNDERLINE = /^ {0,3}-+[ \t]*$/;
+// lines that are not paragraph text: headings, quotes, list items, fences, HTML, tables, rulers
+const NOT_TEXT = /^\s{0,3}(?:#{1,6}(?:\s|$)|>|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|`{3,}|~{3,}|<|\|)/;
+
+/** Front matter (`---` … `---` from line 1) and the slides, split on thematic breaks outside code fences (markdown-it's rule, as Marp). */
 export function splitSlides(md) {
   const lines = md.replace(/\r\n?/g, '\n').split('\n'), slides = [[]];
-  let front = {}, i = 0, fence = null;
+  let front = {}, i = 0, fence = null, para = false;
   if (/^---\s*$/.test(lines[0])) { const end = lines.findIndex((l, k) => k > 0 && /^---\s*$/.test(l)); if (end > 0) { front = keyValues(lines.slice(1, end)); i = end + 1; } }
   for (; i < lines.length; i++) {
     const l = lines[i], f = l.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
     if (f && !fence) fence = f[1];
-    else if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
-    if (!fence && /^---\s*$/.test(l)) slides.push([]); else slides.at(-1).push(l);
+    else if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) { fence = null; slides.at(-1).push(l); para = false; continue; }
+    const split = !fence && RULER.test(l) && !(para && UNDERLINE.test(l));
+    if (split) slides.push([]); else slides.at(-1).push(l);
+    // shortcut: lazy continuation lines of quotes and list items count as paragraph text; a --- under them stays in the slide
+    para = !fence && !split && !(para && UNDERLINE.test(l)) && !!l.trim() && !NOT_TEXT.test(l) && !RULER.test(l);
   }
   return { front, slides: slides.map((s) => s.join('\n')) };
 }
@@ -167,7 +180,7 @@ export function markdownToSlides(md, { baseDir, baseHref, title, image } = {}) {
   let visuals = 0, firstHeading;
   slides.forEach((src, k) => {
     const mine = [], spot = {};
-    const r = render(src, { image, comment: (c) => {
+    const r = render(src, { image, marp: true, comment: (c) => {
       const d = directives(c);
       if (!d) return mine.push(c);
       for (const [key, v] of Object.entries(d)) if (key[0] === '_') spot[key.slice(1)] = v; else if (LOCAL.includes(key)) state[key] = v;

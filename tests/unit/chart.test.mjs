@@ -91,6 +91,23 @@ test('chart: chartFromData defaults (x = first column, y = numeric columns) and 
   assert.throws(() => chartFromData([], {}), /no rows/);
 });
 
+test('chart: a legend lists named series only (unnamed mermaid series get none, as on GitHub)', () => {
+  const legendTexts = (svg) => [...svg.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="12" height="12"[^>]*\/><text[^>]*>([^<]*)</g)].map((m) => m[1]);
+  const unnamed = chartToSvg(parseChart('xychart-beta\nx-axis [a, b]\nbar [1, 2]\nline [2, 3]'));
+  assert.deepEqual(legendTexts(unnamed), []);
+  assert.doesNotMatch(unnamed, /bar 1|line 2/);
+  assert.deepEqual(legendTexts(chartToSvg(parseChart('xychart-beta\nx-axis [a, b]\nbar "Sales" [1, 2]\nline [2, 3]'))), ['Sales']);
+  assert.deepEqual(legendTexts(chartToSvg(chartFromData([{ m: 'a', x: 1, y: 2 }], {}))), ['x', 'y']);
+});
+
+test('chart: --type hbar draws horizontal bars from rows', () => {
+  const m = chartFromData([{ k: 'a', v: 1 }, { k: 'b', v: 3 }], { type: 'hbar' });
+  assert.deepEqual([m.kind, m.horizontal, m.series.map((s) => s.type)], ['xy', true, ['bar']]);
+  const bars = [...chartToSvg(m).matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" class="f0"/g)].map((r) => r.slice(1).map(Number));
+  assert.equal(bars.length, 2);
+  assert.ok(bars[1][2] > bars[0][2] && bars[0][3] === bars[1][3], 'value along the width');
+});
+
 test('chart: every label is escaped, so a label cannot inject markup', () => {
   const evil = '<script>alert(1)</script>';
   const svg = chartToSvg(chartFromData([{ k: evil, v: '1' }, { k: 'b', v: '2' }], { title: evil, y: ['v'] }));

@@ -190,6 +190,7 @@ async function doc(argv, cwd) {
     visuals += r.visuals; errors.push(...r.errors.map((e) => ({ file: relative(cwd, d.md), ...e })));
     results.push({ lang: d.lang, source: relative(cwd, d.md), html: relative(cwd, d.html), ...(wantPdf ? await pdfOrBlocked(cwd, d.html, docPdfOpts(r.title, { allowNetwork })) : {}) });
   }
+  if (errors.length) process.exitCode = 1; // files and report stand; a broken mermaid block still fails the step
   return { docs: results, visuals, errors, missingTranslations: configured?.length > 1 ? all.filter((d) => !existsSync(d.md)).map((d) => relative(cwd, d.md)) : [] };
 }
 
@@ -207,6 +208,7 @@ async function slides(argv, cwd) {
   const r = markdownToSlides(readFileSync(src, 'utf8'), { baseHref: relBase(html, src), image: images(cwd, src) });
   mkdirSync(dirname(html), { recursive: true });
   writeFileSync(html, r.html);
+  if (r.errors.length) process.exitCode = 1;
   return { html: relative(cwd, html), title: r.title, slides: r.slides, visuals: r.visuals, errors: r.errors, notes: r.notes.flat().length,
     ...(wantPdf ? await pdfOrBlocked(cwd, html, { preferCSSPageSize: true, margins: '0in' }) : {}) };
 }

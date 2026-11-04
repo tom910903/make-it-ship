@@ -76,6 +76,28 @@ test('slides: split on --- outside fences and front matter; a fenced --- stays',
   assert.deepEqual(splitSlides('# A\n---\n# B').slides.length, 2); // no front matter
 });
 
+test('slides: split only where markdown-it sees a thematic break: --- under a paragraph is a setext heading; ***, ___ and - - - split too', () => {
+  assert.deepEqual(splitSlides('# A\n\nSome text\n---\nstill A').slides, ['# A\n\nSome text\n---\nstill A']);
+  assert.equal(splitSlides('A\n\n---\n\nB').slides.length, 2);
+  assert.equal(splitSlides('para\n***\nB\n___\nC\n\n- - -\nD').slides.length, 4);
+  assert.equal(splitSlides('para\n- - -\nB').slides.length, 2, 'a spaced ruler is never a setext underline');
+  assert.equal(splitSlides('> quote\n---\nB').slides.length, 2);
+  assert.equal(splitSlides('<!-- note -->\n---\nB').slides.length, 2);
+  const r = markdownToSlides('Intro\n---\n\nmore');
+  assert.equal(r.slides, 1);
+  assert.match(r.html, /<h2>Intro<\/h2>/);
+});
+
+test('slides: Marp image size keywords (w:, h:, width:, height:) become the image size, not alt text', () => {
+  const image = () => 'data:image/png;base64,AAAA';
+  const h = markdownToSlides('![w:640 logo](a.png) ![height:30cm](b.png) ![width:200px h:auto](c.png) ![w:1;color:red](d.png)', { image }).html;
+  assert.match(h, /<img src="data:image\/png;base64,AAAA" alt="logo" style="width:640px">/);
+  assert.match(h, /<img src="[^"]+" alt="" style="height:30cm">/);
+  assert.match(h, /<img src="[^"]+" alt="" style="width:200px;height:auto">/);
+  assert.match(h, /alt="w:1;color:red"/, 'anything but a CSS length stays alt text');
+  assert.match(markdownToHtml('![w:640](a.png)', { image }).html, /alt="w:640">/, 'only decks read the keywords');
+});
+
 test('slides: Marp subset — title, paginate, notes, directives ignored, mermaid, nav script allowed by hash only', () => {
   const md = [
     '---', 'marp: true', 'title: My deck', 'paginate: true', 'theme: gaia', '---', '',

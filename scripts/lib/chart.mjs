@@ -61,7 +61,7 @@ function parseXy(lines, horizontal) {
 /** Model from CSV/JSON rows: x defaults to the first column, y to every other column whose values are all numbers. */
 export function chartFromData(rows, { type = 'bar', x, y, title = '' } = {}) {
   if (!Array.isArray(rows) || !rows.length) throw new Error('no rows to chart (expected a non-empty array of row objects)');
-  if (!['bar', 'line', 'pie'].includes(type)) throw new Error(`--type must be bar, line or pie (got ${type})`);
+  if (!['bar', 'hbar', 'line', 'pie'].includes(type)) throw new Error(`--type must be bar, hbar, line or pie (got ${type})`);
   const cols = Object.keys(rows[0] ?? {});
   for (const c of [x, ...(y ?? [])]) if (c !== undefined && !cols.includes(c)) throw new Error(`unknown column "${c}" (columns: ${cols.join(', ')})`);
   const num = (v) => (typeof v === 'number' ? Number.isFinite(v) : NUM.test(String(v ?? '').trim()));
@@ -78,7 +78,8 @@ export function chartFromData(rows, { type = 'bar', x, y, title = '' } = {}) {
     const slices = values(y[0]).map((value, i) => { if (!(value > 0)) throw new Error(`row ${i + 1} column "${y[0]}": pie values must be positive: ${value}`); return { label: categories[i], value }; });
     return { kind: 'pie', title, showData: false, slices };
   }
-  return { kind: 'xy', title, horizontal: false, categories, xLabel: x, yLabel: y.length === 1 ? y[0] : '', yRange: null, series: y.map((c) => ({ type, name: c, values: values(c) })) };
+  return { kind: 'xy', title, horizontal: type === 'hbar', categories, xLabel: x, yLabel: y.length === 1 ? y[0] : '', yRange: null,
+    series: y.map((c) => ({ type: type === 'hbar' ? 'bar' : type, name: c, values: values(c) })) };
 }
 
 /** RFC 4180-ish CSV: header row, quoted fields with "" escapes, commas and newlines inside quotes, CRLF. */
@@ -148,7 +149,8 @@ function pie(m, top) {
 }
 
 function xy(m, top) {
-  const many = m.series.length > 1, left = 72, right = many ? 180 : 24, bottom = 64, pw = W - left - right, ph = H - top - bottom, out = [];
+  // a legend only for several series and only their names: mermaid's unnamed series have none on GitHub
+  const named = m.series.length > 1 ? m.series.map((s, i) => [s.name, i]).filter(([n]) => n) : [], left = 72, right = named.length ? 180 : 24, bottom = 64, pw = W - left - right, ph = H - top - bottom, out = [];
   const all = m.series.flatMap((s) => s.values);
   const nt = m.yRange ? niceTicks(...m.yRange) : niceTicks(Math.min(0, ...all), Math.max(0, ...all));
   const [lo, hi] = m.yRange ?? [nt.lo, nt.hi], ticks = nt.ticks.filter((t) => t >= lo - 1e-9 && t <= hi + 1e-9);
@@ -183,6 +185,6 @@ function xy(m, top) {
       out.push(`<polyline points="${ps.map((p) => p.join(',')).join(' ')}" class="k${k}" stroke-width="2"/>`, ...ps.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3" class="f${k}"/>`));
     }
   });
-  if (many) out.push(...legend(m.series.map((s, i) => [s.name || `${s.type} ${i + 1}`, i]), W - right + 16, top));
+  out.push(...legend(named, W - right + 16, top));
   return out;
 }

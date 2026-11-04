@@ -186,7 +186,7 @@ mis doc docs/guide.md --pdf     # ```mermaid 블록을 SVG로; guide.md와 guide
 mis slides talk.md --pdf        # Marp 형식 마크다운: 슬라이드 사이 ---, <!-- 노트 -->
 ```
 
-생성된 HTML에는 Content-Security-Policy가 들어가 문서 안의 스크립트는 실행되지 않습니다. PDF는 Chrome이 필요하고, 없으면 PDF는 BLOCKED로 남고 HTML은 그대로 만들어집니다.
+`mis doc`, `mis slides`, `mis pdf`의 HTML에는 Content-Security-Policy가 들어가 문서 안의 스크립트, 프레임, 폼, 원격 로드는 실행되지 않고, 이동을 일으키는 원시 태그(`<meta>` refresh, `<base>`, `<link>`, `<iframe>`, `<object>`, `<form>`)는 글자로 보이며, 저장소 안의 이미지만 (`data:`로) 들어갑니다. `mis chart`와 `mis diagram`의 `.html`에는 우리가 이스케이프한 SVG만 들어갑니다. 심볼릭 링크인 출력 파일은 거부합니다. PDF는 Chrome이 필요하고, 없으면 PDF는 BLOCKED로 남고 HTML은 그대로 만들어집니다. `mis doc`과 `mis slides`는 그릴 수 없는 mermaid 블록이 있으면 종료 코드 1로 끝납니다(파일과 `errors` 보고는 그대로 남습니다).
 
 ### 팀과 세션
 

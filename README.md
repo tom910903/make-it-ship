@@ -186,7 +186,7 @@ mis doc docs/guide.md --pdf     # ```mermaid blocks become SVG; guide.md + guide
 mis slides talk.md --pdf        # Marp-style markdown: --- between slides, <!-- notes -->
 ```
 
-Generated HTML carries a Content-Security-Policy, so scripts inside a document never run. PDFs need Chrome; without it the PDF is BLOCKED and the HTML stands.
+The HTML of `mis doc`, `mis slides` and `mis pdf` carries a Content-Security-Policy: scripts, frames, forms and remote loads in a document never run, raw tags that navigate (`<meta>` refresh, `<base>`, `<link>`, `<iframe>`, `<object>`, `<form>`) show as text, and only images inside the repository are inlined (as `data:`). The `.html` of `mis chart` and `mis diagram` holds only our own escaped SVG. Outputs that are symlinks are refused. PDFs need Chrome; without it the PDF is BLOCKED and the HTML stands. `mis doc` and `mis slides` exit 1 when a mermaid block cannot be drawn (the files and the `errors` report are still written).
 
 ### Teams and sessions
 

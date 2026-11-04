@@ -344,7 +344,7 @@ function diagram([file, ...args], cwd) {
 
 /** Data chart (user decision 2026-11-04): CSV/JSON rows or mermaid pie/xychart-beta → <name>.svg + <name>.html, only inside the repository. */
 function chart([file, ...args], cwd) {
-  if (!file || !/\.(csv|json|mmd)$/i.test(file)) fail('usage: mis chart <file.csv|file.json|file.mmd> [--type bar|line|pie] [--x col] [--y col1,col2] [--title t] [--out dir]');
+  if (!file || !/\.(csv|json|mmd)$/i.test(file)) fail('usage: mis chart <file.csv|file.json|file.mmd> [--type bar|hbar|line|pie] [--x col] [--y col1,col2] [--title t] [--out dir]');
   const src = resolve(cwd, file);
   if (!existsSync(src)) fail(`no file ${file}`);
   const type = flag(args, '--type'), x = flag(args, '--x'), y = flag(args, '--y')?.split(',').map((c) => c.trim()).filter(Boolean), title = flag(args, '--title');
