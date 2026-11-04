@@ -1,6 +1,6 @@
 // mis commands of the built-in browser (M8-A): browse (gstack browse), pdf (gstack make-pdf), visual-verdict (OMC visual-verdict);
 // doc and slides (visual documents, 2026-11-04) live here so every PDF goes through the one Chrome path.
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync, realpathSync, lstatSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename, relative, sep } from 'node:path';
@@ -123,6 +123,8 @@ async function pdf(argv, cwd) {
   if (!existsSync(md)) throw new Error(`no such file: ${file}`);
   const out = resolve(cwd, o.out ?? join(dirname(md), `${basename(md).replace(/\.(md|markdown)$/i, '')}.pdf`));
   const { html, title, visuals, errors } = markdownToHtml(readFileSync(md, 'utf8'), { baseDir: dirname(md), title: o.title, allowNetwork: o.allowNetwork, image: images(cwd, md) });
+  // -o may point anywhere the user chooses; a symlink at the path (e.g. committed next to the .md) must not redirect the write
+  if (lstatSync(out, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${relative(cwd, out) || out} is a symlink; refusing to write through it`);
   mkdirSync(dirname(out), { recursive: true });
   const tmp = mkdtempSync(join(tmpdir(), 'mis-pdf-'));
   const htmlFile = join(tmp, 'doc.html');

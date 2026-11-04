@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { browserLock, makeRepo, write, mis } from '../helpers.mjs';
@@ -55,4 +55,14 @@ test('mis pdf: markdown → tagged PDF through the built-in browser (or BLOCKED 
   assert.equal(o.code, 0, o.err);
   assert.ok(existsSync(join(dir, 'out/g.pdf')));
   assert.equal(mis(dir, ['pdf', 'missing.md'], { env: ENV }).code, 1);
+});
+
+test('mis pdf: an output path that is a symlink is refused before Chrome runs (a committed link cannot redirect the write)', () => {
+  const dir = makeRepo({ 'notes.md': '# Notes\n' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-pdf-out-'));
+  symlinkSync(join(outside, 'pwn.pdf'), join(dir, 'notes.pdf'));
+  const r = mis(dir, ['pdf', 'notes.md']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.err, /symlink/);
+  assert.ok(!existsSync(join(outside, 'pwn.pdf')));
 });
