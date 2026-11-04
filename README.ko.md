@@ -175,6 +175,19 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 
 `/make-it-ship:run`이 office hours, 브레인스토밍, 계획 리뷰(CEO, 디자인, DX, 엔지니어링), 디자인 보드, 병렬 tracer, 감사, 버전 올리기, 비밀값 검사를 알맞은 단계에서 꺼내 씁니다. 따로 부를 필요가 없습니다. 모든 조건은 run 스킬의 "Situational steps" 표에 있습니다.
 
+### 차트, 다이어그램, 시각 문서, 슬라이드
+
+결과물은 다크 모드를 지원하는 독립 SVG/HTML이고, 저장소 안에만 쓰며, 런타임 의존성이 없습니다. 원본은 mermaid 문법이라 GitHub에서도 같은 파일이 그대로 렌더됩니다.
+
+```sh
+mis chart sales.csv --type line --x month --y revenue,cost   # .json이나 mermaid pie / xychart-beta .mmd도 가능
+mis diagram design/login.mmd    # flowchart(+ .excalidraw), sequence, class, ER, state
+mis doc docs/guide.md --pdf     # ```mermaid 블록을 SVG로; guide.md와 guide.ko.md를 한 번에
+mis slides talk.md --pdf        # Marp 형식 마크다운: 슬라이드 사이 ---, <!-- 노트 -->
+```
+
+생성된 HTML에는 Content-Security-Policy가 들어가 문서 안의 스크립트는 실행되지 않습니다. PDF는 Chrome이 필요하고, 없으면 PDF는 BLOCKED로 남고 HTML은 그대로 만들어집니다.
+
 ### 팀과 세션
 
 `/make-it-ship:team`은 일반 run 위에서 plan → exec → verify → fix를 돌립니다(명시적으로 요청할 때만). `mis team start <N> "<task>"`는 각자 worktree를 가진 tmux 작업자를 띄우고, `mis session create issue|pr|feature`는 독립 worktree를 만들며, `mis companion start`는 클릭할 수 있는 선택지가 있는 시안 화면을 띄웁니다.

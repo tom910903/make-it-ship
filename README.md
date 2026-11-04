@@ -175,6 +175,19 @@ Installing the plugin is enough. Every session gets the working discipline (ask 
 
 `/make-it-ship:run` brings in office hours, brainstorming, plan reviews (CEO, design, DX, eng), design boards, parallel tracers, audits, version bumps and secret scans at the phase where they fit; you do not call them separately. The run skill's "Situational steps" table lists every trigger.
 
+### Charts, diagrams, visual docs and slides
+
+All output is self-contained SVG/HTML with dark mode, written only inside the repository, with no runtime dependencies. Sources use mermaid syntax, so GitHub renders the same file.
+
+```sh
+mis chart sales.csv --type line --x month --y revenue,cost   # also .json, or a mermaid pie / xychart-beta .mmd
+mis diagram design/login.mmd    # flowchart (+ .excalidraw), sequence, class, ER, state
+mis doc docs/guide.md --pdf     # ```mermaid blocks become SVG; guide.md + guide.ko.md in one call
+mis slides talk.md --pdf        # Marp-style markdown: --- between slides, <!-- notes -->
+```
+
+Generated HTML carries a Content-Security-Policy, so scripts inside a document never run. PDFs need Chrome; without it the PDF is BLOCKED and the HTML stands.
+
 ### Teams and sessions
 
 `/make-it-ship:team` runs plan → exec → verify → fix on top of a normal run (only on explicit request). `mis team start <N> "<task>"` opens tmux workers on their own worktrees; `mis session create issue|pr|feature` makes an isolated worktree; `mis companion start` serves mockups with clickable choices.

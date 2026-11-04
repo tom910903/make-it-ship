@@ -152,7 +152,7 @@ export function renderDiagram(src) {
   const lines = clean(src), head = lines[0] ?? '';
   const some = (g) => { if (!g.nodes.length) throw cannot(`${head} (empty diagram)`); return g; };
   if (/^(flowchart|graph)\b/i.test(head)) { const g = some(parseMermaid(src)); return { kind: 'flowchart', ...g, svg: toSvg(g), excalidraw: toExcalidraw(g) }; }
-  if (!PARSE[head]) throw new Error(`unsupported diagram type: ${head} (supported: flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram-v2)`);
+  if (!PARSE[head]) throw new Error(`unsupported diagram type: ${head} (supported: flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram-v2; pie and xychart-beta: mis chart)`);
   const [kind, parse] = PARSE[head], g = some(parse(lines.slice(1)));
   // shortcut: .excalidraw only for flowcharts; add per-kind elements when someone edits the other kinds in Excalidraw.
   return { kind, ...g, svg: kind === 'sequence' ? sequenceSvg(g) : toSvg(g), excalidraw: null };
