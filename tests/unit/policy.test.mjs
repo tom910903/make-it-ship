@@ -228,8 +228,8 @@ test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser exe
     }
     assert.equal(d(bash('node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/'), c), 'allow');
   }
-  // M8 r4 N1: pdf, canary and pair-agent start the same browser daemon
-  for (const cmd of ['MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs pdf doc.md', "MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs canary http://127.0.0.1:5/",
+  // M8 r4 N1: pdf, doc/slides --pdf, canary and pair-agent start the same browser daemon
+  for (const cmd of ['MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs pdf doc.md', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs doc doc.md --pdf', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs slides deck.md --pdf', "MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs canary http://127.0.0.1:5/",
     'export MIS_BROWSER_EXE=/tmp/c; node /p/scripts/mis.mjs pair-agent start --local']) assert.equal(d(bash(cmd), idle), 'ask', cmd);
   assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
 });
@@ -429,7 +429,7 @@ test('M9-D: every external or approval-gated mis subcommand asks with and withou
     'gbrain detect', 'gbrain ingest --probe', 'gbrain policy get', 'gbrain enqueue a.md', 'gbrain uninstall', 'design compare', 'design gallery', 'pair-agent stop', 'pair-agent status',
     'ios daemon start --target http://127.0.0.1:9', 'ios daemon stop', 'ios sync', 'android daemon start', 'android tap 1 2', 'android boot Medium_Phone', 'deploy setup', 'deploy status', 'deploy run --dry-run', 'landing-report', 'mission-board',
     'wait --seconds 1', 'wait detect', 'wait auto --pane %3', 'detach -- npm test', 'detach --lock evals -- npm test', 'redact file notes.md', 'redact scan --pii --legal', 'research list', 'autoresearch status m', 'self-improve list', 'writer-memory status', 'layout', 'layout --json',
-    'diagram design/a.mmd --out design', 'chart data.csv --out design', 'chart design/share.mmd'];
+    'diagram design/a.mmd --out design', 'chart data.csv --out design', 'chart design/share.mmd', 'doc docs/guide.md --pdf', 'slides deck.md -o deck.html --pdf'];
   for (const c of [ctx, { ...ctx, activeRun: false }]) {
     for (const cmd of external) {
       const r = classify(bash(`${M} ${cmd}`), c);
