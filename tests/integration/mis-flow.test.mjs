@@ -206,6 +206,27 @@ test('B4 design: comparison board with data-choice per variant, mermaid → exca
   const ex = JSON.parse(readFileSync(join(dir, 'design/arch.excalidraw'), 'utf8'));
   assert.ok(Array.isArray(ex.elements) && ex.elements.length === 8);
   assert.match(d.png, /mis browse screenshot.*BLOCKED/);
+  write(dir, { 'design/seq.mmd': 'sequenceDiagram\n  A->>B: <script>alert(1)</script>\n' });
+  const s = ok(mis(dir, ['diagram', 'design/seq.mmd']));
+  assert.equal(s.kind, 'sequence');
+  assert.equal(s.excalidraw, null);
+  assert.match(s.note, /flowchart only/);
+  assert.deepEqual(s.files, ['design/seq.mmd', 'design/seq.svg', 'design/seq.html']);
+  assert.ok(!existsSync(join(dir, 'design/seq.excalidraw')));
+  const page = readFileSync(join(dir, 'design/seq.html'), 'utf8');
+  assert.doesNotMatch(page, /<script/i);
+  assert.match(page, /prefers-color-scheme: dark/);
+  assert.deepEqual(ok(mis(dir, ['design-board', 'design'])).variants, ['a.html', 'b.html'], 'diagram HTML is not a design variant');
+  const outside = realpathSync(mkdtempSync(join(tmpdir(), 'mis-out-')));
+  writeFileSync(join(outside, 'x.mmd'), 'flowchart TD\n  A --> B\n');
+  for (const args of [['design/arch.mmd', '--out', '../escape'], ['design/arch.mmd', '--out', join(outside, 'o')], [join(outside, 'x.mmd')]]) {
+    const r = mis(dir, ['diagram', ...args]);
+    assert.notEqual(r.code, 0, args.join(' '));
+    assert.match(r.err + r.out, /outside the repository/);
+  }
+  assert.ok(!existsSync(join(dir, '../escape')) && !existsSync(join(outside, 'o')), 'refused --out is never created');
+  write(dir, { 'design/bad.mmd': 'pie title x\n  "a" : 1\n' });
+  assert.match(mis(dir, ['diagram', 'design/bad.mmd']).err, /unsupported diagram type/);
   ok(mis(dir, ['taste', 'approve', 'a.html', '--tags', 'serif,warm']));
   ok(mis(dir, ['taste', 'reject', 'b.html', '--tags', 'gradient,warm']));
   const t = ok(mis(dir, ['taste', 'show']));

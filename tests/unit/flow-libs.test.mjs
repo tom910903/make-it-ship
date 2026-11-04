@@ -6,7 +6,7 @@ import { nextVersion, changelogRelease, classifyPath, diffScope, prTitle } from 
 import { parsePlanDoc } from '../../scripts/lib/plandoc.mjs';
 import { validatePlan } from '../../scripts/lib/plan.mjs';
 import { filterQuestions, deriveProfile, validateQuestionLog } from '../../scripts/lib/questions.mjs';
-import { parseMermaid, toExcalidraw, toSvg } from '../../scripts/lib/diagram.mjs';
+import { parseMermaid, toExcalidraw, toSvg, renderDiagram } from '../../scripts/lib/diagram.mjs';
 import { mergeJsonl, activeDecisions } from '../../scripts/lib/commands-flow.mjs';
 import { detectKeywords } from '../../scripts/lib/keywords.mjs';
 import { classify } from '../../scripts/lib/policy.mjs';
@@ -117,6 +117,104 @@ test('diagram: mermaid flowchart → excalidraw elements and svg', () => {
   assert.match(toSvg(g), /^<svg[\s\S]*Client[\s\S]*<\/svg>$/);
   assert.throws(() => parseMermaid('sequenceDiagram\nA->>B: x'), /flowchart/);
   assert.throws(() => parseMermaid('graph TD\nA --> '), /cannot parse/);
+});
+
+test('diagram: renderDiagram covers flowchart subgraphs, sequence, class, ER and state; unsupported syntax throws', () => {
+  const safe = (svg) => {
+    assert.match(svg, /^<svg[\s\S]*<\/svg>$/);
+    assert.doesNotMatch(svg, /<script/i);
+    assert.doesNotMatch(svg, /(fill|stroke)="#/, 'colors go through <style> classes');
+    assert.match(svg, /@media \(prefers-color-scheme: dark\)/);
+    assert.equal(svg.match(/https?:\/\/[^"]*/g).filter((u) => u !== 'http://www.w3.org/2000/svg').length, 0);
+  };
+  const f = renderDiagram('%% c\nflowchart TD\n  subgraph api [API layer]\n    A[<script>x</script>] --> B\n  end\n  C --> A\n  classDef hot fill:#f00\n  class A hot');
+  assert.equal(f.kind, 'flowchart');
+  assert.deepEqual(f.groups.map((s) => [s.id, s.title, s.nodes]), [['api', 'API layer', ['A', 'B']]]);
+  assert.ok(f.excalidraw.elements.some((e) => e.type === 'frame' && e.name === 'API layer'));
+  safe(f.svg);
+  assert.match(f.svg, /&lt;script&gt;x&lt;\/script&gt;/);
+  assert.match(f.svg, /API layer/);
+  for (const bad of ['subgraph a\nsubgraph b\nX\nend\nend', 'subgraph a\nX\nend\na --> X', 'subgraph a\nX', 'end', 'subgraph a\nX\nend\nsubgraph b\nX\nend'])
+    assert.throws(() => renderDiagram(`flowchart TD\n${bad}`), /cannot parse/, bad);
+
+  const s = renderDiagram(`sequenceDiagram
+  autonumber
+  participant A as Alice
+  actor B as <b>Bob</b>
+  loop every minute
+    A->>B: ping
+    B-->>A: pong
+  end
+  alt ok
+    A-xB: fail
+  else retry
+    A--xB: again
+  end
+  opt maybe
+    B->A: solid
+  end
+  B-->A: dotted
+  Note right of B: thinks
+  Note over A,B: shared`);
+  assert.equal(s.kind, 'sequence');
+  assert.equal(s.excalidraw, null);
+  assert.deepEqual(s.nodes.map((p) => [p.id, p.label, p.actor]), [['A', 'Alice', false], ['B', '<b>Bob</b>', true]]);
+  assert.deepEqual(s.edges.map((m) => [m.from, m.to, m.arrow, m.text]), [['A', 'B', '->>', 'ping'], ['B', 'A', '-->>', 'pong'], ['A', 'B', '-x', 'fail'],
+    ['A', 'B', '--x', 'again'], ['B', 'A', '->', 'solid'], ['B', 'A', '-->', 'dotted']]);
+  safe(s.svg);
+  for (const t of ['1. ping', 'loop [every minute]', 'alt [ok]', '[retry]', 'opt [maybe]', 'thinks', 'shared', '&lt;b&gt;Bob']) assert.ok(s.svg.includes(t), t);
+  for (const bad of ['A-)B: x', 'A->>+B: x', 'activate A', 'par x', 'else', 'end', 'loop x', 'A->>B', 'rect rgb(0,0,0)'])
+    assert.throws(() => renderDiagram(`sequenceDiagram\n${bad}`), /cannot parse/, bad);
+
+  const c = renderDiagram(`classDiagram
+  class Animal {
+    +String name
+    +eat() void
+  }
+  Animal : +int age
+  Animal <|-- Duck
+  Duck "1" *-- "many" Egg : lays
+  Pond o-- Duck
+  Duck --> Food
+  Duck ..> Water
+  Duck ..|> Swimmer
+  Duck -- Bird`);
+  assert.equal(c.kind, 'class');
+  const animal = c.nodes.find((n) => n.id === 'Animal');
+  assert.deepEqual(animal.sections, [['+String name', '+int age'], ['+eat() void']]);
+  assert.deepEqual(c.edges.map((e) => [e.from, e.to, e.rel]), [['Animal', 'Duck', '<|--'], ['Duck', 'Egg', '*--'], ['Pond', 'Duck', 'o--'],
+    ['Duck', 'Food', '-->'], ['Duck', 'Water', '..>'], ['Duck', 'Swimmer', '..|>'], ['Duck', 'Bird', '--']]);
+  assert.deepEqual([c.edges[1].fromLabel, c.edges[1].toLabel, c.edges[1].label], ['1', 'many', 'lays']);
+  safe(c.svg);
+  for (const bad of ['class Box~T~', '<<interface>> Shape', 'A <--> B', 'class A {\n<<service>>\n}', 'class A {\nx'])
+    assert.throws(() => renderDiagram(`classDiagram\n${bad}`), /cannot parse/, bad);
+
+  const e = renderDiagram(`erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE-ITEM : "contains"
+  CUSTOMER }|..|{ DELIVERY-ADDRESS : uses
+  CUSTOMER {
+    string name PK
+    string email UK "unique"
+  }`);
+  assert.equal(e.kind, 'er');
+  assert.deepEqual(e.edges.map((r) => [r.from, r.to, r.fromLabel, r.toLabel, r.label, r.dashed]), [['CUSTOMER', 'ORDER', '1', '0..*', 'places', false],
+    ['ORDER', 'LINE-ITEM', '1', '1..*', 'contains', false], ['CUSTOMER', 'DELIVERY-ADDRESS', '1..*', '1..*', 'uses', true]]);
+  assert.deepEqual(e.nodes.find((n) => n.id === 'CUSTOMER').sections, [['string name PK', 'string email UK "unique"']]);
+  safe(e.svg);
+  for (const bad of ['A only one to zero or more B : x', 'A ||--o{ B', 'p[Person] {\n}'])
+    assert.throws(() => renderDiagram(`erDiagram\n${bad}`), /cannot parse/, bad);
+
+  const st = renderDiagram('stateDiagram-v2\n  state "Waiting for input" as Idle\n  [*] --> Idle\n  Idle --> Busy : start\n  Busy : working hard\n  Busy --> [*]');
+  assert.equal(st.kind, 'state');
+  assert.deepEqual(st.edges.map((x) => [x.from, x.to, x.label]), [['[*]start', 'Idle', null], ['Idle', 'Busy', 'start'], ['Busy', '[*]end', null]]);
+  assert.deepEqual(st.nodes.map((n) => [n.id, n.label, n.shape ?? 'box']), [['Idle', 'Waiting for input', 'box'], ['[*]start', '', 'start'], ['Busy', 'working hard', 'box'], ['[*]end', '', 'end']]);
+  safe(st.svg);
+  for (const bad of ['state Big {\nA --> B\n}', 'note right of A : x', 'state f <<fork>>', '--'])
+    assert.throws(() => renderDiagram(`stateDiagram-v2\n${bad}`), /cannot parse/, bad);
+
+  for (const head of ['pie title x', 'xychart-beta', 'gantt', 'stateDiagram', '---\ntitle: x\n---\nflowchart TD'])
+    assert.throws(() => renderDiagram(`${head}\nA`), /unsupported diagram type/, head);
 });
 
 test('JSONL union merge and decision supersede view', () => {

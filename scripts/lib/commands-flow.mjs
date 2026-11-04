@@ -3,9 +3,9 @@
 // Storage: per-repo private data (contexts, goals, questions, taste) under the state root (shared by worktrees, outside
 // the code hash); team-shared append-only ledgers (decisions, health) under docs/make-it-ship/*.jsonl.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
@@ -16,7 +16,7 @@ import { shortcutDebt, renderDebt } from './debt.mjs';
 import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
 import { bumpVersion, currentVersion, nextVersion, diffScope, repoMode, LEVELS } from './release.mjs';
 import { QID, validateQuestionLog, deriveProfile } from './questions.mjs';
-import { parseMermaid, toExcalidraw, toSvg } from './diagram.mjs';
+import { renderDiagram, esc } from './diagram.mjs';
 
 const fail = (msg) => { throw new Error(msg); };
 function flag(args, name) {
@@ -288,8 +288,8 @@ function designBoard([d = 'design', ...args], cwd) {
   const dir = resolve(cwd, d);
   if (!existsSync(dir)) fail(`no directory ${d}`);
   const out = flag(args, '--out') ?? 'board.html';
-  // <name>.html next to <name>.excalidraw is a diagram that mis diagram wrote, not a design variant.
-  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html' && !existsSync(join(dir, f.replace(/\.html?$/i, '.excalidraw')))).sort();
+  // <name>.html next to <name>.excalidraw or <name>.svg is a diagram that mis diagram wrote, not a design variant.
+  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html' && !['.excalidraw', '.svg'].some((x) => existsSync(join(dir, f.replace(/\.html?$/i, x))))).sort();
   if (variants.length < 2) fail(`a board needs at least 2 HTML variants in ${d} (found ${variants.length})`);
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const cards = variants.map((v) => `<figure><iframe src="${encodeURI(v)}" title="${esc(v)}" loading="lazy"></iframe>
@@ -307,18 +307,25 @@ ${cards}
 }
 
 function diagram([file, ...args], cwd) {
-  if (!file || !/\.mmd$/.test(file)) fail('usage: mis diagram <file.mmd> [--out <dir>]');
-  const outDir = resolve(cwd, flag(args, '--out') ?? dirname(file));
-  const g = parseMermaid(readFileSync(resolve(cwd, file), 'utf8'));
+  if (!file || !/\.mmd$/.test(file)) fail('usage: mis diagram <file.mmd> [--out <dir>]  (flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram-v2)');
+  // input and --out must stay in the repository, symlinks resolved; checked before anything is read or created
+  const root = realpathSync(repoRoot(cwd)), src = resolve(cwd, file), outDir = resolve(cwd, flag(args, '--out') ?? dirname(file));
+  for (const p of [src, outDir]) {
+    let q = p;
+    while (!existsSync(q)) q = dirname(q);
+    const r = realpathSync(q);
+    if (r !== root && !r.startsWith(root + sep)) fail(`${relative(cwd, p) || p} resolves outside the repository (${r}); nothing written`);
+  }
+  const d = renderDiagram(readFileSync(src, 'utf8'));
   const name = basename(file, '.mmd');
   mkdirSync(outDir, { recursive: true });
   const ex = join(outDir, `${name}.excalidraw`), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`);
-  const s = toSvg(g);
-  writeFileSync(ex, JSON.stringify(toExcalidraw(g), null, 2) + '\n');
-  writeFileSync(svg, s + '\n');
-  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title><style>body{margin:0;background:#fff}</style></head><body>${s}</body></html>\n`);
-  return { nodes: g.nodes.length, edges: g.edges.length, files: [file, relative(cwd, ex), relative(cwd, svg), relative(cwd, html)],
-    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg and .excalidraw stand)` };
+  if (d.excalidraw) writeFileSync(ex, JSON.stringify(d.excalidraw, null, 2) + '\n');
+  writeFileSync(svg, d.svg + '\n');
+  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#1e1e1e}}</style></head><body>${d.svg}</body></html>\n`);
+  return { kind: d.kind, nodes: d.nodes.length, edges: d.edges.length, files: [file, ...(d.excalidraw ? [relative(cwd, ex)] : []), relative(cwd, svg), relative(cwd, html)],
+    ...(d.excalidraw ? {} : { excalidraw: null, note: `.excalidraw is written for flowchart only; ${d.kind} gets .svg + .html` }),
+    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg${d.excalidraw ? ' and .excalidraw stand' : ' stands'})` };
 }
 
 // ---------------------------------------------------------------- B8 decisions, JSONL merge driver
