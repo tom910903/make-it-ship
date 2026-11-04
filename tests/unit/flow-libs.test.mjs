@@ -213,6 +213,13 @@ test('diagram: renderDiagram covers flowchart subgraphs, sequence, class, ER and
   for (const bad of ['state Big {\nA --> B\n}', 'note right of A : x', 'state f <<fork>>', '--'])
     assert.throws(() => renderDiagram(`stateDiagram-v2\n${bad}`), /cannot parse/, bad);
 
+  const links = renderDiagram('flowchart LR\n  A --- B\n  B -.-> C\n  C ==> D');
+  assert.deepEqual(links.edges.map((x) => [x.end, x.dashed, x.thick]), [[null, undefined, undefined], [undefined, true, undefined], [undefined, undefined, true]]);
+  assert.match(links.svg, /class="edge dashed" marker-end/);
+  assert.match(links.svg, /class="edge thick" marker-end/);
+  assert.equal(links.excalidraw.elements.find((x) => x.id === 'edge-0').endArrowhead, null);
+  for (const empty of ['flowchart TD', 'classDiagram', 'erDiagram', 'stateDiagram-v2', 'sequenceDiagram\nloop x\nend'])
+    assert.throws(() => renderDiagram(empty), /cannot parse: .*empty diagram/, empty);
   for (const head of ['pie title x', 'xychart-beta', 'gantt', 'stateDiagram', '---\ntitle: x\n---\nflowchart TD'])
     assert.throws(() => renderDiagram(`${head}\nA`), /unsupported diagram type/, head);
 });

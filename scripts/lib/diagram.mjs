@@ -11,6 +11,7 @@ const NODE = /([A-Za-z_][\w-]*)\s*(?:\[\[?([^\]]*)\]?\]|\(\(?([^)]*)\)?\)|\{([^}
 const EDGE = /\s*(-->|---|-\.->|==>|--)\s*(?:\|([^|]*)\|\s*)?/y;
 // shortcut: classDef/class/style/linkStyle are accepted and ignored (shapes and edges match GitHub, colors do not); honour them when someone needs the colors.
 const STYLING = /^(classDef|class|style|linkStyle)\s/;
+const LINK = { '---': { end: null }, '-.->': { dashed: true }, '==>': { thick: true } }; // how GitHub draws each link type
 const cannot = (line) => new Error(`cannot parse: ${line}`);
 const clean = (src) => String(src).split('\n').map((l) => l.replace(/%%.*$/, '').trim()).filter(Boolean);
 
@@ -26,7 +27,7 @@ export function parseMermaid(src) {
     if (label) n.label = label.trim() || id;
     if (!seen.has(id)) seen.set(id, line);
     if (group && n.group !== group.id) {
-      if (n.group) throw cannot(line); // a node in two subgraphs: GitHub moves it, we would not
+      if (n.group) throw cannot(line); // shortcut: a node mentioned in two subgraphs is refused (membership rule unverified); define cross-subgraph edges outside both
       n.group = group.id; group.nodes.push(id);
     }
   };
@@ -39,19 +40,19 @@ export function parseMermaid(src) {
     }
     if (line === 'end') { if (!group?.nodes.length) throw cannot(line); group = null; continue; }
     if (STYLING.test(line)) continue;
-    let pos = 0, prev = null, label = null;
+    let pos = 0, prev = null, label = null, type = null;
     for (;;) {
       NODE.lastIndex = pos;
       const n = NODE.exec(line);
       if (!n) throw cannot(line);
       const id = n[1];
       node(id, n[2] ?? n[3] ?? n[4], line);
-      if (prev) edges.push({ from: prev, to: id, label });
+      if (prev) edges.push({ from: prev, to: id, label, ...LINK[type] });
       pos = NODE.lastIndex;
       EDGE.lastIndex = pos;
       const e = EDGE.exec(line);
       if (!e) break;
-      prev = id; label = e[2]?.trim() || null; pos = EDGE.lastIndex;
+      prev = id; label = e[2]?.trim() || null; type = e[1]; pos = EDGE.lastIndex;
     }
     if (line.slice(pos).trim().replace(/;$/, '')) throw cannot(line);
   }
@@ -149,9 +150,10 @@ const PARSE = { sequenceDiagram: ['sequence', parseSequence], classDiagram: ['cl
 /** One entry for every kind: { kind, svg, excalidraw (flowchart only, else null), nodes, edges, … }. */
 export function renderDiagram(src) {
   const lines = clean(src), head = lines[0] ?? '';
-  if (/^(flowchart|graph)\b/i.test(head)) { const g = parseMermaid(src); return { kind: 'flowchart', ...g, svg: toSvg(g), excalidraw: toExcalidraw(g) }; }
+  const some = (g) => { if (!g.nodes.length) throw cannot(`${head} (empty diagram)`); return g; };
+  if (/^(flowchart|graph)\b/i.test(head)) { const g = some(parseMermaid(src)); return { kind: 'flowchart', ...g, svg: toSvg(g), excalidraw: toExcalidraw(g) }; }
   if (!PARSE[head]) throw new Error(`unsupported diagram type: ${head} (supported: flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram-v2)`);
-  const [kind, parse] = PARSE[head], g = parse(lines.slice(1));
+  const [kind, parse] = PARSE[head], g = some(parse(lines.slice(1)));
   // shortcut: .excalidraw only for flowcharts; add per-kind elements when someone edits the other kinds in Excalidraw.
   return { kind, ...g, svg: kind === 'sequence' ? sequenceSvg(g) : toSvg(g), excalidraw: null };
 }
@@ -194,7 +196,7 @@ export function toExcalidraw(g) {
     const a = pos[e.from], b = pos[e.to];
     const sx = a.x + W / 2, sy = a.y + H / 2, dx = b.x + W / 2 - sx, dy = b.y + H / 2 - sy;
     elements.push(base(`edge-${i}`, 'arrow', sx, sy, Math.abs(dx), Math.abs(dy), { points: [[0, 0], [dx, dy]], startBinding: { elementId: `box-${e.from}`, focus: 0, gap: 4 },
-      endBinding: { elementId: `box-${e.to}`, focus: 0, gap: 4 }, startArrowhead: null, endArrowhead: 'arrow', ...(e.label ? { label: { text: e.label } } : {}) }));
+      endBinding: { elementId: `box-${e.to}`, focus: 0, gap: 4 }, startArrowhead: null, endArrowhead: e.end === null ? null : 'arrow', strokeStyle: e.dashed ? 'dashed' : 'solid', strokeWidth: e.thick ? 4 : 2, ...(e.label ? { label: { text: e.label } } : {}) }));
   });
   return { type: 'excalidraw', version: 2, source: 'make-it-ship', elements, appState: { viewBackgroundColor: '#ffffff', gridSize: null }, files: {} };
 }
@@ -202,7 +204,7 @@ export function toExcalidraw(g) {
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 // Colors only through classes so the dark-mode media query reaches every mark.
-const STYLE = `.bg{fill:#fff}.node{fill:#f4f6fb;stroke:#1e1e1e;stroke-width:2}.edge{stroke:#1e1e1e;stroke-width:2;fill:none}.dashed{stroke-dasharray:6 4}
+const STYLE = `.bg{fill:#fff}.node{fill:#f4f6fb;stroke:#1e1e1e;stroke-width:2}.edge{stroke:#1e1e1e;stroke-width:2;fill:none}.dashed{stroke-dasharray:6 4}.thick{stroke-width:4}
 .life{stroke:#999;stroke-width:1;stroke-dasharray:4 4}.solid{fill:#1e1e1e}.hollow{fill:#fff;stroke:#1e1e1e;stroke-width:1.5}.frame{fill:#8882;stroke:#888;stroke-width:1.5}
 .note{fill:#fff5c4;stroke:#aa9;stroke-width:1}text{fill:#1e1e1e;font-size:15px}.label{fill:#444;font-size:13px}.title{font-weight:600}
 @media (prefers-color-scheme: dark){.bg{fill:#1e1e1e}.node{fill:#2a2f3a;stroke:#ddd}.edge{stroke:#ddd}.solid{fill:#ddd}.hollow{fill:#1e1e1e;stroke:#ddd}
@@ -225,7 +227,7 @@ export function toSvg(g) {
   const half = (id) => (byId.get(id).shape ? [12, 12] : [W / 2, H / 2]);
   const parts = frames.flatMap((f) => [`<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="6" class="frame"/>`, text(f.x + 8, f.y + 18, f.title, 'label title', 'start')]);
   for (const e of g.edges) {
-    const a = pos[e.from], b = pos[e.to], [x1, y1, x2, y2] = [a.x + W / 2, a.y + H / 2, b.x + W / 2, b.y + H / 2], cls = `edge${e.dashed ? ' dashed' : ''}`;
+    const a = pos[e.from], b = pos[e.to], [x1, y1, x2, y2] = [a.x + W / 2, a.y + H / 2, b.x + W / 2, b.y + H / 2], cls = `edge${e.dashed ? ' dashed' : ''}${e.thick ? ' thick' : ''}`;
     if (e.from === e.to) { // self loop on the right side
       const r = a.x + W;
       parts.push(`<path d="M${r},${y1 - 10} C${r + 45},${y1 - 35} ${r + 45},${y1 + 35} ${r},${y1 + 10}" class="${cls}"${marks(e)}/>`);
