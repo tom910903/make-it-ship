@@ -1,6 +1,6 @@
 // mis commands of the built-in browser (M8-A): browse (gstack browse), pdf (gstack make-pdf), visual-verdict (OMC visual-verdict);
 // doc and slides (visual documents, 2026-11-04) live here so every PDF goes through the one Chrome path.
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, statSync, realpathSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename, relative, sep } from 'node:path';
@@ -11,7 +11,7 @@ import { EXTENSION_DIR } from './browse/actions.mjs';
 import { listCookieDomains, readBrowserCookies } from './browse/cookies.mjs';
 import { browserSkill, skillify, domainSkill } from './browse/skills.mjs';
 import { markdownToHtml, markdownToSlides } from './markdown.mjs';
-import { inRepo } from './commands-flow.mjs';
+import { inRepo, outFiles } from './commands-flow.mjs';
 import { repoRoot } from './tree-hash.mjs';
 import { loadConfig } from './config.mjs';
 import { DEFAULT_DOCS } from './layout.mjs';
@@ -122,7 +122,7 @@ async function pdf(argv, cwd) {
   const md = resolve(cwd, file);
   if (!existsSync(md)) throw new Error(`no such file: ${file}`);
   const out = resolve(cwd, o.out ?? join(dirname(md), `${basename(md).replace(/\.(md|markdown)$/i, '')}.pdf`));
-  const { html, title, visuals, errors } = markdownToHtml(readFileSync(md, 'utf8'), { baseDir: dirname(md), title: o.title, allowNetwork: o.allowNetwork });
+  const { html, title, visuals, errors } = markdownToHtml(readFileSync(md, 'utf8'), { baseDir: dirname(md), title: o.title, allowNetwork: o.allowNetwork, image: images(cwd, md) });
   mkdirSync(dirname(out), { recursive: true });
   const tmp = mkdtempSync(join(tmpdir(), 'mis-pdf-'));
   const htmlFile = join(tmp, 'doc.html');
@@ -133,6 +133,17 @@ async function pdf(argv, cwd) {
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', avif: 'image/avif' };
+/** Local image href (relative to the markdown) → data: URI when it resolves (symlinks too) inside the repository, else null (a blocked box). */
+const images = (cwd, md) => (href) => {
+  const path = decodeURI(href.replace(/[?#].*$/, '')), type = MIME[path.match(/\.(\w+)$/)?.[1].toLowerCase()];
+  try {
+    const p = realpathSync(resolve(dirname(md), path));
+    inRepo(cwd, p);
+    return type && `data:${type};base64,${readFileSync(p).toString('base64')}`;
+  } catch { return null; }
+};
+
 /** The one Chrome PDF path (mis pdf, doc, slides): print an HTML file through the browse daemon, network blocked unless allowed. */
 const printHtml = (cwd, htmlFile, out, opts) => send(browseDir(cwd), { cmd: '_render-pdf', cwd, args: [{ html: pathToFileURL(htmlFile).href, out, opts }] });
 function docPdfOpts(title, o) {
@@ -142,8 +153,9 @@ function docPdfOpts(title, o) {
     footer: o.noNumbers ? '<span></span>' : `<div style="${small} text-align: right;"><span class="pageNumber"></span> of <span class="totalPages"></span></div>` };
 }
 /** <x>.html → <x>.pdf next to it; without a browser the PDF is reported BLOCKED and the HTML stands. */
+const toPdf = (htmlFile) => htmlFile.replace(/\.html$/i, '.pdf');
 async function pdfOrBlocked(cwd, htmlFile, opts) {
-  const out = htmlFile.replace(/\.html$/i, '.pdf');
+  const out = toPdf(htmlFile);
   try { return { pdf: relative(cwd, out), pages: (await printHtml(cwd, htmlFile, out, opts)).pages }; } catch (e) {
     if (/BLOCKED:/.test(e.message)) return { pdf: null, blocked: e.message };
     throw e;
@@ -167,11 +179,12 @@ async function doc(argv, cwd) {
   const stem = m && langs.includes(m[2]) && m[2] !== 'en' ? m[1] : src.slice(0, -3), outStem = out ? resolve(cwd, out).slice(0, -5) : stem;
   const all = langs.map((lang) => { const s = lang === 'en' ? '' : `.${lang}`; return { lang, md: `${stem}${s}.md`, html: `${outStem}${s}.html` }; });
   const docs = all.filter((d) => existsSync(d.md));
-  inRepo(cwd, ...docs.flatMap((d) => [d.md, d.html]));
+  inRepo(cwd, ...docs.map((d) => d.md));
+  outFiles(cwd, ...docs.flatMap((d) => [d.html, ...(wantPdf ? [toPdf(d.html)] : [])]));
   const results = [], errors = [];
   let visuals = 0;
   for (const d of docs) {
-    const r = markdownToHtml(readFileSync(d.md, 'utf8'), { baseHref: relBase(d.html, d.md), allowNetwork, lang: d.lang });
+    const r = markdownToHtml(readFileSync(d.md, 'utf8'), { baseHref: relBase(d.html, d.md), allowNetwork, lang: d.lang, image: images(cwd, d.md) });
     mkdirSync(dirname(d.html), { recursive: true });
     writeFileSync(d.html, r.html);
     visuals += r.visuals; errors.push(...r.errors.map((e) => ({ file: relative(cwd, d.md), ...e })));
@@ -189,8 +202,9 @@ async function slides(argv, cwd) {
   const src = resolve(cwd, file);
   if (!existsSync(src)) throw new Error(`no such file: ${file}`);
   const html = resolve(cwd, out ?? src.replace(/\.md$/i, '.html'));
-  inRepo(cwd, src, html);
-  const r = markdownToSlides(readFileSync(src, 'utf8'), { baseHref: relBase(html, src) });
+  inRepo(cwd, src);
+  outFiles(cwd, html, ...(wantPdf ? [toPdf(html)] : []));
+  const r = markdownToSlides(readFileSync(src, 'utf8'), { baseHref: relBase(html, src), image: images(cwd, src) });
   mkdirSync(dirname(html), { recursive: true });
   writeFileSync(html, r.html);
   return { html: relative(cwd, html), title: r.title, slides: r.slides, visuals: r.visuals, errors: r.errors, notes: r.notes.flat().length,

@@ -61,9 +61,14 @@ async function renderPdf({ html, out, opts }) {
   const prev = browser.active, tab = await browser.newTab();
   try {
     if (!opts.allowNetwork) await browser.send(tab, 'Network.setBlockedURLs', { urls: ['http://*', 'https://*', 'ws://*', 'wss://*'] });
+    // fail closed if the page left our file (meta refresh and the like; no CSP stops navigation): before and after printing
+    const stay = () => { if (tab.url !== html) throw new Error(`pdf: the page navigated away from ${html} to ${tab.url}; nothing written`); };
     await browser.navigate(tab, html);
+    stay();
     await browser.evaluate(tab, 'document.fonts.ready.then(() => true)');
+    stay();
     const pdf = await printPdf(browser, tab, opts);
+    stay();
     writeFileSync(out, pdf);
     return { bytes: pdf.length, pages: (pdf.toString('latin1').match(/\/Type\s*\/Page(?![s\w])/g) ?? []).length };
   } finally {

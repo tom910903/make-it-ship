@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { markdownToHtml, markdownToSlides, splitSlides } from '../../scripts/lib/markdown.mjs';
 
-const CSP = /^<!doctype html><html lang="\w+"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="([^"]+)">/;
+const CSP = /^<!doctype html><html lang="\w+"><head><meta charset="utf-8">(?:<base href="[^"]*">)?<meta http-equiv="Content-Security-Policy" content="([^"]+)">/;
 const offline = (html) => assert.doesNotMatch(html, /https?:\/\/(?!www\.w3\.org)/);
 
 test('doc: mermaid diagram and chart blocks render as inline SVG; other code stays code', () => {
@@ -36,10 +36,34 @@ test('doc: CSP meta comes first and blocks scripts from document content; https 
   const md = '# x\n\n<script>alert(1)</script>\n\n<img src=x onerror="alert(2)">\n';
   const { html } = markdownToHtml(md, { baseDir: '/docs' });
   const [, csp] = html.match(CSP);
-  assert.equal(csp, "default-src 'none'; style-src 'unsafe-inline'; img-src file: data:");
-  assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<base href'), 'CSP before <base>');
+  assert.equal(csp, "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'");
+  assert.ok(html.indexOf('<base href') < html.indexOf('Content-Security-Policy'), "our <base> precedes the CSP, so base-uri 'none' stops only the document's own");
   assert.match(html, /<script>alert\(1\)<\/script>/); // passed through by marked, inert under the CSP
-  assert.equal(markdownToHtml(md, { allowNetwork: true }).html.match(CSP)[1], "default-src 'none'; style-src 'unsafe-inline'; img-src file: data: https:");
+  assert.equal(markdownToHtml(md, { allowNetwork: true }).html.match(CSP)[1], "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-src 'none'");
+});
+
+test('doc: raw HTML that navigates or fetches without script (meta refresh, base, link, frames, objects, forms) is shown as text', () => {
+  const bad = ['<meta http-equiv="refresh" content="0;url=file:///etc/passwd">', '<base href="https://evil.example/">', '<link rel="stylesheet" href="file:///x.css">',
+    '<iframe src="file:///etc/passwd"></iframe>', '<frame src="x">', '<object data="file:///x"></object>', '<embed src="file:///x">', '<form action="https://evil.example/"><button>go</button></form>', '<portal src="https://evil.example/"></portal>'];
+  for (const tag of bad) for (const md of [`${tag}\n`, `text ${tag} more\n`, `<div>\n${tag}\n</div>\n`]) {
+    const { html } = markdownToHtml(md);
+    const body = html.slice(html.indexOf('<body>'));
+    assert.doesNotMatch(body, /<(meta|base|link|iframe|frame|object|embed|form|portal)\b/i, md);
+    assert.match(body, /&lt;(meta|base|link|iframe|frame|object|embed|form|portal)\b/i, md);
+  }
+  assert.match(markdownToHtml('<div align="center"><b>ok</b></div>\n').html, /<div align="center"><b>ok<\/b><\/div>/, 'other raw HTML still passes');
+});
+
+test('doc: local images only through the resolver (inside the repository → data: URI), everything else is a blocked box', () => {
+  const image = (href) => (href === 'in.png' ? 'data:image/png;base64,AAAA' : null);
+  const md = '![in](in.png) ![out](../../etc/out.png) <img src="in.png" width="40"> <img src="/etc/x.png">\n';
+  const { html } = markdownToHtml(md, { image });
+  assert.match(html, /<img src="data:image\/png;base64,AAAA" alt="in">/);
+  assert.match(html, /<span class="blocked">\[local image blocked: out\]/);
+  assert.match(html, /<img src="data:image\/png;base64,AAAA" width="40">/, 'raw <img> in the repository is inlined too');
+  assert.doesNotMatch(html, /etc\/(out|x)\.png/);
+  assert.match(markdownToHtml('![in](in.png)').html, /local image blocked: in/, 'no resolver → no local images');
+  assert.match(markdownToHtml('![d](data:image/png;base64,AA==)').html, /<img src="data:image\/png;base64,AA=="/);
 });
 
 test('slides: split on --- outside fences and front matter; a fenced --- stays', () => {
@@ -77,6 +101,6 @@ test('slides: Marp subset — title, paginate, notes, directives ignored, mermai
   const ours = scripts.find((s) => /keydown/.test(s));
   for (const k of ['ArrowRight', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End', "' '"]) assert.ok(ours.includes(k), k);
   const csp = h.match(CSP)[1];
-  assert.equal(csp, `default-src 'none'; style-src 'unsafe-inline'; img-src file: data:; script-src 'sha256-${createHash('sha256').update(ours).digest('base64')}'`);
+  assert.equal(csp, `default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; script-src 'sha256-${createHash('sha256').update(ours).digest('base64')}'`);
   offline(h);
 });

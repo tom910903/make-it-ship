@@ -1,7 +1,7 @@
 // mis chart (user decision 2026-11-04): CSV/JSON/mermaid → <name>.svg + <name>.html inside the repository, never outside it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeRepo, write, mis } from '../helpers.mjs';
@@ -57,4 +57,22 @@ test('mis chart: refuses --out or input outside the repository, unknown columns,
   assert.match(mis(dir, ['chart', 'bad.csv', '--y', 'v']).err, /row 1 column "v": not a number: x/);
   assert.match(mis(dir, ['chart', 'flow.mmd']).err, /pie.*xychart-beta/);
   assert.match(mis(dir, ['chart', 'notes.txt']).err, /usage: mis chart/);
+});
+
+test('mis chart / diagram: an output file that is a symlink (even dangling) or an input linked outside is refused; nothing lands outside', () => {
+  const dir = makeRepo();
+  const outside = realpathSync(mkdtempSync(join(tmpdir(), 'mis-chart-link-')));
+  write(dir, { 'sales.csv': 'k,v\na,1\n', 'd.mmd': 'flowchart TD\n  A --> B\n', 'e.mmd': 'flowchart TD\n  A --> B\n' });
+  write(outside, { 'x.csv': 'k,v\na,1\n' });
+  mkdirSync(join(dir, 'charts'));
+  symlinkSync(join(outside, 'pwn.svg'), join(dir, 'charts/sales.svg'));
+  symlinkSync(join(outside, 'd.html'), join(dir, 'd.html'));
+  symlinkSync(join(outside, 'e.excalidraw'), join(dir, 'e.excalidraw'));
+  symlinkSync(join(outside, 'x.csv'), join(dir, 'linked.csv'));
+  for (const args of [['chart', 'sales.csv', '--out', 'charts'], ['diagram', 'd.mmd'], ['diagram', 'e.mmd'], ['chart', 'linked.csv']]) {
+    const r = mis(dir, args);
+    assert.equal(r.code, 1, args.join(' '));
+    assert.match(r.err, /symlink|outside the repository/, args.join(' '));
+  }
+  assert.deepEqual(readdirSync(outside), ['x.csv']);
 });

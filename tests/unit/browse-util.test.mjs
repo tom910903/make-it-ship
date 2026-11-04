@@ -49,7 +49,7 @@ test('markdown → print HTML: title from first H1, smart quotes outside code, r
   assert.match(html, /remote image blocked/);
   assert.doesNotMatch(html, /x\.test/);
   assert.match(html, /<base href="file:\/\/\/docs\/">/);
-  assert.match(html, /<img src="img\/a\.png"/);
+  assert.match(html, /local image blocked: local/); // no image resolver: a local path never reaches the page (mis pdf passes one)
   const net = markdownToHtml('![pic](https://x.test/a.png)', { baseDir: '/d', allowNetwork: true }).html;
   assert.match(net, /<img src="https:\/\/x\.test\/a\.png"/);
 });

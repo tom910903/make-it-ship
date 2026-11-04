@@ -39,22 +39,35 @@ figure.visual { margin: 1em 0; break-inside: avoid; } figure.visual svg { max-wi
 @media screen and (prefers-color-scheme: dark) { html { background: #0d1117; color: #e6edf3; } pre, :not(pre) > code { background: #161b22; } blockquote { color: #9da7b3; } }
 `;
 
-/** Repository markdown is untrusted and marked passes raw HTML through: nothing in it may run or fetch; our own script only by its hash. */
-export const csp = (allowNetwork = false, script) => `default-src 'none'; style-src 'unsafe-inline'; img-src file: data:${allowNetwork ? ' https:' : ''}`
+/** Repository markdown is untrusted and marked passes raw HTML through: nothing in it may run, fetch or change the base; our own script only by its hash.
+ * No file: images (Chrome cannot limit them to a folder): local images are inlined as data: URIs by the caller's resolver, which checks the repository. */
+export const csp = (allowNetwork = false, script) => `default-src 'none'; style-src 'unsafe-inline'; img-src data:${allowNetwork ? ' https:' : ''}; base-uri 'none'; form-action 'none'; frame-src 'none'`
   + (script ? `; script-src 'sha256-${createHash('sha256').update(script).digest('base64')}'` : '');
+
+// Raw tags that navigate or fetch without any script (meta refresh, a foreign base, frames, plugins, forms): shown as text, never as markup.
+const NAVIGATES = /<\s*\/?\s*(meta|base|link|i?frame|frameset|object|embed|applet|form|portal)\b/i;
+const SCHEME = /^[a-z][\w+.-]*:/i;
 
 /** A mermaid fence → SVG: pie and xychart-beta by chart.mjs, every other kind by diagram.mjs. */
 const visual = (src) => (/^(?:\s*%%.*\n)*\s*(pie|xychart-beta)\b/.test(src) ? chartToSvg(parseChart(src)) : renderDiagram(src).svg);
 
 /** Lex + render one markdown text. A broken mermaid block keeps its source plus an error box and lands in errors (never thrown).
  * comment(text) receives every whole HTML comment (slides: notes and directives), which is then dropped from the output. */
-function render(md, { allowNetwork = false, comment } = {}) {
+function render(md, { allowNetwork = false, comment, image } = {}) {
   const marked = new Marked({ gfm: true }), errors = [], lines = [];
   let visuals = 0, n = 0;
+  const local = (href) => !SCHEME.test(href) && image?.(href);
   marked.use({ renderer: {
-    image({ href, text }) {
-      if (/^https?:/i.test(href) && !allowNetwork) return `<span class="blocked">[remote image blocked: ${esc(text || href)}] (use --allow-network)</span>`;
-      return false;
+    image({ href, text, title }) {
+      if (/^https?:/i.test(href)) return allowNetwork ? false : `<span class="blocked">[remote image blocked: ${esc(text || href)}] (use --allow-network)</span>`;
+      if (/^data:/i.test(href)) return false;
+      const src = local(href);
+      return src ? `<img src="${esc(src)}" alt="${esc(text)}"${title ? ` title="${esc(title)}"` : ''}>` : `<span class="blocked">[local image blocked: ${esc(text || href)}] (outside the repository or not found)</span>`;
+    },
+    html({ text }) {
+      if (NAVIGATES.test(text)) return esc(text);
+      // shortcut: only the quoted src of a raw <img> is inlined (an unresolved local one is emptied); other local image references stay and the CSP blocks them
+      return text.replace(/(<img\b[^>]*?\ssrc\s*=\s*)(["'])([^"']*)\2/gi, (all, pre, q, href) => (SCHEME.test(href) ? all : `${pre}"${esc(local(href) || '')}"`));
     },
     code({ text, lang }) {
       if (lang !== 'mermaid') return false;
@@ -80,13 +93,15 @@ function render(md, { allowNetwork = false, comment } = {}) {
   return { tokens, body: marked.parser(tokens), visuals, errors };
 }
 
-const head = (lang, policy, title, base, css) => `<!doctype html><html lang="${esc(lang)}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><title>${esc(title)}</title>${base}<style>${css}</style></head>`;
+// our <base> goes before the CSP: base-uri 'none' then refuses only a later one from the document
+const head = (lang, policy, title, base, css) => `<!doctype html><html lang="${esc(lang)}"><head><meta charset="utf-8">${base}<meta http-equiv="Content-Security-Policy" content="${policy}"><title>${esc(title)}</title><style>${css}</style></head>`;
 const baseTag = (baseHref, baseDir) => { const h = baseHref ?? (baseDir && pathToFileURL(baseDir).href.replace(/\/?$/, '/')); return h ? `<base href="${esc(h)}">` : ''; };
 
 /** @returns {{html:string, title:string, visuals:number, errors:{index:number, line?:number, message:string}[]}} a complete HTML document;
- * relative links resolve against baseDir (absolute file URL, for a temp copy) or baseHref (relative, for a file kept in the repository) */
-export function markdownToHtml(md, { baseDir, baseHref, title, allowNetwork = false, lang = 'en' } = {}) {
-  const r = render(md, { allowNetwork });
+ * relative links resolve against baseDir (absolute file URL, for a temp copy) or baseHref (relative, for a file kept in the repository);
+ * image(href) → data: URI or null for a local image (no resolver: every local image is blocked) */
+export function markdownToHtml(md, { baseDir, baseHref, title, allowNetwork = false, lang = 'en', image } = {}) {
+  const r = render(md, { allowNetwork, image });
   const h1 = r.tokens.find((t) => t.type === 'heading' && t.depth === 1);
   const docTitle = title ?? (h1 ? smart(h1.text.replace(/[*_`]/g, '')) : 'Document');
   const html = `${head(lang, csp(allowNetwork), docTitle, baseTag(baseHref, baseDir), PRINT_CSS + SCREEN_CSS)}<body>${r.body}</body></html>`;
@@ -146,13 +161,13 @@ body.present { height: 100vh; overflow: hidden; } body.present .slide { display:
 /** Marp-style deck → one self-contained HTML. Supported: front matter and comment directives marp, title, lang, paginate, header, footer, class
  * (`_x` for one slide) and `<!-- notes -->`. shortcut: theme, size, backgrounds and the other Marp directives are ignored and header/footer are
  * plain text; render with Marp itself when a deck needs them. */
-export function markdownToSlides(md, { baseDir, baseHref, title } = {}) {
+export function markdownToSlides(md, { baseDir, baseHref, title, image } = {}) {
   const { front, slides } = splitSlides(md), state = Object.fromEntries(LOCAL.map((k) => [k, front[k]]));
   const notes = [], errors = [], sections = [];
   let visuals = 0, firstHeading;
   slides.forEach((src, k) => {
     const mine = [], spot = {};
-    const r = render(src, { comment: (c) => {
+    const r = render(src, { image, comment: (c) => {
       const d = directives(c);
       if (!d) return mine.push(c);
       for (const [key, v] of Object.entries(d)) if (key[0] === '_') spot[key.slice(1)] = v; else if (LOCAL.includes(key)) state[key] = v;

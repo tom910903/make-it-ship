@@ -3,7 +3,7 @@
 // Storage: per-repo private data (contexts, goals, questions, taste) under the state root (shared by worktrees, outside
 // the code hash); team-shared append-only ledgers (decisions, health) under docs/make-it-ship/*.jsonl.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -307,15 +307,22 @@ ${cards}
   return { board: relative(cwd, join(dir, out)), variants, next: `mis companion start ${d} → open the printed URL at /${out}; clicks appear in mis companion status` };
 }
 
-/** Input and output paths of generated visuals must stay in the repository, symlinks resolved; checked before anything is read or created. */
+/** Input and output paths of generated visuals must stay in the repository, symlinks resolved; checked before anything is read or created.
+ * lstat, not exists: a dangling link is there (and refused), not missing. */
 export function inRepo(cwd, ...paths) {
   const root = realpathSync(repoRoot(cwd));
   for (const p of paths) {
-    let q = p;
-    while (!existsSync(q)) q = dirname(q);
-    const r = realpathSync(q);
+    let q = p, r;
+    while (!lstatSync(q, { throwIfNoEntry: false })) q = dirname(q);
+    try { r = realpathSync(q); } catch { fail(`${relative(cwd, q) || q} is a dangling symlink; nothing written`); }
     if (r !== root && !r.startsWith(root + sep)) fail(`${relative(cwd, p) || p} resolves outside the repository (${r}); nothing written`);
   }
+}
+
+/** Final output files: never a symlink (writing would follow it), and their folder inside the repository. */
+export function outFiles(cwd, ...files) {
+  for (const f of files) if (lstatSync(f, { throwIfNoEntry: false })?.isSymbolicLink()) fail(`${relative(cwd, f) || f} is a symlink; refusing to write through it`);
+  inRepo(cwd, ...files.map((f) => dirname(f)));
 }
 
 function diagram([file, ...args], cwd) {
@@ -324,8 +331,9 @@ function diagram([file, ...args], cwd) {
   inRepo(cwd, src, outDir);
   const d = renderDiagram(readFileSync(src, 'utf8'));
   const name = basename(file, '.mmd');
-  mkdirSync(outDir, { recursive: true });
   const ex = join(outDir, `${name}.excalidraw`), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`);
+  outFiles(cwd, ...(d.excalidraw ? [ex] : []), svg, html);
+  mkdirSync(outDir, { recursive: true });
   if (d.excalidraw) writeFileSync(ex, JSON.stringify(d.excalidraw, null, 2) + '\n');
   writeFileSync(svg, d.svg + '\n');
   writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#1e1e1e}}</style></head><body>${d.svg}</body></html>\n`);
@@ -353,8 +361,9 @@ function chart([file, ...args], cwd) {
     model = chartFromData(rows, { type, x, y });
   }
   if (title) model.title = title;
-  mkdirSync(outDir, { recursive: true });
   const name = basename(file).replace(/\.(csv|json|mmd)$/i, ''), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`), s = chartToSvg(model);
+  outFiles(cwd, svg, html);
+  mkdirSync(outDir, { recursive: true });
   writeFileSync(svg, s + '\n');
   writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(model.title || name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#0d1117}}</style></head><body>${s}</body></html>\n`);
   const pie = model.kind === 'pie';
