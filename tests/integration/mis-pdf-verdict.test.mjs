@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { browserLock, makeRepo, write, mis } from '../helpers.mjs';
@@ -50,8 +50,29 @@ test('mis pdf: markdown → tagged PDF through the built-in browser (or BLOCKED 
   assert.equal(r.json.title, 'Part one');
   assert.ok(r.json.pages >= 2, `chapter break per H1, got ${r.json.pages} pages`);
   assert.equal(readFileSync(r.json.pdf).subarray(0, 5).toString(), '%PDF-');
+  assert.match(readFileSync(r.json.pdf).toString('latin1'), /\/Subtype\s*\/Image[^>]*\/Width\s+20\b|\/Width\s+20\b[^>]*\/Subtype\s*\/Image/, 'the 20x20 local image renders under the CSP (not a broken-image icon)');
   const o = mis(dir, ['pdf', 'docs/guide.md', '-o', 'out/g.pdf', '--page-size', 'a4', '--no-page-numbers'], { env: ENV });
   assert.equal(o.code, 0, o.err);
   assert.ok(existsSync(join(dir, 'out/g.pdf')));
   assert.equal(mis(dir, ['pdf', 'missing.md'], { env: ENV }).code, 1);
+});
+
+test('mis pdf: an output path that is a symlink is refused before Chrome runs (a committed link cannot redirect the write)', () => {
+  const dir = makeRepo({ 'notes.md': '# Notes\n' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-pdf-out-'));
+  symlinkSync(join(outside, 'pwn.pdf'), join(dir, 'notes.pdf'));
+  const r = mis(dir, ['pdf', 'notes.md']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.err, /symlink/);
+  assert.ok(!existsSync(join(outside, 'pwn.pdf')));
+});
+
+test('mis pdf: -o inside the repository through a symlinked folder is refused; -o outside the repository is the user\'s choice', () => {
+  const dir = makeRepo({ 'notes.md': '# Notes\n' });
+  const outside = mkdtempSync(join(tmpdir(), 'mis-pdf-dir-'));
+  symlinkSync(outside, join(dir, 'linkdir'));
+  const r = mis(dir, ['pdf', 'notes.md', '-o', 'linkdir/o.pdf']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.err, /outside the repository/);
+  assert.ok(!existsSync(join(outside, 'o.pdf')));
 });

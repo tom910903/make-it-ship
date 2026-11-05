@@ -1,6 +1,6 @@
 ---
 name: run
-description: Make It Ship main entry. Use when the user asks to build, add, or fix something from an idea, a requirements .md file, a plan document, or an issue in the current git repo and wants it planned, implemented, actually tested, reviewed, and reported with evidence (VERIFIED/PARTIAL/BLOCKED/FAILED). Also design-only work (design system, mockups, variants, diagrams) and generating docs for existing code.
+description: Make It Ship main entry. Use when the user asks to build, add, or fix something from an idea, a requirements .md file, a plan document, or an issue in the current git repo and wants it planned, implemented, actually tested, reviewed, and reported with evidence (VERIFIED/PARTIAL/BLOCKED/FAILED). Also design-only work (design system, mockups, variants, diagrams), charts from data, visual documents (markdown with diagrams and charts → HTML/PDF), slide decks, and generating docs for existing code.
 ---
 
 # Make It Ship — run
@@ -18,7 +18,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" <args>
 ```
 
 Type it in full, or define `mis() { node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" "$@"; }` in the same Bash call. Never put it in a variable (`M="node …"; $M` fails in zsh).
-Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis note rootcause <task> -`, `mis task <id> retry`, `mis resume`, `mis approve continue`, `mis note design -`, `mis parallel plan`, `mis worktree <add|merge> <task>`, `mis qa detect`, `mis bench <check> --runs N`, `mis ship`, `mis retro [--git --since 7d]`, `mis learn <add -|list|search|distill>`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`. Used by the phases when their situation applies: `mis plan check <plan.md>`, `mis start --plan <plan.md>`, `mis goal`, `mis question`, `mis profile`, `mis decision`, `mis diagram`, `mis design-board`, `mis taste`, `mis health`, `mis debt`, `mis redact scan`, `mis diff-scope`, `mis repo-mode`, `mis next-version`, `mis version-bump`, `mis jsonl-merge install`, `mis context`.
+Run it from the repository. Commands: `mis doctor`, `mis init [--write]`, `mis start --input <file|text>`, `mis plan set -` (plan JSON on stdin), `mis mode set <quick|standard|full> --reason "<why>"`, `mis interview add '<json>'`, `mis interview resolve <id> <answer>`, `mis review add <kind> -` (review text on stdin), `mis approve plan`, `mis task <id> <start|done|fail>`, `mis check <name>`, `mis note dep <reason>`, `mis note rootcause <task> -`, `mis task <id> retry`, `mis resume`, `mis approve continue`, `mis note design -`, `mis parallel plan`, `mis worktree <add|merge> <task>`, `mis qa detect`, `mis bench <check> --runs N`, `mis ship`, `mis retro [--git --since 7d]`, `mis learn <add -|list|search|distill>`, `mis verdict`, `mis status`, `mis report`, `mis block <reason>`, `mis cancel`. Used by the phases when their situation applies: `mis plan check <plan.md>`, `mis start --plan <plan.md>`, `mis goal`, `mis question`, `mis profile`, `mis decision`, `mis diagram`, `mis chart`, `mis doc`, `mis slides`, `mis design-board`, `mis taste`, `mis health`, `mis debt`, `mis redact scan`, `mis diff-scope`, `mis repo-mode`, `mis next-version`, `mis version-bump`, `mis jsonl-merge install`, `mis context`.
 
 Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never write plans, reviews, or scratch files into the repository: any file there changes the code hash and pollutes the change list.
 
@@ -67,6 +67,7 @@ Situational steps inside those phases (each phase file says exactly when):
 | several independent goals | plan · goal ledger (`mis goal`) | OMC ultragoal |
 | Full (CEO always; design if `ui`; DX if developer-facing; eng) | product-review · lenses, autoplan when asked or non-interactive | gstack plan-*-review, autoplan |
 | design with alternatives | design · `mis diagram`, decision log | gstack diagram, decision-log |
+| numbers, flows or a talk to show | design / ship · `mis chart`, mermaid blocks in docs, `mis doc`, `mis slides` | gstack make-pdf |
 | UI design | design-explore · taste, preview page, `mis design-board`, finalize | gstack design-consultation, design-shotgun, design-html, taste-update |
 | Standard/Full with 3+ tasks | implement · subagent per task + two-stage review | Superpowers subagent-driven-development |
 | several plausible causes | debug · parallel tracers, trace file | OMC trace |
@@ -80,6 +81,7 @@ Situational steps inside those phases (each phase file says exactly when):
 
 - **Plan only** ("write a plan", "plan this, build later"): `/make-it-ship:plan`.
 - **Design only** (a design system, mockups, variants, a diagram): the design / design-explore phases without `mis start`; files only in `design/` and `DESIGN.md`.
+- **Visuals only** (a chart, a visual document, a slide deck): the design phase's "Visuals" step without `mis start`; no code changes.
 - **Docs for existing code** (document-generate): `make-it-ship:writer` writes them from the code; run the project's checks afterwards and show the result.
 - **Spec, office hours, brainstorming**: `/make-it-ship:interview`. **Reviews and audits**: `/make-it-ship:plan-review`, `/make-it-ship:review`. **Release, finishing a branch**: `/make-it-ship:ship`. **Saved context**: `/make-it-ship:resume`.
 

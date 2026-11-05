@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.4.0](https://img.shields.io/badge/version-0.4.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
@@ -174,6 +174,19 @@ Installing the plugin is enough. Every session gets the working discipline (ask 
 ### Planning, review, design, docs and release inside the flow
 
 `/make-it-ship:run` brings in office hours, brainstorming, plan reviews (CEO, design, DX, eng), design boards, parallel tracers, audits, version bumps and secret scans at the phase where they fit; you do not call them separately. The run skill's "Situational steps" table lists every trigger.
+
+### Charts, diagrams, visual docs and slides
+
+All output is self-contained SVG/HTML with dark mode, written only inside the repository, with no runtime dependencies. Sources use mermaid syntax, so GitHub renders the same file.
+
+```sh
+mis chart sales.csv --type line --x month --y revenue,cost   # also .json, or a mermaid pie / xychart-beta .mmd
+mis diagram design/login.mmd    # flowchart (+ .excalidraw), sequence, class, ER, state
+mis doc docs/guide.md --pdf     # ```mermaid blocks become SVG; guide.md + guide.ko.md in one call
+mis slides talk.md --pdf        # Marp-style markdown: --- between slides, <!-- notes -->
+```
+
+The HTML of `mis doc`, `mis slides` and `mis pdf` carries a Content-Security-Policy: scripts, frames, forms and remote loads in a document never run, raw tags that navigate (`<meta>` refresh, `<base>`, `<link>`, `<iframe>`, `<object>`, `<form>`) show as text, and only images inside the repository are inlined (as `data:`). The `.html` of `mis chart` and `mis diagram` holds only our own escaped SVG. Outputs that are symlinks are refused. PDFs need Chrome; without it the PDF is BLOCKED and the HTML stands. `mis doc` and `mis slides` exit 1 when a mermaid block cannot be drawn (the files and the `errors` report are still written).
 
 ### Teams and sessions
 

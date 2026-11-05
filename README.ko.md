@@ -4,7 +4,7 @@
 
 **아이디어에서 검증된 코드까지, 믿을 수 있는 판정과 함께.**
 
-![version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.4.0](https://img.shields.io/badge/version-0.4.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship은 git 저장소의 아이디어, 요구사항 `.md`, 이슈를 받아 계획 → 구현 → **실제** 검증 → 리뷰까지 진행하는 Claude Code 플러그인입니다. 결과는 항상 `VERIFIED`, `PARTIAL`, `BLOCKED`, `FAILED` 네 가지 판정 중 하나입니다. 판정은 모델이 정하지 않습니다. `mis check`가 프로젝트의 테스트·빌드 명령을 직접 실행해 그 코드 상태의 종료 코드를 기록하고, `mis verdict`가 그 증거에 고정된 규칙을 적용합니다. 위험한 작업은 PreToolUse 훅(guard)이 먼저 묻습니다.
 
@@ -174,6 +174,19 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 ### 흐름 안의 계획·리뷰·디자인·문서·릴리스
 
 `/make-it-ship:run`이 office hours, 브레인스토밍, 계획 리뷰(CEO, 디자인, DX, 엔지니어링), 디자인 보드, 병렬 tracer, 감사, 버전 올리기, 비밀값 검사를 알맞은 단계에서 꺼내 씁니다. 따로 부를 필요가 없습니다. 모든 조건은 run 스킬의 "Situational steps" 표에 있습니다.
+
+### 차트, 다이어그램, 시각 문서, 슬라이드
+
+결과물은 다크 모드를 지원하는 독립 SVG/HTML이고, 저장소 안에만 쓰며, 런타임 의존성이 없습니다. 원본은 mermaid 문법이라 GitHub에서도 같은 파일이 그대로 렌더됩니다.
+
+```sh
+mis chart sales.csv --type line --x month --y revenue,cost   # .json이나 mermaid pie / xychart-beta .mmd도 가능
+mis diagram design/login.mmd    # flowchart(+ .excalidraw), sequence, class, ER, state
+mis doc docs/guide.md --pdf     # ```mermaid 블록을 SVG로; guide.md와 guide.ko.md를 한 번에
+mis slides talk.md --pdf        # Marp 형식 마크다운: 슬라이드 사이 ---, <!-- 노트 -->
+```
+
+`mis doc`, `mis slides`, `mis pdf`의 HTML에는 Content-Security-Policy가 들어가 문서 안의 스크립트, 프레임, 폼, 원격 로드는 실행되지 않고, 이동을 일으키는 원시 태그(`<meta>` refresh, `<base>`, `<link>`, `<iframe>`, `<object>`, `<form>`)는 글자로 보이며, 저장소 안의 이미지만 (`data:`로) 들어갑니다. `mis chart`와 `mis diagram`의 `.html`에는 우리가 이스케이프한 SVG만 들어갑니다. 심볼릭 링크인 출력 파일은 거부합니다. PDF는 Chrome이 필요하고, 없으면 PDF는 BLOCKED로 남고 HTML은 그대로 만들어집니다. `mis doc`과 `mis slides`는 그릴 수 없는 mermaid 블록이 있으면 종료 코드 1로 끝납니다(파일과 `errors` 보고는 그대로 남습니다).
 
 ### 팀과 세션
 

@@ -3,9 +3,9 @@
 // Storage: per-repo private data (contexts, goals, questions, taste) under the state root (shared by worktrees, outside
 // the code hash); team-shared append-only ledgers (decisions, health) under docs/make-it-ship/*.jsonl.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
@@ -16,7 +16,8 @@ import { shortcutDebt, renderDebt } from './debt.mjs';
 import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
 import { bumpVersion, currentVersion, nextVersion, diffScope, repoMode, LEVELS } from './release.mjs';
 import { QID, validateQuestionLog, deriveProfile } from './questions.mjs';
-import { parseMermaid, toExcalidraw, toSvg } from './diagram.mjs';
+import { renderDiagram, esc } from './diagram.mjs';
+import { parseChart, chartFromData, chartToSvg, parseCsv } from './chart.mjs';
 
 const fail = (msg) => { throw new Error(msg); };
 function flag(args, name) {
@@ -288,8 +289,8 @@ function designBoard([d = 'design', ...args], cwd) {
   const dir = resolve(cwd, d);
   if (!existsSync(dir)) fail(`no directory ${d}`);
   const out = flag(args, '--out') ?? 'board.html';
-  // <name>.html next to <name>.excalidraw is a diagram that mis diagram wrote, not a design variant.
-  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html' && !existsSync(join(dir, f.replace(/\.html?$/i, '.excalidraw')))).sort();
+  // <name>.html next to <name>.excalidraw or <name>.svg is a diagram that mis diagram wrote, not a design variant.
+  const variants = readdirSync(dir).filter((f) => /\.html?$/i.test(f) && f !== out && f !== 'index.html' && !['.excalidraw', '.svg'].some((x) => existsSync(join(dir, f.replace(/\.html?$/i, x))))).sort();
   if (variants.length < 2) fail(`a board needs at least 2 HTML variants in ${d} (found ${variants.length})`);
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const cards = variants.map((v) => `<figure><iframe src="${encodeURI(v)}" title="${esc(v)}" loading="lazy"></iframe>
@@ -306,19 +307,69 @@ ${cards}
   return { board: relative(cwd, join(dir, out)), variants, next: `mis companion start ${d} → open the printed URL at /${out}; clicks appear in mis companion status` };
 }
 
+/** Input and output paths of generated visuals must stay in the repository, symlinks resolved; checked before anything is read or created.
+ * lstat, not exists: a dangling link is there (and refused), not missing. */
+export function inRepo(cwd, ...paths) {
+  const root = realpathSync(repoRoot(cwd));
+  for (const p of paths) {
+    let q = p, r;
+    while (!lstatSync(q, { throwIfNoEntry: false })) q = dirname(q);
+    try { r = realpathSync(q); } catch { fail(`${relative(cwd, q) || q} is a dangling symlink; nothing written`); }
+    if (r !== root && !r.startsWith(root + sep)) fail(`${relative(cwd, p) || p} resolves outside the repository (${r}); nothing written`);
+  }
+}
+
+/** Final output files: never a symlink (writing would follow it), and their folder inside the repository. */
+export function outFiles(cwd, ...files) {
+  for (const f of files) if (lstatSync(f, { throwIfNoEntry: false })?.isSymbolicLink()) fail(`${relative(cwd, f) || f} is a symlink; refusing to write through it`);
+  inRepo(cwd, ...files.map((f) => dirname(f)));
+}
+
 function diagram([file, ...args], cwd) {
-  if (!file || !/\.mmd$/.test(file)) fail('usage: mis diagram <file.mmd> [--out <dir>]');
-  const outDir = resolve(cwd, flag(args, '--out') ?? dirname(file));
-  const g = parseMermaid(readFileSync(resolve(cwd, file), 'utf8'));
+  if (!file || !/\.mmd$/.test(file)) fail('usage: mis diagram <file.mmd> [--out <dir>]  (flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram-v2)');
+  const src = resolve(cwd, file), outDir = resolve(cwd, flag(args, '--out') ?? dirname(file));
+  inRepo(cwd, src, outDir);
+  const d = renderDiagram(readFileSync(src, 'utf8'));
   const name = basename(file, '.mmd');
-  mkdirSync(outDir, { recursive: true });
   const ex = join(outDir, `${name}.excalidraw`), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`);
-  const s = toSvg(g);
-  writeFileSync(ex, JSON.stringify(toExcalidraw(g), null, 2) + '\n');
+  outFiles(cwd, ...(d.excalidraw ? [ex] : []), svg, html);
+  mkdirSync(outDir, { recursive: true });
+  if (d.excalidraw) writeFileSync(ex, JSON.stringify(d.excalidraw, null, 2) + '\n');
+  writeFileSync(svg, d.svg + '\n');
+  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#1e1e1e}}</style></head><body>${d.svg}</body></html>\n`);
+  return { kind: d.kind, nodes: d.nodes.length, edges: d.edges.length, files: [file, ...(d.excalidraw ? [relative(cwd, ex)] : []), relative(cwd, svg), relative(cwd, html)],
+    ...(d.excalidraw ? {} : { excalidraw: null, note: `.excalidraw is written for flowchart only; ${d.kind} gets .svg + .html` }),
+    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg${d.excalidraw ? ' and .excalidraw stand' : ' stands'})` };
+}
+
+/** Data chart (user decision 2026-11-04): CSV/JSON rows or mermaid pie/xychart-beta → <name>.svg + <name>.html, only inside the repository. */
+function chart([file, ...args], cwd) {
+  if (!file || !/\.(csv|json|mmd)$/i.test(file)) fail('usage: mis chart <file.csv|file.json|file.mmd> [--type bar|hbar|line|pie] [--x col] [--y col1,col2] [--title t] [--out dir]');
+  const src = resolve(cwd, file);
+  if (!existsSync(src)) fail(`no file ${file}`);
+  const type = flag(args, '--type'), x = flag(args, '--x'), y = flag(args, '--y')?.split(',').map((c) => c.trim()).filter(Boolean), title = flag(args, '--title');
+  const outDir = resolve(cwd, flag(args, '--out') ?? dirname(file));
+  inRepo(cwd, src, outDir);
+  const text = readFileSync(src, 'utf8');
+  let model;
+  if (/\.mmd$/i.test(file)) {
+    if (type || x || y) fail('--type, --x and --y apply to CSV/JSON; a .mmd chart sets them itself');
+    model = parseChart(text);
+  } else {
+    let rows;
+    try { rows = /\.json$/i.test(file) ? JSON.parse(text) : parseCsv(text); } catch (e) { fail(`${file}: ${e.message}`); }
+    model = chartFromData(rows, { type, x, y });
+  }
+  if (title) model.title = title;
+  const name = basename(file).replace(/\.(csv|json|mmd)$/i, ''), svg = join(outDir, `${name}.svg`), html = join(outDir, `${name}.html`), s = chartToSvg(model);
+  outFiles(cwd, svg, html);
+  mkdirSync(outDir, { recursive: true });
   writeFileSync(svg, s + '\n');
-  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title><style>body{margin:0;background:#fff}</style></head><body>${s}</body></html>\n`);
-  return { nodes: g.nodes.length, edges: g.edges.length, files: [file, relative(cwd, ex), relative(cwd, svg), relative(cwd, html)],
-    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg and .excalidraw stand)` };
+  writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(model.title || name)}</title><style>body{margin:0;background:#fff}@media (prefers-color-scheme: dark){body{background:#0d1117}}</style></head><body>${s}</body></html>\n`);
+  const pie = model.kind === 'pie';
+  return { type: pie ? 'pie' : [...new Set(model.series.map((t) => (model.horizontal && t.type === 'bar' ? 'hbar' : t.type)))].join('+'), series: pie ? 1 : model.series.length, points: pie ? model.slices.length : model.categories.length,
+    files: [relative(cwd, svg), relative(cwd, html)],
+    png: `PNG: mis browse goto file://${html} then mis browse screenshot ${relative(cwd, join(outDir, `${name}.png`))} (no Chrome → the PNG is BLOCKED; the .svg stands)` };
 }
 
 // ---------------------------------------------------------------- B8 decisions, JSONL merge driver
@@ -396,4 +447,4 @@ function jsonlMerge(args, cwd) {
 }
 
 export const flowCommands = { debt, redact, health, 'version-bump': versionBump, 'next-version': nextVersionCmd, 'diff-scope': diffScopeCmd,
-  'repo-mode': repoModeCmd, context, goal, question, profile, taste, 'design-board': designBoard, diagram, decision, 'jsonl-merge': jsonlMerge };
+  'repo-mode': repoModeCmd, context, goal, question, profile, taste, 'design-board': designBoard, diagram, chart, decision, 'jsonl-merge': jsonlMerge };
