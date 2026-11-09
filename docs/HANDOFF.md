@@ -76,8 +76,8 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
    - 0.3.3(2026-10-30): HUD를 OMC처럼 시각화. ctx·5h·7d를 10칸 막대로 표시하고 리셋까지 남은 시간을 붙임. 70%부터 노랑, 85%부터 빨강. 검사 표시·판정·브랜치·모델에 색. `NO_COLOR`면 색 없음.
    - version 0.3.0: 0.2.0 이후의 `.ai/` layout, Android 기기·에뮬레이터 지원(`mis android`), 보고 뒤 리뷰로 run 다시 열기(PROPOSALS b), HUD 요금제 사용량(5h/7d). MCP 서버는 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).
 3. **시각화 기능 — 0.4.0으로 master에 병합(2026-11-04 사용자 결정, PR)**: `mis chart`(CSV/JSON·mermaid pie/xychart-beta, bar·line·pie·hbar), `mis diagram` 확장(subgraph·sequence·class·ER·state), `mis doc`(마크다운의 ```mermaid → HTML/PDF, en/ko 쌍), `mis slides`(Marp 부분집합, 16:9, PDF). run의 design "Visuals"와 ship Part A에서 쓴다. 독립 검증 1차 FAIL(HIGH: meta refresh로 로컬 파일 유출, 심링크로 저장소 밖 쓰기) → 수정 → 2차 PASS. 2차 MED/LOW(pdf -o 심링크 폴더, sequence `<br>`, 이미지 10MB 상한, hbar 보고값, 슬라이드 넘침)도 고쳤다. 남은 한계: `class Box~T~` 불가, Excalidraw는 사각형만, 여러 층 역방향 선은 직선, `mis pdf`는 mermaid 오류에도 종료 0, Marp 테마·`![bg]` 미지원.
-5. **브레인스토밍 단독 + 슬라이드 연결 — `feat/brainstorm`(2026-11-10 사용자 결정, 미병합)**: `/make-it-ship:brainstorm` 스킬(interview의 brainstorming 모드만 따로 실행, run 시작 안 함). 설계 문서 뒤에 `<slug>-design-slides.md`를 제안하고 `mis slides`로 HTML/PDF를 만든다. 새 코드 없음. `feat/visualize`에서 갈라졌으므로 0.4.0 PR 병합 뒤 master 위로 올린다.
 4. ~~선택 개선(PROPOSALS)~~ 2026-10-26 (b)로 해결: 보고 뒤 코드 리뷰를 기록하면 run이 REPORTED → VERIFYING으로 다시 열린다(PROGRESS SPEC_CHANGES).
+5. **브레인스토밍 단독 + 슬라이드 연결 — `feat/brainstorm`(2026-11-10 사용자 결정, master에 병합)**: `/make-it-ship:brainstorm` 스킬(interview의 brainstorming 모드만 따로 실행, run 시작 안 함). 설계 문서 뒤에 `<slug>-design-slides.md`를 제안하고 `mis slides`로 HTML/PDF를 만든다. 새 코드 없음.
 
 ## 4. 열린 결정
 
