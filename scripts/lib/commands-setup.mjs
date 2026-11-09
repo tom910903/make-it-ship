@@ -234,6 +234,7 @@ export const CONFIG_KEYS = {
   'telemetry.endpoint': { check: (v) => v === null || (typeof v === 'string' && /^https?:\/\//.test(v)), sensitive: true, doc: 'URL that mis telemetry sync uploads events to' },
   'simplifier.enabled': { check: bool, doc: 'Stop hook asks for a code-simplifier pass once per set of edited source files (default false)' },
   'simplifier.maxFiles': { check: (v) => Number.isInteger(v) && v >= 1, doc: 'most recent edited files handed to the simplifier (default 10)' },
+  'memory.observe': { check: bool, doc: 'record one local observation per tool use for mis memory and memory_search (default true; secrets masked, never uploaded)' },
   proactive: { check: bool, doc: 'session start asks for a one-line next-skill suggestion when a piece of work ends (default true)' },
 };
 

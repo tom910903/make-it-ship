@@ -89,7 +89,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 
 **guard.** run 중에는 계획 승인, `git push`, PR 생성, 패키지 설치, 설정 변경, 외부 MCP 쓰기 전에 묻습니다. 파괴적 명령(`git reset --hard`, `git clean -f`, `git checkout .`, force push, 저장소 밖 재귀 삭제, DB `DROP`/`TRUNCATE`, `kubectl delete`, `docker system prune`)과 다른 모델 서비스 호출은 run이 없어도 **언제나** 묻습니다. `main`/`master`로 force push하는 것과 run 상태를 직접 고치는 것은 항상 막습니다. guard는 부주의한 실수를 막는 장치이며, 모델이 일부러 명령을 숨기는 경우까지 막지는 못합니다.
 
-**MCP 도구.** 번들 MCP 서버가 기억(`notepad_*`, `project_memory_*`, `state_*`), 지식(`wiki_*`, `session_search`, `trace_timeline`), 코드 분석(`lsp_*`, `ast_grep_*`, `python_repl`, 이미 설치된 도구 사용), 스킬 불러오기를 제공합니다. 이름은 `mcp__plugin_make-it-ship_mis__<name>`입니다.
+**MCP 도구.** 번들 MCP 서버가 기억(`notepad_*`, `project_memory_*`, `state_*`), 지식(`wiki_*`, `session_search`, `memory_search`, `trace_timeline`), 코드 분석(`lsp_*`, `ast_grep_*`, `python_repl`, 이미 설치된 도구 사용), 스킬 불러오기를 제공합니다. 이름은 `mcp__plugin_make-it-ship_mis__<name>`입니다.
 
 **내장 브라우저.** `mis browse`는 이미 설치된 Chrome, Chromium, Edge를 DevTools Protocol로 헤드리스 실행해 조작합니다. Playwright도, 추가 설치도 필요 없고, 브라우저가 없으면 `BLOCKED`를 보고합니다. `mis browse start --local-only`는 이 기기(localhost, `127.0.0.1`, `[::1]`)에만 연결되는 브라우저를 띄우며, 파일 업로드는 이 모드에서만 묻지 않고 실행됩니다. 쿠키, 헤더, 다운로드 같은 자격 증명 명령은 항상 묻습니다.
 

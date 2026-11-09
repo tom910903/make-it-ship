@@ -27,6 +27,22 @@ function lastAssistantText(path) {
   return '';
 }
 
+/** claude-mem-style observation of one tool use (config memory.observe, default on); the same record twice in a row is kept once. */
+async function observe(input, sess) {
+  if (!input.cwd || globalConfig().memory?.observe === false) return;
+  try {
+    const { observation, recordObservation } = await import('./lib/observe.mjs');
+    const { realpathSync } = await import('node:fs');
+    let root = null;
+    try { root = realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(input.cwd)); } catch { /* outside a repo: absolute paths */ }
+    const o = observation(input, root);
+    const key = o && `${o.type} ${o.title}`;
+    if (!o || sess.lastObs === key) return;
+    sess.lastObs = key;
+    recordObservation(input.cwd, { session: input.session_id, ...o });
+  } catch { /* fail-open */ }
+}
+
 const handlers = {
   async SessionStart(input) {
     const cwd = input.cwd || process.cwd();
@@ -166,6 +182,7 @@ const handlers = {
       const text = typeof r === 'string' ? r : Array.isArray(r?.content) ? r.content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n') : typeof r?.result === 'string' ? r.result : '';
       try { (await import('./lib/memory.mjs')).extractRemember(text, input.cwd || process.cwd()); } catch { /* best effort */ }
     }
+    await observe(input, sess);
     // M9-D telemetry: a no-op unless the user turned it on (mis telemetry on); local file only.
     if (input.tool_name === 'Skill') (await import('./lib/telemetry.mjs')).logEvent({ event: 'skill_run', skill: String(ti.skill ?? ti.command ?? ''), outcome: 'invoked' });
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
@@ -173,6 +190,7 @@ const handlers = {
   },
   async PostToolUseFailure(input) {
     const sess = readSession(input.session_id);
+    await observe(input, sess);
     const key = `${input.tool_name}:${String(input.tool_input?.command ?? input.tool_input?.file_path ?? '').slice(0, 200)}`;
     sess.failures = { ...sess.failures, [key]: (sess.failures?.[key] ?? 0) + 1 };
     writeSession(input.session_id, sess);

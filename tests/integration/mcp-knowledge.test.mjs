@@ -16,9 +16,9 @@ async function session(dir, env = {}) {
   return mcpSession(dir, { MIS_STATE_HOME: tmp('mis-home-'), MIS_CLAUDE_PROJECTS_DIR: tmp('mis-proj-'), ...env });
 }
 
-test('knowledge module exports exactly the 16 tools', () => {
+test('knowledge module exports exactly the 17 tools', () => {
   assert.deepEqual(tools.map((t) => t.name).sort(), [
-    'deepinit_manifest', 'merge_readiness_cancel', 'merge_readiness_record_answer', 'merge_readiness_report',
+    'deepinit_manifest', 'memory_search', 'merge_readiness_cancel', 'merge_readiness_record_answer', 'merge_readiness_report',
     'merge_readiness_set_content', 'merge_readiness_start', 'session_search', 'trace_summary', 'trace_timeline',
     'wiki_add', 'wiki_delete', 'wiki_ingest', 'wiki_lint', 'wiki_list', 'wiki_query', 'wiki_read',
   ]);
@@ -127,6 +127,21 @@ test('session_search: current project transcripts, filters, CLAUDE_CONFIG_DIR fa
     assert.equal((await s.call('session_search', { query: 'Payment', caseSensitive: true })).json.totalMatches, 1);
     assert.equal((await s.call('session_search', { query: 'payment', sessionId: 's2' })).json.totalMatches, 0);
     assert.equal((await s.call('session_search', { query: '' })).isError, true);
+  } finally { s.close(); }
+});
+
+test('memory_search: observations of this project, type filter, empty query refused (2026-11-10)', async () => {
+  const dir = makeRepo();
+  mkdirSync(stateRoot(dir), { recursive: true });
+  writeFileSync(join(stateRoot(dir), 'observations.jsonl'), [
+    { id: 'a', at: '2026-11-01T00:00:00Z', type: 'change', title: 'Edited src/webhook.mjs', files: ['src/webhook.mjs'] },
+    { id: 'b', at: '2026-11-02T00:00:00Z', type: 'test', title: 'Run webhook tests', cmd: 'npm test' },
+  ].map((o) => JSON.stringify(o)).join('\n') + '\n');
+  const s = await session(dir);
+  try {
+    assert.deepEqual((await s.call('memory_search', { query: 'webhook' })).json.map((r) => r.id).sort(), ['a', 'b']);
+    assert.deepEqual((await s.call('memory_search', { query: 'webhook', type: 'test' })).json.map((r) => r.id), ['b']);
+    assert.equal((await s.call('memory_search', { query: ' ' })).isError, true);
   } finally { s.close(); }
 });
 

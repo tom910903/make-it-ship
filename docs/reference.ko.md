@@ -58,6 +58,7 @@ run 상태는 `.git/make-it-ship/`에 있으므로 커밋되지 않고 코드 �
 - **종료 전 점검:** run이 EXECUTING일 때 코드를 고친 세션은 멈추기 전에 `mis check`를 돌리라는 요청을 받습니다(최대 두 번). `mis config set simplifier.enabled true`로 켜면(`simplifier.maxFiles`, 기본 10) 수정한 파일 묶음마다 한 번 `code-simplifier` 패스를 권합니다. 활성 루프가 먼저 판단하고, 그다음 check 알림, 그다음 simplifier 순입니다.
 - **디버그 범위:** `mis debug scope <file|dir…>`를 쓰면 가설에 해당하는 파일 밖을 고치기 전에 guard가 묻습니다(`--clear`로 해제). debug 단계는 근본 원인을 찾으면 이 범위를 설정합니다.
 - **세션 기록:** 세션이 끝나면 요약(수정한 파일, 남은 할 일, run, 가장 많이 읽은 파일)을 `.git/make-it-ship/session-summaries/`에 쓰고, 많이 읽은 파일은 프로젝트 기억(`often read`)이 됩니다. 남은 할 일은 컴팩션 뒤에도 유지됩니다. 세션(종류: interactive, headless, team worker), 서브에이전트, 스킬은 프로젝트 타임라인에 남습니다: `mis timeline`, `mis timeline log <event> [k=v…]`, `trace_timeline` 도구. 오래 지킬 규칙처럼 들리는 프롬프트("항상 pnpm 써")는 프로젝트 지시로 제안하며, 사용자 없이 저장하지 않습니다.
+- **관찰 기록:** Read, 편집, Bash, Agent, Skill 호출(그리고 실패한 모든 도구 호출)마다 규칙으로 만든 기록 하나(타입 change·read·test·commit·command·agent·skill·failure, 제목, 파일이나 명령, 비밀값은 가림)를 `.git/make-it-ship/observations.jsonl`에 남깁니다. 2MB를 넘으면 오래된 절반을 지웁니다. 밖으로는 아무것도 보내지 않습니다. `mis memory [--last N]`으로 보고, `mis memory search <단어> [--type T] [--since 7d] [--limit N]`과 `memory_search` 도구로 찾습니다(BM25, 한국어·일본어·중국어도 됨). 끄려면 `mis config set memory.observe false`.
 - **프로젝트 CLAUDE.md 라우팅:** `mis setup routing`은 쓸 `## Skill routing` 섹션을 보여 줍니다(기존 섹션, 예를 들어 gstack 것은 교체). `mis setup routing --write`는 guard가 물은 뒤 적용합니다.
 - 사용자별 상태는 `~/.make-it-ship/`에 있습니다(`MIS_STATE_HOME`으로 바꿈). 이 훅들은 자기 오류 때문에 세션을 막지 않습니다. guard만 실패 시 닫힌 쪽으로 동작합니다.
 
@@ -102,7 +103,7 @@ run 상태는 `.git/make-it-ship/`에 있으므로 커밋되지 않고 코드 �
 ## 도구 (번들 MCP 서버 `mis`)
 플러그인이 MCP 서버(`.mcp.json`)를 함께 제공하므로 이 도구들은 `mcp__plugin_make-it-ship_mis__<name>`으로 나타납니다.
 - **기억:** `notepad_*`(priority / working 7일 / manual), `project_memory_*`(스택, 명령, 메모, 지시), `state_*`(모드 상태. run, 루프, 스타일, 동결은 실시간 읽기 전용으로 표시), `shared_memory_*`(에이전트용 TTL 있는 네임스페이스 키/값). `.git/make-it-ship/memory/`에 저장되며 커밋되지 않습니다.
-- **지식:** `wiki_*`(`.make-it-ship/wiki/`의 페이지, 기본적으로 git에서 무시. 커밋하려면 그 `.gitignore`를 지우세요), `session_search`(이 프로젝트의 지난 Claude Code 세션, 읽기 전용), `trace_timeline` / `trace_summary`(run 이벤트와 훅 활동), `deepinit_manifest`, `merge_readiness_*`(병합 전 run의 증거로 이해도를 확인하는 세션).
+- **지식:** `wiki_*`(`.make-it-ship/wiki/`의 페이지, 기본적으로 git에서 무시. 커밋하려면 그 `.gitignore`를 지우세요), `memory_search`(이 프로젝트의 관찰 기록, 아래 참고), `session_search`(이 프로젝트의 지난 Claude Code 세션, 읽기 전용), `trace_timeline` / `trace_summary`(run 이벤트와 훅 활동), `deepinit_manifest`, `merge_readiness_*`(병합 전 run의 증거로 이해도를 확인하는 세션).
 - **코드:** `lsp_*`(hover, 정의, 참조, 심볼, 진단, 이름 바꾸기, 코드 액션. 이미 설치된 언어 서버 사용: typescript-language-server, pyright/pylsp, gopls, rust-analyzer, clangd, sourcekit-lsp), `ast_grep_search` / `ast_grep_replace`(`ast-grep` CLI 필요), `python_repl`(지속되는 `python3`. Bash에서 python을 실행하는 것과 권한 범위가 같은 일반 Python). 실행 파일이 없으면 결과 대신 설치 힌트를 돌려줍니다.
 - **스킬:** `list_skills`, `load_skills_local`, `load_skills_global`(관리와 작성은 "스킬 작성" 참고).
 - `ast_grep_replace`와 `lsp_rename`은 `apply: true`일 때만 파일을 바꿉니다. run이 활성일 때는 이들(과 `lsp_code_action_resolve`)이 파일을 다시 쓰기 전에 guard가 묻고, 동결도 적용됩니다.
