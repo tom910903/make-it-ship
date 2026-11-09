@@ -142,7 +142,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 | 영역 | 스킬 |
 |---|---|
 | 기본 흐름 | `/make-it-ship:run`, `/make-it-ship:status`, `/make-it-ship:resume`, `/make-it-ship:cancel` |
-| 단계 하나만 | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
+| 단계 하나만 | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:brainstorm`(설계 대안 탐색, 원하면 슬라이드까지), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
 | 상시 동작 | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:browse` |
 | 팀 | `/make-it-ship:team`, `/make-it-ship:session` |
 | 스킬 관리 | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |

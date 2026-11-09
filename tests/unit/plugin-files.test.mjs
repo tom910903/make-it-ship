@@ -15,7 +15,7 @@ function frontmatter(text) {
 const AGENTS = ['explorer', 'critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'architect', 'product-reviewer', 'qa-tester', 'analyst', 'planner', 'tracer'];
 const REVIEWERS = ['critic', 'spec-reviewer', 'quality-reviewer', 'security-reviewer', 'product-reviewer'];
 const PHASES = ['discover', 'interview', 'product-review', 'design', 'design-explore', 'plan', 'plan-critique', 'parallel', 'implement', 'debug', 'verify', 'review', 'simplify', 'qa', 'ship', 'retro'];
-const SKILLS = ['run', 'plan', 'status', 'interview', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
+const SKILLS = ['run', 'plan', 'status', 'interview', 'brainstorm', 'plan-review', 'review', 'resume', 'debug', 'qa', 'ship', 'retro', 'browse', 'team', 'session', 'skill', 'skillify', 'writing-skills', 'setup', 'cancel',
   'ask', 'research', 'writer-memory', 'deploy', 'ops', 'ios', 'android', 'telemetry', 'gbrain', 'design-images', 'pair-agent', 'help', 'reference'];
 
 for (const a of AGENTS) {
@@ -58,6 +58,9 @@ test('run skill references every M1 phase file and phases exist', () => {
 
 test('direct commands use their phase files', () => {
   assert.match(read('skills/interview/SKILL.md'), /phases\/interview\.md/);
+  // brainstorming on its own, its design handed on as a deck (user decision 2026-11-10)
+  assert.match(read('skills/brainstorm/SKILL.md'), /phases\/interview\.md[\s\S]*brainstorming/);
+  assert.match(read('skills/run/phases/interview.md'), /\*\*brainstorming\*\*[^\n]*<slug>-design-slides\.md[^\n]*mis slides/);
   assert.match(read('skills/plan-review/SKILL.md'), /phases\/plan-critique\.md/);
   assert.match(read('skills/review/SKILL.md'), /phases\/review\.md/);
   assert.match(read('skills/debug/SKILL.md'), /phases\/debug\.md/);

@@ -142,7 +142,7 @@ Headless screenshots and console errors from your installed browser. In local-on
 | Area | Skills |
 |---|---|
 | Main flow | `/make-it-ship:run`, `/make-it-ship:status`, `/make-it-ship:resume`, `/make-it-ship:cancel` |
-| Single phases | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
+| Single phases | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:brainstorm` (design options, optional slide deck), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
 | Always on | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:browse` |
 | Teams | `/make-it-ship:team`, `/make-it-ship:session` |
 | Skills | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
