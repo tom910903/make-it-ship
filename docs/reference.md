@@ -10,7 +10,7 @@ The details behind [README.md](../README.md): every feature area, what it does, 
 /make-it-ship:run Fix the bug described in ISSUE.md
 /make-it-ship:status
 ```
-Optional single-phase commands: `/make-it-ship:plan` (write a plan, build later), `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. Skills: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
+Optional single-phase commands: `/make-it-ship:plan` (write a plan, build later), `/make-it-ship:interview`, `/make-it-ship:brainstorm` (brainstorming alone; the design can become a deck through `mis slides`), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. Skills: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
 
 What happens:
 1. **Setup.** `mis doctor` checks the environment. `mis init` proposes `.make-it-ship.json`, which holds the check commands (detected from `package.json`, Python tests, a `Makefile`, Cargo, Go, or SwiftPM). You confirm it before it is written.

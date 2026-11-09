@@ -83,7 +83,7 @@ Situational steps inside those phases (each phase file says exactly when):
 - **Design only** (a design system, mockups, variants, a diagram): the design / design-explore phases without `mis start`; files only in `design/` and `DESIGN.md`.
 - **Visuals only** (a chart, a visual document, a slide deck): the design phase's "Visuals" step without `mis start`; no code changes.
 - **Docs for existing code** (document-generate): `make-it-ship:writer` writes them from the code; run the project's checks afterwards and show the result.
-- **Spec, office hours, brainstorming**: `/make-it-ship:interview`. **Reviews and audits**: `/make-it-ship:plan-review`, `/make-it-ship:review`. **Release, finishing a branch**: `/make-it-ship:ship`. **Saved context**: `/make-it-ship:resume`.
+- **Spec, office hours, brainstorming**: `/make-it-ship:interview` (brainstorming alone, with an optional deck: `/make-it-ship:brainstorm`). **Reviews and audits**: `/make-it-ship:plan-review`, `/make-it-ship:review`. **Release, finishing a branch**: `/make-it-ship:ship`. **Saved context**: `/make-it-ship:resume`.
 
 Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix or a function); Standard = a normal feature; Full = new project, large refactor, many modules. Any risk flag (auth, payment, pii, migration, security) means at least Standard — `mis` raises it automatically and refuses to lower it. State the mode and why; the user may change it.
 

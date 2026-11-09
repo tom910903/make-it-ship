@@ -10,7 +10,7 @@
 /make-it-ship:run Fix the bug described in ISSUE.md
 /make-it-ship:status
 ```
-단계 하나만 쓰는 명령(선택): `/make-it-ship:plan`(계획만 쓰고 구현은 나중에), `/make-it-ship:interview`, `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. 스킬 관리: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
+단계 하나만 쓰는 명령(선택): `/make-it-ship:plan`(계획만 쓰고 구현은 나중에), `/make-it-ship:interview`, `/make-it-ship:brainstorm`(브레인스토밍만 따로; 설계를 `mis slides`로 발표 자료까지), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:resume`, `/make-it-ship:retro`. 스킬 관리: `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills`.
 
 진행 순서:
 1. **설정.** `mis doctor`가 환경을 점검합니다. `mis init`은 `.make-it-ship.json`을 제안합니다. 이 파일에는 check 명령이 들어 있으며 `package.json`, Python 테스트, `Makefile`, Cargo, Go, SwiftPM에서 찾아냅니다. 파일은 사용자가 확인한 뒤에만 기록합니다.
