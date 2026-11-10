@@ -459,7 +459,7 @@ function outsideRepoMis(m) {
 // Keys of `mis config` that neither run a command nor contact a URL (commands-setup.mjs CONFIG_KEYS without `sensitive`;
 // a test keeps the two equal). Any other key, including an unknown or variable one, asks.
 export const NON_SENSITIVE_CONFIG = ['style.default', 'keywords.disabled', 'subagentMatcher', 'update.check', 'maintenance.retainDays',
-  'telemetry.enabled', 'simplifier.enabled', 'simplifier.maxFiles', 'proactive', 'memory.observe'];
+  'telemetry.enabled', 'simplifier.enabled', 'simplifier.maxFiles', 'proactive', 'memory.observe', 'memory.context', 'memory.contextObservations', 'memory.contextMaxChars'];
 const CLAUDE_CHANGES = { mcp: ['add', 'add-json', 'add-from-claude-desktop', 'remove', 'reset-project-choices'], plugin: ['install', 'i', 'uninstall', 'remove', 'update', 'enable', 'disable'],
   'plugin marketplace': ['add', 'remove', 'rm', 'update'], config: ['set', 'add', 'remove'] };
 // --settings (a file or JSON) can set permissions.defaultMode: any --settings on launch asks (M9 r2 D3)

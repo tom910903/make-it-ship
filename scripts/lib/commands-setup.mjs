@@ -235,6 +235,11 @@ export const CONFIG_KEYS = {
   'simplifier.enabled': { check: bool, doc: 'Stop hook asks for a code-simplifier pass once per set of edited source files (default false)' },
   'simplifier.maxFiles': { check: (v) => Number.isInteger(v) && v >= 1, doc: 'most recent edited files handed to the simplifier (default 10)' },
   'memory.observe': { check: bool, doc: 'record one local observation per tool use for mis memory and memory_search (default true; secrets masked, never uploaded)' },
+  'memory.summarize': { check: bool, sensitive: true, doc: 'at the end of each turn run claude -p (no tools) to summarize the turn into memories, like claude-mem; costs model tokens (default true)' },
+  'memory.model': { check: (v) => v === null || (typeof v === 'string' && /^[\w.-]+$/.test(v)), sensitive: true, doc: 'model of the memory summarizer (default claude-haiku-4-5)' },
+  'memory.context': { check: bool, doc: 'session start shows recent memories in claude-mem layout (default true; not on resume)' },
+  'memory.contextObservations': { check: (v) => Number.isInteger(v) && v >= 1, doc: 'memories shown at session start (default 50)' },
+  'memory.contextMaxChars': { check: (v) => Number.isInteger(v) && v >= 500, doc: 'size budget of the session-start memory block (default 6000)' },
   proactive: { check: bool, doc: 'session start asks for a one-line next-skill suggestion when a piece of work ends (default true)' },
 };
 

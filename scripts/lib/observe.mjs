@@ -21,7 +21,7 @@ const CMD_SECRETS = [
   [/((?:^|\s)--?(?:password|passwd|pass|token|secret|api-?key|apikey|auth|key)(?:=|\s+))\S+/gi, '$1***'],
   [/\b((?:password|passwd|비밀번호|암호)\s*(?:is|=|:|는|은)?\s+)\S+/gi, '$1***'],
 ];
-const mask = (s) => CMD_SECRETS.reduce((t, [re, to]) => t.replace(re, to), maskSecrets(String(s ?? '')));
+export const mask = (s) => CMD_SECRETS.reduce((t, [re, to]) => t.replace(re, to), maskSecrets(String(s ?? '')));
 const cut = (s, n) => { const t = mask(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 // git [-C dir] commit … -m "msg" (escaped quotes allowed), or Claude Code's -m "$(cat <<'EOF'\nmsg\n…" form: first line of the message
 const COMMIT_MSG = /\bgit\b[^\n]*?\scommit\b[^\n]*?\s-\w*m\s*(?:"\$\(cat\s*<<-?\s*['"]?\w+['"]?\s*\n([^\n]*)|(["'])((?:\\.|(?!\2).)*)\2)/;
@@ -93,11 +93,11 @@ export function sinceMs(spec) {
   return t;
 }
 
-/** BM25 over title, command, files and error (wiki tokenizer: words plus CJK chars and bigrams); ties go to the newer record. */
+/** BM25 over title, subtitle, narrative, facts, concepts, command, files and error (wiki tokenizer: words plus CJK chars and bigrams); ties go to the newer record. */
 export function searchObservations(recs, query, { type, since, limit = 20 } = {}) {
   const from = sinceMs(since), terms = tokenize(String(query ?? ''));
   const docs = recs.filter((r) => (!type || r.type === type) && (!from || Date.parse(r.at) >= from))
-    .map((r) => ({ r, toks: new Set(tokenize([r.title, r.cmd, ...(r.files ?? []), r.error].filter(Boolean).join(' '))) }));
+    .map((r) => ({ r, toks: new Set(tokenize([r.title, r.subtitle, r.narrative, r.cmd, ...(r.facts ?? []), ...(r.concepts ?? []), ...(r.files ?? []), r.error].filter(Boolean).join(' '))) }));
   if (!terms.length || !docs.length) return [];
   const avg = docs.reduce((n, d) => n + d.toks.size, 0) / docs.length, k1 = 1.2, b = 0.75;
   const idf = Object.fromEntries(terms.map((t) => { const n = docs.filter((d) => d.toks.has(t)).length; return [t, Math.log(1 + (docs.length - n + 0.5) / (n + 0.5))]; }));

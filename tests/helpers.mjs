@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 delete process.env.CLAUDE_CONFIG_DIR;
 // Same for the Android SDK: tests use a stub adb on PATH, never the real SDK.
 delete process.env.ANDROID_HOME; delete process.env.ANDROID_SDK_ROOT;
+// Hooks run in tests start the memory summarizer at Stop: it must never reach the real claude (cost). Tests that need it set a fake.
+process.env.MIS_MEMORY_CLAUDE = 'false';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MIS = join(ROOT, 'scripts', 'mis.mjs');

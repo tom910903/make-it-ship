@@ -10,6 +10,7 @@ import { join, resolve } from 'node:path';
 import { routingChange, sectionDiff } from './routing.mjs';
 import { readTimeline, timelineLog, timelineText, sessionKind } from './timeline.mjs';
 import { readObservations, searchObservations } from './observe.mjs';
+import { readMemories, readSummaries } from './summarize.mjs';
 
 function style([a, b]) {
   if (a === 'default') {
@@ -100,9 +101,14 @@ function timeline([sub, ...rest], cwd) {
   return readTimeline(cwd).slice(-n).map((e) => `${e.at}  ${timelineText(e)}`).join('\n') || 'no timeline events';
 }
 
-/** Observations (claude-mem items 1-2, 2026-11-10): `mis memory [--last N]`, `mis memory search <words…> [--type T] [--since 7d] [--limit N]`. */
+/** Observations and summarized memories (claude-mem, 2026-11-10): `mis memory [--last N]`, `mis memory get <id…>`, `mis memory search <words…> [--type T] [--since 7d] [--limit N]`. */
 function memory([sub, ...rest], cwd) {
-  const usage = 'usage: mis memory [--last N] | search <words…> [--type change|read|test|commit|command|agent|skill|failure] [--since 7d|<date>] [--limit N]';
+  const usage = 'usage: mis memory [--last N] | get <id…> | search <words…> [--type bugfix|feature|refactor|change|discovery|decision|read|test|commit|command|agent|skill|failure] [--since 7d|<date>] [--limit N]';
+  if (sub === 'get') {
+    if (!rest.length) throw new Error(usage);
+    const all = [...readMemories(cwd), ...readSummaries(cwd), ...readObservations(cwd)];
+    return rest.map((id) => all.find((r) => String(r.id) === String(id).replace(/^#/, '')) ?? { id, missing: true });
+  }
   if (sub === 'search') {
     const opts = {}, words = [];
     for (let i = 0; i < rest.length; i++) {
@@ -110,7 +116,7 @@ function memory([sub, ...rest], cwd) {
       if (m) { if (rest[i + 1] === undefined) throw new Error(usage); opts[m[1]] = m[1] === 'limit' ? Number(rest[++i]) : rest[++i]; } else words.push(rest[i]);
     }
     if (!words.length || (opts.limit !== undefined && !(opts.limit >= 1))) throw new Error(usage);
-    return searchObservations(readObservations(cwd), words.join(' '), opts);
+    return searchObservations([...readObservations(cwd), ...readMemories(cwd)], words.join(' '), opts);
   }
   if (sub !== undefined && !(sub === '--last' && Number(rest[0]) >= 1)) throw new Error(usage);
   const n = sub === '--last' ? Number(rest[0]) : 50;
