@@ -99,7 +99,9 @@ export function summarizeTurn(cwd, { session, transcriptPath, model = DEFAULT_MO
   if (!release) return { skipped: 'locked' };
   try {
     // one cursor per session: parallel sessions on one project (worktrees, clones) never send each other's events
-    const cur = readCursor(cwd), sid = String(session ?? ''), floor = [cur.sessions?.[sid] ?? '', cur.at ?? ''].sort().at(-1);
+    // a session pushed out of the 50 kept never goes below the oldest kept one (it was summarized up to there at least)
+    const cur = readCursor(cwd), sid = String(session ?? ''), kept = Object.values(cur.sessions ?? {}).map(String).sort();
+    const floor = [cur.sessions?.[sid] ?? (kept.length >= 50 ? kept[0] : ''), cur.at ?? ''].sort().at(-1);
     const fresh = readObservations(cwd).filter((o) => String(o.session ?? '') === sid && String(o.at) > floor);
     if (!fresh.length) return { skipped: 'nothing new' };
     const save = (extra) => {

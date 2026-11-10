@@ -16,7 +16,17 @@ const withHome = (fn) => { const old = process.env.MIS_STATE_HOME; process.env.M
 test('normalizeRemote: one repository in every URL form, never its credentials', () => {
   for (const u of ['git@github.com:Tom/Make-It-Ship.git', 'https://u:ghp_secret123@github.com/Tom/Make-It-Ship.git', 'ssh://git@github.com:22/Tom/Make-It-Ship', 'https://github.com/Tom/Make-It-Ship/', 'https://tok@github.com/Tom/Make-It-Ship.git?x=1'])
     assert.equal(normalizeRemote(u), 'github.com/tom/make-it-ship', u);
+  // r1: unencoded @ or / in a password, and user:pw@ without a scheme
+  for (const u of ['https://user:p@ss@github.com/Tom/Make-It-Ship.git', 'https://user:p/ss@github.com/Tom/Make-It-Ship.git', 'user:tok@github.com:Tom/Make-It-Ship.git', 'user:tok@github.com/Tom/Make-It-Ship.git'])
+    assert.equal(normalizeRemote(u), 'github.com/tom/make-it-ship', u);
 });
+
+test('projectDir r1: a remote added later keeps the memory made before it', () => withHome(() => {
+  const dir = makeRepo();
+  writeFileSync(obsFile(dir), JSON.stringify({ id: 'x', at: '2026-11-10T00:00:00Z', type: 'change', title: 'Before the remote' }) + '\n');
+  git(dir, 'remote', 'add', 'origin', 'git@github.com:org/late.git');
+  assert.equal(readObservations(dir)[0]?.title, 'Before the remote');
+}));
 
 test('projectKey: clones of one remote share a key and folder; no remote → main worktree path; credentials never stored', () => withHome(() => {
   const a = makeRepo(), b = makeRepo(), c = makeRepo();
@@ -84,6 +94,8 @@ test('importClaudeMem: this project by folder name, masked one-line text, prefix
     assert.deepEqual(s.json.map((r) => [r.id, r.project]), [['cm5000', 'other']]);
     assert.deepEqual(mis(dir, ['memory', 'search', 'thing'], { env: { MIS_STATE_HOME: home } }).json, [], 'without --all only this project');
     assert.match(mis(dir, ['memory', 'projects'], { env: { MIS_STATE_HOME: home } }).out, /app[\s\S]*other/);
+    const again = await importClaudeMem(makeRepo(), { dbPath: f, all: true });
+    assert.equal(again.projects.find((p) => p.project === 'app'), undefined, '--all skips a project that already imported its rows');
     const missing = await importClaudeMem(makeRepo(), { dbPath: '/nonexistent.db' });
     assert.match(missing.error, /no claude-mem database/);
   } finally { process.env.MIS_STATE_HOME = old; }
@@ -108,5 +120,27 @@ test('SessionStart imports this project\'s claude-mem history once in the backgr
   spawnSync('sleep', ['1']);
   const old = process.env.MIS_STATE_HOME; process.env.MIS_STATE_HOME = off;
   try { assert.deepEqual(readMemories(dir), []); } finally { process.env.MIS_STATE_HOME = old; }
+});
+
+test('importClaudeMem r1: a bad row never stops the import, an error still leaves the marker; the folder name also matches', async () => {
+  const f = await claudeMemDb();
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(f);
+  db.prepare('INSERT INTO observations (id, project, type, title, created_at_epoch) VALUES (?,?,?,?,?)').run(4941, 'app', 'change', 'Bad time', 1e300);
+  db.close();
+  const old = process.env.MIS_STATE_HOME; process.env.MIS_STATE_HOME = tmp('mis-home-');
+  try {
+    const dir = makeRepo();
+    git(dir, 'remote', 'add', 'origin', 'git@github.com:org/renamed-on-github.git');
+    const local = join(tmp('mis-mv-'), 'app');
+    (await import('node:fs')).renameSync(dir, local);
+    const r = await importClaudeMem(local, { dbPath: f });
+    assert.deepEqual([r.observations, r.summaries], [3, 1], 'matched by the folder name app');
+    assert.equal(readMemories(local).find((m) => m.id === 'cm4941').at, new Date(0).toISOString());
+    const broken = join(tmp('mis-cm-'), 'broken.db');
+    new DatabaseSync(broken).close();
+    const e = await importClaudeMem(makeRepo(), { dbPath: broken });
+    assert.match(e.error, /no such table/);
+  } finally { process.env.MIS_STATE_HOME = old; }
 });
 

@@ -8,6 +8,7 @@ import { mcpSession } from '../helpers-mcp.mjs';
 import { memorySessionContext, extractRemember, preCompactContext, notepadRead, writeMemoryFile } from '../../scripts/lib/memory.mjs';
 import { stateRoot } from '../../scripts/lib/state.mjs';
 import { writeLoop } from '../../scripts/lib/loop.mjs';
+const SAVED_HOME = process.env.MIS_STATE_HOME; // restored, never deleted: helpers point it at a temp home, the real one must stay untouched
 
 const NAMES = ['notepad_read', 'notepad_write_priority', 'notepad_write_working', 'notepad_write_manual', 'notepad_prune', 'notepad_stats',
   'project_memory_read', 'project_memory_write', 'project_memory_add_note', 'project_memory_add_directive',
@@ -187,7 +188,7 @@ test('hook helpers: remember tags, session context, precompact context', () => {
     assert.match(pc, /Always run lint/);
     assert.match(pc, /run \d{8}-\d{4}-\w+ .*PLANNING/);
     assert.match(pc, /loop.*ship it.*3\/9/);
-  } finally { delete process.env.MIS_STATE_HOME; }
+  } finally { process.env.MIS_STATE_HOME = SAVED_HOME; }
 });
 
 test('hook helpers fail open outside a git repo', () => {
@@ -198,5 +199,5 @@ test('hook helpers fail open outside a git repo', () => {
     assert.equal(preCompactContext(plain), '');
     assert.equal(extractRemember('<remember>x</remember>', plain), 1);
     assert.equal(readdirSync(plain).length, 0); // stored under the per-user home, not in the folder
-  } finally { delete process.env.MIS_STATE_HOME; }
+  } finally { process.env.MIS_STATE_HOME = SAVED_HOME; }
 });

@@ -105,13 +105,13 @@ const handlers = {
         parts.push((await import('./lib/recall.mjs')).renderRecent({ project, memories: S.readMemories(cwd), summaries: S.readSummaries(cwd), raw: readObservations(cwd),
           observations: m.contextObservations ?? 50, maxChars: m.contextMaxChars ?? 6000 }));
       } catch { /* recall is optional context */ }
-      // claude-mem users: this project's claude-mem history is imported once, in the background (shown from the next session)
-      try {
-        const { claudeMemDb } = await import('./lib/claude-mem-import.mjs'), { projectDir, readMeta } = await import('./lib/memstore.mjs'), { existsSync } = await import('node:fs');
-        if (m.importClaudeMem !== false && existsSync(claudeMemDb()) && !readMeta(projectDir(cwd))?.claudeMem)
-          spawn(process.execPath, [join(ROOT, 'scripts', 'memory-worker.mjs'), '--import', cwd], { detached: true, stdio: 'ignore', cwd }).unref();
-      } catch { /* fail-open */ }
     }
+    // claude-mem users: this project's claude-mem history is imported once, in the background (shown from the next session)
+    if (input.cwd) try {
+      const { claudeMemDb } = await import('./lib/claude-mem-import.mjs'), { projectDir, readMeta } = await import('./lib/memstore.mjs'), { existsSync } = await import('node:fs');
+      if (m.importClaudeMem !== false && existsSync(claudeMemDb()) && !readMeta(projectDir(cwd))?.claudeMem)
+        spawn(process.execPath, [join(ROOT, 'scripts', 'memory-worker.mjs'), '--import', cwd], { detached: true, stdio: 'ignore', cwd }).unref();
+    } catch { /* fail-open */ }
     if (m.observe !== false && m.summarize !== false) {
       const { readHome: rh, writeHome: wh } = await import('./lib/home.mjs');
       if (!rh('memory-notice.json')) {

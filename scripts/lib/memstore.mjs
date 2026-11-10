@@ -16,9 +16,17 @@ const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', st
 /** git@host:o/r.git, https://u:tok@host/o/r.git, ssh://git@host:22/o/r → host/o/r */
 export function normalizeRemote(url) {
   let u = String(url).trim();
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = u.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^[^@/]*@/, '').replace(/^([^/:]+):\d*(?=\/)/, '$1');
-  else u = u.replace(/^[^@/:]*@/, '').replace(/^([^/:]+):/, '$1/');
+  const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(u);
+  // userinfo up to the last @ that a host follows (a password may hold unencoded @ or /)
+  u = u.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^.*@(?=[^@/:]+[/:])/, '');
+  u = scheme ? u.replace(/^([^/:]+):\d*(?=\/)/, '$1') : u.replace(/^([^/:]+):/, '$1/');
   return u.replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.git$/, '').toLowerCase();
+}
+
+/** Folder names this project goes by locally (claude-mem labels projects by the session's folder name). */
+export function folderNames(cwd) {
+  try { return [...new Set([basename(git(cwd, ['rev-parse', '--show-toplevel'])), basename(real(dirname(resolve(cwd, git(cwd, ['rev-parse', '--git-common-dir'])))))])]; }
+  catch { return [basename(real(cwd))]; }
 }
 
 export function projectKey(cwd) {
@@ -56,6 +64,11 @@ export function projectDir(cwd) {
   if (!existsSync(join(dir, 'meta.json'))) {
     mkdirSync(dir, { recursive: true });
     try { migrateLegacy(cwd, dir); } catch { /* best effort */ }
+    // a remote added later: the memory kept under the repository's path moves along
+    try {
+      const root = real(dirname(resolve(cwd, git(cwd, ['rev-parse', '--git-common-dir'])))), byPath = dirFor({ key: root, name: basename(root) });
+      if (k.key !== root && existsSync(byPath)) { for (const f of FILES) if (existsSync(join(byPath, f)) && !existsSync(join(dir, f))) move(join(byPath, f), join(dir, f)); rmSync(byPath, { recursive: true, force: true }); }
+    } catch { /* outside git */ }
     writeMeta(dir, { key: k.key, name: k.name, created: new Date().toISOString() });
   }
   return dir;

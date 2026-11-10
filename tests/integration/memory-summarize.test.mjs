@@ -128,3 +128,14 @@ test('summarizeTurn: two sessions sharing one project (worktrees, clones) each s
   assert.doesNotMatch(fake.calls()[1].input, /a-only/);
 });
 
+test('summarizeTurn r1: a session evicted from the cursor map does not resend what it already sent', () => {
+  const dir = makeRepo();
+  const fake = fakeClaude(MODEL_JSON);
+  const cursor = join(dirname(obsFile(dir)), 'memory-cursor.json');
+  const sessions = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`s${i}`, `2026-11-10T02:${String(i).padStart(2, '0')}:00.000Z`]));
+  writeFileSync(cursor, JSON.stringify({ sessions, nextId: 1, nextSummary: 1 }));
+  seed(dir, [{ id: 'old', at: '2026-11-10T01:00:00.000Z', session: 'gone', type: 'change', title: 'Already summarized long ago' }]);
+  assert.deepEqual(withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, { session: 'gone' })), { skipped: 'nothing new' });
+  assert.equal(fake.calls().length, 0);
+});
+
