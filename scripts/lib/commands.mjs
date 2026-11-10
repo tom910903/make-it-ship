@@ -354,7 +354,9 @@ export function reviewScope(text, counts, changed) {
   if (counts.blocking > 0) return [];
   const body = text.replace(/^(VERDICT|BLOCKING|MAJOR):.*$/gm, '').replace(/[\s#*`>|_-]+/g, '');
   if (body.length < 20) fail('review has no body: a passing review must say what it checked (files, criteria, what was not checked)');
-  const scope = changed.filter((f) => text.includes(f) || text.includes(f.split('/').pop()));
+  // the path or file name as its own token: a.js must not count inside data.json
+  const named = (n) => new RegExp(`(?<![\\w./-])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w/-]|\\.\\w)`).test(text);
+  const scope = changed.filter((f) => named(f) || named(f.split('/').pop()));
   if (changed.length && !scope.length) fail(`review names none of the changed files (${changed.slice(0, 10).join(', ')}${changed.length > 10 ? ', …' : ''}): a passing review must cite what it reviewed (file:line)`);
   return scope;
 }

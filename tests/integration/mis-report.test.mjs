@@ -162,6 +162,7 @@ test('a passing code review must say what it checked: header-only, no changed fi
   const add = (input) => mis(dir, ['review', 'add', 'quality', '-'], { input });
   assert.match(add('BLOCKING: 0\nMAJOR: 0\n').err, /no body/);
   assert.match(add('VERDICT: SHIP\nBLOCKING: 0\nMAJOR: 0\n\nAll good, nothing to report here at all.\n').err, /names none of the changed files.*lib\.mjs/);
+  assert.match(add('VERDICT: SHIP\nBLOCKING: 0\nMAJOR: 0\n\nChecked corelib.mjs.map and the mylib.mjs2 notes only.\n').err, /names none/, 'a name inside another word does not count');
   assert.match(add('VERDICT: SHIP\nBLOCKING: 2\nMAJOR: 0\n\nlib.mjs: mul() overflows.\n').err, /VERDICT SHIP contradicts BLOCKING: 2/);
   assert.match(add('VERDICT: FAIL\nBLOCKING: 0\nMAJOR: 0\n\nlib.mjs: criterion not met.\n').err, /VERDICT FAIL contradicts/);
   assert.equal(ok(mis(dir, ['verdict'])).verdict, 'PARTIAL', 'no refused review was recorded');

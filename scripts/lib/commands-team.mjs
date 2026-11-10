@@ -215,8 +215,9 @@ function status(dir) {
     const age = hb ? Date.now() - Date.parse(hb.at) : null;
     // Liveness comes from the heartbeat, not from has-session (which can fail transiently under load).
     // stale = a late heartbeat from a live driver (it may recover); dead = its driver process is gone (it never comes back)
-    const late = hb && age > STALE_MS, dead = late && hb.pid && !pidAlive(hb.pid);
-    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : !hb ? 'starting' : dead ? 'dead' : late ? 'stale' : 'running';
+    // no heartbeat a minute after start: the driver died before its first beat (it beats right after the layout is ready)
+    const late = hb && age > STALE_MS, dead = (late && hb.pid && !pidAlive(hb.pid)) || (!hb && Date.now() - Date.parse(team.startedAt) > 2 * STALE_MS);
+    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : dead ? 'dead' : !hb ? 'starting' : late ? 'stale' : 'running';
     return { ...w, state, task: hb?.task ?? null, heartbeatAgeSec: age === null ? null : Math.round(age / 1000), log: join(dir, 'workers', w.name, 'log') };
   });
   const tasks = listTasks(dir);

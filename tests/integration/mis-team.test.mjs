@@ -63,6 +63,7 @@ function fakeTeam(workers, tasks) {
     if (w.beat) writeFileSync(join(td, 'workers', w.name, 'heartbeat.json'), JSON.stringify({ at: new Date(Date.now() - w.beat * 1000).toISOString(), pid: w.pid, task: null }));
     if (w.exited) writeFileSync(join(td, 'workers', w.name, 'exit.json'), '{}');
   }
+  if (workers.starting) writeFileSync(join(td, 'team.json'), JSON.stringify({ ...JSON.parse(readFileSync(join(td, 'team.json'), 'utf8')), startedAt: new Date(Date.now() - workers.starting * 1000).toISOString() }));
   return { dir, td, status: () => ok(mis(dir, ['team', 'status', '--team', id], { env })) };
 }
 const deadPid = () => spawnSync('true').pid;
@@ -88,6 +89,14 @@ test('team status: a running worker or a stale but alive one keeps the team runn
     st = slow.status();
     assert.deepEqual([st.complete, st.workers.map((w) => w.state)], [false, ['running', 'running']], 'heartbeat recovered');
   } finally { live.kill(); }
+});
+
+test('team status: a worker with no heartbeat a minute after start is dead (it crashed before its first beat)', () => {
+  const ws = [{ name: 'w1' }]; ws.starting = 120;
+  const st = fakeTeam(ws, ['pending']).status();
+  assert.deepEqual([st.complete, st.outcome, st.workers[0].state], [false, 'aborted', 'dead']);
+  const fresh = [{ name: 'w1' }]; fresh.starting = 5;
+  assert.equal(fakeTeam(fresh, ['pending']).status().workers[0].state, 'starting');
 });
 
 test('team status/wait: crashed workers (stale heartbeat, dead pid) with unfinished tasks → aborted; wait fails at once, not complete', () => {

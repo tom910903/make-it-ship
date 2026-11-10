@@ -2,6 +2,8 @@
 // tree, not only the direct child (review 2026-11-10, RELIABILITY-001): SIGTERM to the group, SIGKILL after a grace period.
 // When mis itself is interrupted (SIGINT, SIGTERM, SIGHUP) or exits while one runs, the group goes too.
 // shortcut: a SIGKILL of mis leaves the group running and a command that daemonizes (setsid) escapes it; isolation needs a container.
+// shortcut: a passing command's background child that closed its output keeps running (only timeouts and mis's exit end the group);
+// output past maxBuffer is dropped, not an error as with spawnSync. Kill the group after every run if leftovers start to matter.
 import { spawn } from 'node:child_process';
 
 export const GRACE_MS = 2000;
