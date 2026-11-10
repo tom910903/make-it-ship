@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 0.5.0](https://img.shields.io/badge/version-0.5.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.6.0](https://img.shields.io/badge/version-0.6.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
@@ -89,7 +89,7 @@ Quick mode requires `required.quick`; Standard and Full require `required.standa
 
 **The guard.** While a run is active it asks before plan approval, `git push`, PR creation, package installs, config changes and external MCP writes. Destructive commands (`git reset --hard`, `git clean -f`, `git checkout .`, force push, recursive delete outside the repo, database `DROP`/`TRUNCATE`, `kubectl delete`, `docker system prune`) and calls to other model services are asked about **at any time**, run or not. Force-pushing to `main`/`master` and editing run state by hand are always denied. It protects against careless mistakes, not against a model deliberately obfuscating commands.
 
-**MCP tools.** A bundled MCP server adds memory (`notepad_*`, `project_memory_*`, `state_*`), knowledge (`wiki_*`, `session_search`, `trace_timeline`), code intelligence (`lsp_*`, `ast_grep_*`, `python_repl`, using tools already installed) and skill loading. They appear as `mcp__plugin_make-it-ship_mis__<name>`.
+**MCP tools.** A bundled MCP server adds memory (`notepad_*`, `project_memory_*`, `state_*`), knowledge (`wiki_*`, `session_search`, `memory_search`, `trace_timeline`), code intelligence (`lsp_*`, `ast_grep_*`, `python_repl`, using tools already installed) and skill loading. They appear as `mcp__plugin_make-it-ship_mis__<name>`.
 
 **Built-in browser.** `mis browse` drives a Chrome, Chromium or Edge already on the machine, headless, through the DevTools Protocol. No Playwright, nothing installed; with no browser it reports `BLOCKED`. `mis browse start --local-only` starts a browser that can reach only this machine (localhost, `127.0.0.1`, `[::1]`); file uploads run without asking only there. Credential commands (cookies, headers, downloads, …) always ask.
 

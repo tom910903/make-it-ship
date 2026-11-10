@@ -6,6 +6,8 @@ import { dirname, extname, join, posix, relative, resolve, sep } from 'node:path
 import { CATEGORIES, WIKI_DIR, allPages, deletePage, ingest, lint, query, readIndex, readPage, slug } from '../../lib/wiki.mjs';
 import { readTrace } from '../../lib/trace.mjs';
 import { readTimeline, timelineText } from '../../lib/timeline.mjs';
+import { readObservations, searchObservations, sinceMs } from '../../lib/observe.mjs';
+import { readMemories } from '../../lib/summarize.mjs';
 import { loadRun, readEvents, stateRoot } from '../../lib/state.mjs';
 import { repoRoot } from '../../lib/tree-hash.mjs';
 import { cancelGate, readGate, recordAnswer, renderGate, setContent, startGate, worktreeKey } from '../../lib/merge-readiness.mjs';
@@ -120,13 +122,7 @@ function texts(entry) {
     : typeof b?.text === 'string' ? [b.text] : typeof b?.thinking === 'string' ? [b.thinking] : []);
 }
 
-function since(spec) {
-  if (!spec) return 0;
-  const m = spec.trim().match(/^(\d+)\s*([mhdw])$/i);
-  if (m) return Date.now() - m[1] * { m: 6e4, h: 36e5, d: 864e5, w: 6048e5 }[m[2].toLowerCase()];
-  const t = Date.parse(spec);
-  return Number.isNaN(t) ? fail(`unrecognized since: ${spec}`) : t;
-}
+const since = sinceMs;
 
 function searchSessions(cwd, a) {
   const q = String(a.query ?? '').replace(/\s+/g, ' ').trim();
@@ -365,4 +361,8 @@ export const tools = [...wikiTools, { name: 'session_search', description: 'Sear
   inputSchema: { type: 'object', properties: { query: str('Text to find (exact phrase, else all words)'), limit: { type: 'integer', minimum: 1 }, sessionId: str('Only this session'),
     since: str('Relative (7d, 24h, 30m, 2w) or absolute date'), project: str('"current" (default), "all", or a substring of the project path'), caseSensitive: { type: 'boolean' },
     contextChars: { type: 'integer', minimum: 20 } }, required: ['query'] },
-  handler: (a, { cwd }) => searchSessions(cwd, a) }, ...traceTools, deepinitTool, ...mergeTools];
+  handler: (a, { cwd }) => searchSessions(cwd, a) },
+{ name: 'memory_search', description: 'Search this project\'s memory: raw observations (one per tool use: edits, reads, commands, tests, commits, agents, skills, failures) and the summarized records made from them each turn (bugfix, feature, refactor, change, discovery, decision; numeric ids). BM25 over title, command, files and error; returns records with id, time, type and score, best first.',
+  inputSchema: { type: 'object', properties: { query: str('Words to find (Korean, Japanese and Chinese work too)'), type: { type: 'string', enum: ['bugfix', 'feature', 'refactor', 'change', 'discovery', 'decision', 'read', 'test', 'commit', 'command', 'agent', 'skill', 'failure'] },
+    since: str('Relative (7d, 24h, 30m, 2w) or absolute date'), limit: { type: 'integer', minimum: 1 } }, required: ['query'] },
+  handler: (a, { cwd }) => (String(a.query ?? '').trim() ? searchObservations([...readObservations(cwd), ...readMemories(cwd)], a.query, a) : fail('query is empty')) }, ...traceTools, deepinitTool, ...mergeTools];

@@ -2,6 +2,7 @@
 // Always-on hooks (M6): SessionStart, SubagentStart, ... One entry, event name in argv[2].
 // Fail-open by design: any error or bad input prints nothing and exits 0 so a session is never blocked.
 // (guard.mjs is the separate fail-closed PreToolUse hook.)
+import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,32 @@ function lastAssistantText(path) {
     } catch { /* partial line */ }
   }
   return '';
+}
+
+/** claude-mem-style observation of one tool use (config memory.observe, default on); the same record twice in a row is kept once. */
+async function observe(input, sess) {
+  if (!input.cwd || globalConfig().memory?.observe === false) return;
+  try {
+    const { observation, recordObservation } = await import('./lib/observe.mjs');
+    const { realpathSync } = await import('node:fs');
+    let root = null;
+    try { root = realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(input.cwd)); } catch { /* outside a repo: absolute paths */ }
+    const o = observation(input, root);
+    const key = o && `${o.type} ${o.title}`;
+    if (!o || sess.lastObs === key) return;
+    sess.lastObs = key;
+    recordObservation(input.cwd, { session: input.session_id, ...o });
+  } catch { /* fail-open */ }
+}
+
+/** Once per turn: summarize this turn's observations in the background (config memory.summarize, default on; interactive sessions only). */
+function startSummarizer(input) {
+  const m = globalConfig().memory ?? {};
+  if (!input.cwd || input.stop_hook_active || m.observe === false || m.summarize === false || sessionKind() !== 'interactive') return;
+  try {
+    spawn(process.execPath, [join(ROOT, 'scripts', 'memory-worker.mjs'), input.cwd, String(input.session_id ?? ''), String(input.transcript_path ?? ''), String(m.model ?? '')],
+      { detached: true, stdio: 'ignore', cwd: input.cwd }).unref();
+  } catch { /* fail-open */ }
 }
 
 const handlers = {
@@ -68,9 +95,28 @@ const handlers = {
       parts.push(input.source === 'compact' ? [mem.preCompactContext(cwd), todos, mem.projectContext(cwd)].filter(Boolean).join('\n\n') : mem.memorySessionContext(cwd), wiki.wikiSessionContext(cwd));
       if (input.source === 'compact') parts.push(wiki.wikiPreCompact(cwd));
     } catch { /* memory and wiki are optional context */ }
+    const m = globalConfig().memory ?? {};
+    let notice = null;
+    if (input.cwd && input.source !== 'resume' && m.context !== false) {
+      try {
+        const S = await import('./lib/summarize.mjs'), { readObservations } = await import('./lib/observe.mjs'), { basename } = await import('node:path');
+        let project = basename(cwd);
+        try { project = basename((await import('./lib/tree-hash.mjs')).repoRoot(cwd)); } catch { /* outside a repo */ }
+        parts.push((await import('./lib/recall.mjs')).renderRecent({ project, memories: S.readMemories(cwd), summaries: S.readSummaries(cwd), raw: readObservations(cwd),
+          observations: m.contextObservations ?? 50, maxChars: m.contextMaxChars ?? 6000 }));
+      } catch { /* recall is optional context */ }
+    }
+    if (m.observe !== false && m.summarize !== false) {
+      const { readHome: rh, writeHome: wh } = await import('./lib/home.mjs');
+      if (!rh('memory-notice.json')) {
+        notice = 'Make It Ship memory: at the end of each turn a background Haiku call (claude -p, no tools) summarizes what was done, like claude-mem; it costs Haiku tokens. Turn it off with: mis config set memory.summarize false';
+        try { wh('memory-notice.json', { shownAt: new Date().toISOString() }); } catch { /* unwritable home: show again next time */ }
+      }
+    }
     const { buildCodeMap } = await import('./lib/codemap.mjs');
     parts.push(buildCodeMap(cwd));
-    return context('SessionStart', parts.filter(Boolean).join('\n\n'));
+    const out = context('SessionStart', parts.filter(Boolean).join('\n\n'));
+    return notice ? { ...out, systemMessage: notice } : out;
   },
   async UserPromptSubmit(input) {
     const { detectKeywords, styleSwitch, learnedSkills, promptContext } = await import('./lib/keywords.mjs');
@@ -88,6 +134,7 @@ const handlers = {
   },
   async Stop(input) {
     const cwd = input.cwd || process.cwd();
+    startSummarizer(input);
     try { (await import('./lib/memory.mjs')).extractRemember(typeof input.last_assistant_message === 'string' ? input.last_assistant_message : lastAssistantText(input.transcript_path), cwd); } catch { /* best effort */ }
     const { loopForSession, writeLoop, endLoop, loopDecision, freshEvidence } = await import('./lib/loop.mjs');
     const loop = loopForSession(cwd, input.session_id);
@@ -166,6 +213,7 @@ const handlers = {
       const text = typeof r === 'string' ? r : Array.isArray(r?.content) ? r.content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n') : typeof r?.result === 'string' ? r.result : '';
       try { (await import('./lib/memory.mjs')).extractRemember(text, input.cwd || process.cwd()); } catch { /* best effort */ }
     }
+    await observe(input, sess);
     // M9-D telemetry: a no-op unless the user turned it on (mis telemetry on); local file only.
     if (input.tool_name === 'Skill') (await import('./lib/telemetry.mjs')).logEvent({ event: 'skill_run', skill: String(ti.skill ?? ti.command ?? ''), outcome: 'invoked' });
     try { writeSession(input.session_id, sess); } catch { /* unwritable home */ }
@@ -173,6 +221,7 @@ const handlers = {
   },
   async PostToolUseFailure(input) {
     const sess = readSession(input.session_id);
+    await observe(input, sess);
     const key = `${input.tool_name}:${String(input.tool_input?.command ?? input.tool_input?.file_path ?? '').slice(0, 200)}`;
     sess.failures = { ...sess.failures, [key]: (sess.failures?.[key] ?? 0) + 1 };
     writeSession(input.session_id, sess);
@@ -263,6 +312,9 @@ const handlers = {
     return context('SubagentStart', rules);
   },
 };
+
+// The memory summarizer's own `claude -p` (MIS_MEMORY_WORKER) must never record, summarize or spawn again.
+if (process.env.MIS_MEMORY_WORKER) process.exit(0);
 
 let input = {};
 try {
