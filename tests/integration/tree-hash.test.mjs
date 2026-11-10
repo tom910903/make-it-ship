@@ -37,3 +37,33 @@ test('tree hash: does not touch the real index, works from a subdirectory', () =
   assert.ok(readFileSync(join(dir, '.git', 'index')).equals(before), 'real index bytes unchanged');
   assert.equal(git(dir, 'status', '--porcelain'), statusBefore);
 });
+
+// ISSUE-002 (review 2026-11-10): plans and specs are inputs of a verification, so an edit to them must change the hash;
+// what mis writes itself (reports, ledgers, retros) must not, or every report would stale its own evidence.
+test('tree hash: plan and spec documents count, generated report files do not; the real index stays untouched', () => {
+  const dir = makeRepo({ 'a.txt': 'a\n', 'docs/make-it-ship/plans/p.md': '# plan\n' });
+  const h0 = treeHash(dir);
+  write(dir, { 'docs/make-it-ship/r1/report.md': 'report', 'docs/make-it-ship/decisions.jsonl': '{}\n', 'docs/make-it-ship/retro-2026-11-10.md': 'r' });
+  assert.equal(treeHash(dir), h0, 'generated files excluded');
+  write(dir, { 'docs/make-it-ship/plans/p.md': '# plan\n- new criterion\n' });
+  const h1 = treeHash(dir);
+  assert.notEqual(h1, h0, 'a plan edit counts');
+  write(dir, { 'docs/make-it-ship/specs/s-design.md': '# spec\n' });
+  assert.notEqual(treeHash(dir), h1, 'a new spec counts');
+  assert.equal(git(dir, 'diff', '--cached', '--name-only'), '', 'nothing staged in the real index');
+  const bare = makeRepo({ 'a.txt': 'a\n' });
+  assert.match(treeHash(bare), /^[0-9a-f]{40}$/, 'works when plans/ and specs/ do not exist');
+});
+
+// Found while fixing ISSUE-002: with docs/make-it-ship in .gitignore the exclude pathspec named an ignored path and git add
+// exited 1, so every check was BLOCKED. Ignored plans and specs still count: they are the inputs of the verification.
+test('tree hash: works when docs/make-it-ship is gitignored, and its plans still count', () => {
+  const dir = makeRepo({ 'a.txt': 'a\n', '.gitignore': 'docs/make-it-ship/\n' });
+  write(dir, { 'docs/make-it-ship/plans/p.md': '# plan\n', 'docs/make-it-ship/r1/report.md': 'r' });
+  const h0 = treeHash(dir);
+  write(dir, { 'docs/make-it-ship/r1/report.md': 'r2' });
+  assert.equal(treeHash(dir), h0, 'generated files excluded');
+  write(dir, { 'docs/make-it-ship/plans/p.md': '# plan v2\n' });
+  assert.notEqual(treeHash(dir), h0, 'an ignored plan edit still counts');
+  assert.equal(git(dir, 'status', '--porcelain'), '', 'nothing staged or changed');
+});

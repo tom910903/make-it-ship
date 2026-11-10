@@ -76,6 +76,14 @@ function gitSub(ws) {
   return { sub: ws[i], rest: ws.slice(i + 1) };
 }
 
+/** gh [-R o/r | --repo o/r | --repo=o/r]... <sub> <verb>: the global repo flag may come before the subcommand (review 2026-11-10). */
+function ghSub(ws) {
+  if (ws[0] !== 'gh') return null;
+  let i = 1;
+  while (i < ws.length && ws[i].startsWith('-')) i += ws[i] === '-R' || ws[i] === '--repo' ? 2 : 1;
+  return ws.slice(i);
+}
+
 /** Pre-push secret scan result (computed by guard.mjs, M9-B): shown in every push ask; never shows secret values. */
 function scanNote(ctx) {
   const s = ctx.pushScan;
@@ -240,7 +248,8 @@ function runOnly(ws, ctx, functions) {
   if (mis?.[0] === 'approve') return ask('approval is recorded only when you confirm this command');
   if ((mis?.[0] === 'init' || (mis?.[0] === 'setup' && mis[1] === 'team')) && mis.includes('--write')) return ask('writing .make-it-ship.json changes verification rules');
   if (g?.sub === 'push') return classifyPush(g.rest, ctx);
-  if (ws[0] === 'gh' && ((ws[1] === 'pr' && ['create', 'merge'].includes(ws[2])) || ws[1] === 'release')) return ask(`remote write (gh ${ws[1]} ${ws[2] ?? ''}) needs your approval`);
+  const gh = ghSub(ws);
+  if (gh && ((gh[0] === 'pr' && ['create', 'merge'].includes(gh[1])) || gh[0] === 'release')) return ask(`remote write (gh ${gh[0]} ${gh[1] ?? ''}) needs your approval`);
   if (isInstall(ws)) return ask('package install needs your approval (supply chain)');
   return allow;
 }

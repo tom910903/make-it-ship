@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, write, mis, git, ROOT } from '../helpers.mjs';
+import { makeRepo, write, mis, git, ROOT, passingReview } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const TPL = join(ROOT, 'templates', 'ios-debug-bridge');
@@ -34,14 +34,14 @@ test('bridge-scan finds leftover bridge code; ship is NOT READY (PARTIAL) until 
   ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   const s = ok(mis(dir, ['ship']));
   assert.equal(s.ready, false);
   assert.equal(s.verdict, 'PARTIAL');
   assert.ok(s.reasons.some((r) => /debug bridge/i.test(r)));
   write(dir, { 'App/AppMain.swift': 'import SwiftUI\n@main struct A: App { var body: some Scene { WindowGroup { Text("x") } } }\n' });
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   assert.equal(ok(mis(dir, ['ship'])).ready, true);
 });
 

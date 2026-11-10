@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { repoRoot, REPORT_DIR } from './tree-hash.mjs';
 import { stateRoot, loadRun } from './state.mjs';
 import { MIS_CLI_ENV } from './cli-util.mjs';
+import { runTree } from './proc.mjs';
 import { loadConfig } from './config.mjs';
 import { shortcutDebt, renderDebt } from './debt.mjs';
 import { scanTree, scanHistory, scanText, describeFindings, kindsWith, redactText } from './redact.mjs';
@@ -82,7 +83,7 @@ const WEIGHTS = [[/test/i, 30], [/type|tsc|mypy/i, 25], [/lint|eslint|ruff|clipp
 const weightOf = (name) => WEIGHTS.find(([re]) => re.test(name))?.[1] ?? 10;
 
 /** Weighted health score of the project's checks (gstack health). Does not record run evidence. */
-function health(args, cwd) {
+async function health(args, cwd) {
   const root = repoRoot(cwd);
   const cfg = loadConfig(root);
   if (!cfg.config) fail(cfg.exists ? `.make-it-ship.json invalid: ${cfg.errors.join('; ')}` : 'no .make-it-ship.json (run mis init)');
@@ -91,7 +92,7 @@ function health(args, cwd) {
   for (const [name, def] of Object.entries(cfg.config.checks)) {
     if (name.startsWith('qa-')) continue; // real-use QA needs a running app; health is the static dashboard
     const t0 = Date.now();
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, stdio: 'ignore', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', env: { CI: '1', ...MIS_CLI_ENV() } });
+    const r = await runTree(def.argv, { cwd: root, capture: false, timeoutMs: def.timeoutSec * 1000, env: { CI: '1', ...MIS_CLI_ENV() } });
     const status = r.error ? 'BLOCKED' : r.status === 0 ? 'PASS' : 'FAIL';
     const weight = weightOf(name);
     checks[name] = { status, weight, ms: Date.now() - t0 };

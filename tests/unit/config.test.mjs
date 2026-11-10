@@ -63,3 +63,14 @@ test('standard/full: every defined qa-* check is required (Spec §14.1 qa); quic
   assert.deepEqual(requiredChecks(c, 'standard'), ['unit', 'qa-web', 'qa-cli']);
   assert.deepEqual(requiredChecks(c, 'full'), ['unit', 'qa-web', 'qa-cli']);
 });
+
+// ISSUE-001 (review 2026-11-10): Full read required.standard only, so a check listed under required.full was never required.
+test('full: required.full adds to required.standard (Full never verifies less than Standard); without it Full = Standard', () => {
+  const c = normalizeConfig({ version: 1, checks: { unit: { argv: ['x'] }, e2e: { argv: ['y'] }, lint: { argv: ['z'] } },
+    required: { quick: ['unit'], standard: ['unit', 'lint'], full: ['e2e'] } });
+  assert.deepEqual(requiredChecks(c, 'full'), ['unit', 'lint', 'e2e']);
+  assert.deepEqual(requiredChecks(c, 'standard'), ['unit', 'lint']);
+  const onlyFull = normalizeConfig({ version: 1, checks: { unit: { argv: ['x'] }, e2e: { argv: ['y'] } }, required: { full: ['e2e'] } });
+  assert.deepEqual(requiredChecks(onlyFull, 'full'), ['unit', 'e2e'], 'no standard list: Standard is every check, so Full is too');
+  assert.deepEqual(requiredChecks(onlyFull, 'standard'), ['unit', 'e2e'], 'standard without a list: every check');
+});

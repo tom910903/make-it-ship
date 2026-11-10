@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, write, mis, git, GUARD } from '../helpers.mjs';
+import { makeRepo, write, mis, git, GUARD, passingReview } from '../helpers.mjs';
 
 const CFG = { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
@@ -59,7 +59,7 @@ test('conflict: overlapping edits are detected, the merge is aborted, the run st
   assert.equal(readFileSync(join(dir, 'shared.txt'), 'utf8'), 'from T1\n');
   assert.ok(existsSync(w2), 'conflicting worktree kept for resolution');
   ok(mis(dir, ['check', 'unit']));
-  write(dir, { '../rev.md': 'BLOCKING: 0\nMAJOR: 0\n' });
+  write(dir, { '../rev.md': passingReview(dir) });
   ok(mis(dir, ['review', 'add', 'quality', '../rev.md']));
   const v = ok(mis(dir, ['verdict']));
   assert.equal(v.verdict, 'PARTIAL');

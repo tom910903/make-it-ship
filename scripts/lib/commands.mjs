@@ -13,9 +13,10 @@ import { maskSecrets } from './mask.mjs';
 import { verdict as judge } from './verdict.mjs';
 import { changedManifests } from './deps.mjs';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, rmSync, readdirSync } from 'node:fs';
+import { writeFileSync, rmSync, readdirSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderStatus, renderReport } from './render.mjs';
+import { runTree } from './proc.mjs';
 import { REPORT_DIR } from './tree-hash.mjs';
 import { detectConfig, writeConfig, projectType } from './setup.mjs';
 import { shortcutDebt } from './debt.mjs';
@@ -341,6 +342,25 @@ export function parseReview(text) {
   return { blocking: count('BLOCKING'), major: count('MAJOR') };
 }
 
+/**
+ * A code review that lets the run pass (BLOCKING 0) must show it looked at this change (review 2026-11-10, ISSUE-004): a body
+ * beyond the header, a VERDICT line (when given) that agrees with the counts, and at least one changed file named. Returns
+ * the changed files it names (its scope). Only checked when added, so reviews already recorded keep counting.
+ */
+export function reviewScope(text, counts, changed) {
+  const v = text.match(/^VERDICT:[ \t]*(\S+)/m)?.[1]?.toUpperCase();
+  if (v && ['SHIP', 'PASS', 'ACCEPT', 'APPROVE'].includes(v) && counts.blocking > 0) fail(`VERDICT ${v} contradicts BLOCKING: ${counts.blocking}`);
+  if (v && ['FAIL', 'FIX-FIRST', 'REJECT'].includes(v) && counts.blocking === 0 && counts.major === 0) fail(`VERDICT ${v} contradicts BLOCKING: 0 and MAJOR: 0`);
+  if (counts.blocking > 0) return [];
+  const body = text.replace(/^(VERDICT|BLOCKING|MAJOR):.*$/gm, '').replace(/[\s#*`>|_-]+/g, '');
+  if (body.length < 20) fail('review has no body: a passing review must say what it checked (files, criteria, what was not checked)');
+  // the path or file name as its own token: a.js must not count inside data.json
+  const named = (n) => new RegExp(`(?<![\\w./-])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w/-]|\\.\\w)`).test(text);
+  const scope = changed.filter((f) => named(f) || named(f.split('/').pop()));
+  if (changed.length && !scope.length) fail(`review names none of the changed files (${changed.slice(0, 10).join(', ')}${changed.length > 10 ? ', …' : ''}): a passing review must cite what it reviewed (file:line)`);
+  return scope;
+}
+
 function review([sub, kind, file], cwd) {
   if (sub !== 'add' || !REVIEW_KINDS.includes(kind) || !file) fail(`usage: mis review add <${REVIEW_KINDS.join('|')}> <md-file|->`);
   const src = resolve(cwd, file);
@@ -351,12 +371,20 @@ function review([sub, kind, file], cwd) {
     const s = run.state;
     const reopen = s.state === 'REPORTED' && !PLAN_REVIEWS.includes(kind);
     if (TERMINAL.includes(s.state) && !reopen) fail(`run is ${s.state}`);
+    const tree = treeHash(cwd);
+    let scope;
+    if (!PLAN_REVIEWS.includes(kind)) {
+      // the code under review: files changed since the run started, without mis's own folder (plans, reports)
+      const changed = changedFiles(repoRoot(cwd), s.baseCommit, tree).map((c) => c.path.split(' → ').pop()).filter((f) => !f.startsWith(`${REPORT_DIR}/`));
+      scope = reviewScope(text, counts, changed);
+    }
     if (reopen) transition(s, 'VERIFYING');
     const n = s.reviews.length + 1;
     mkdirSync(join(run.dir, 'reviews'), { recursive: true });
     const dest = `reviews/${n}-${kind}.md`;
     writeFileSync(join(run.dir, dest), text);
-    const rec = { kind, treeHash: treeHash(cwd), planHash: s.planHash, ...counts, file: dest, at: new Date().toISOString() };
+    const rec = { kind, treeHash: tree, planHash: s.planHash, ...counts, file: dest, at: new Date().toISOString(),
+      runId: s.runId, baseCommit: s.baseCommit ?? null, sha256: createHash('sha256').update(text).digest('hex'), ...(scope ? { scope } : {}) };
     s.reviews.push(rec);
     if (!reopen) return { event: { type: 'review', kind, ...counts }, result: rec };
     const reopened = 'REPORTED -> VERIFYING';
@@ -400,7 +428,7 @@ function task([id, action], cwd) {
   });
 }
 
-function check([name], cwd) {
+async function check([name], cwd) {
   if (!name) fail('usage: mis check <name>');
   const root = repoRoot(cwd);
   const cfg = loadConfig(root);
@@ -419,16 +447,15 @@ function check([name], cwd) {
   const { id, dir } = pre;
   const marker = join(dir, 'running', `${process.pid}.json`);
   mkdirSync(join(dir, 'running'), { recursive: true });
-  writeFileSync(marker, JSON.stringify({ pid: process.pid, id, check: name, startedAt: new Date().toISOString() }));
+  writeFileSync(`${marker}.tmp`, JSON.stringify({ pid: process.pid, id, check: name, startedAt: new Date().toISOString() }));
+  renameSync(`${marker}.tmp`, marker);
   const def = cfg.config?.checks[name];
   const rec = { id, check: name, argv: def?.argv ?? null, exitCode: null, status: 'BLOCKED', reason: null,
     treeHash: treeHash(root), configHash: cfg.configHash, log: `logs/${id}.log`, startedAt: new Date().toISOString(), endedAt: null };
   let output = '';
   if (!def) rec.reason = cfg.exists ? `check "${name}" is not defined in .make-it-ship.json` : 'no .make-it-ship.json (run `mis init`)';
   else {
-    // shortcut: spawnSync kills only the direct child on timeout; grandchildren may linger. Upgrade to process groups if that bites.
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, encoding: 'utf8', timeout: def.timeoutSec * 1000,
-      killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024, env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
+    const r = await runTree(def.argv, { cwd: root, timeoutMs: def.timeoutSec * 1000, env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     if (r.error?.code === 'ENOENT') rec.reason = `command not found: ${def.argv[0]}`;
     else if (r.error?.code === 'ETIMEDOUT' || (r.signal && r.status === null)) rec.reason = `timed out after ${def.timeoutSec}s`;
@@ -586,8 +613,8 @@ function resume([runId], cwd) {
     const openQuestions = s.interview.filter((q) => !q.answer).map((q) => `${q.id} (${q.impact}) ${q.question}`);
     const interruptedChecks = [];
     const runningDir = join(r.dir, 'running');
-    for (const f of existsSync(runningDir) ? readdirSync(runningDir) : []) {
-      const m = JSON.parse(readFileSync(join(runningDir, f), 'utf8'));
+    for (const f of existsSync(runningDir) ? readdirSync(runningDir).filter((x) => /^\d+\.json$/.test(x)) : []) {
+      let m; try { m = JSON.parse(readFileSync(join(runningDir, f), 'utf8')); } catch { m = { pid: parseInt(f, 10) }; } // cut short by a crash: the name holds the pid
       if (pidAlive(m.pid)) continue;
       interruptedChecks.push({ id: m.id, check: m.check, startedAt: m.startedAt });
       rmSync(join(runningDir, f), { force: true });
@@ -745,7 +772,7 @@ export function benchStatus(medianMs, baseMs, failed = null) {
   return { deltaPct, status: failed ? 'FAILED' : !baseMs ? 'BASELINE' : deltaPct > 50 ? 'REGRESSION' : deltaPct > 20 ? 'WARN' : 'OK' };
 }
 
-function bench(args, cwd) {
+async function bench(args, cwd) {
   const runs = Number(flag(args, '--runs') ?? 5);
   const [name] = args;
   if (!name || !Number.isInteger(runs) || runs < 1 || runs > 50) fail('usage: mis bench <check> [--runs 1-50]');
@@ -756,7 +783,7 @@ function bench(args, cwd) {
   let failed = null;
   for (let i = 0; i < runs; i++) {
     const t0 = process.hrtime.bigint();
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: root, timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', stdio: 'ignore', env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
+    const r = await runTree(def.argv, { cwd: root, timeoutMs: def.timeoutSec * 1000, capture: false, env: { CI: '1', ...process.env, MIS_CLI: fileURLToPath(new URL('../mis.mjs', import.meta.url)) } });
     times.push(Number(process.hrtime.bigint() - t0) / 1e6);
     if (r.status !== 0) { failed = r.error?.message ?? `exit ${r.status ?? r.signal}`; break; }
   }

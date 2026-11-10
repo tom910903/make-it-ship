@@ -37,3 +37,5 @@ MAJOR: <n>
 ```
 
 Then: **What this change does** (one line) · **Must fix** · **Should fix** · **Nice to have** (each: what, problem, smallest fix — prefer deletion) · **Lean** (lines/deps that could go) · **Open questions** · **Not checked**.
+
+**Reviewed** comes first in the body: the changed files you read, by path. `mis review add` refuses a passing review (BLOCKING 0) that names none of them, has no body, or whose VERDICT contradicts the counts.

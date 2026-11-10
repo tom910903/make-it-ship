@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis, ROOT } from '../helpers.mjs';
+import { makeRepo, mis, ROOT, passingReview } from '../helpers.mjs';
 
 const HOOKS = join(ROOT, 'scripts', 'hooks.mjs');
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
@@ -59,7 +59,7 @@ test('Stop ends the loop once the run is reported VERIFIED; a BLOCKED run lets t
   assert.equal(ok(mis(bdir, ['loop', 'status'])).active, true, 'loop survives a block');
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   assert.equal(stop(dir).decision, 'block', 'VERIFIED but no report yet → keep going');
   ok(mis(dir, ['report']));
   const done = stop(dir);
@@ -144,7 +144,7 @@ test('M6 D5: a run reported before the loop started does not finish the loop', (
   ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   ok(mis(dir, ['report']));
   ok(mis(dir, ['loop', 'start', 'add feature X']));
   const r = stop(dir);
@@ -181,7 +181,7 @@ test('M6 R2-3: re-reporting an old run is not evidence; a new run with checks af
   ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   ok(mis(dir, ['report']));
   ok(mis(dir, ['loop', 'start', 'export CSV']));
   ok(mis(dir, ['report']));
@@ -191,7 +191,7 @@ test('M6 R2-3: re-reporting an old run is not evidence; a new run with checks af
   ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   ok(mis(dir, ['report']));
   assert.match(stop(dir).systemMessage, /VERIFIED/, 'a new run with fresh checks ends it');
 });

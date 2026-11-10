@@ -31,3 +31,5 @@ MAJOR: <n>
 ```
 
 Then: **Attack surface of this change** · **Findings** (each: severity, confidence, `file:line` with the quoted line, OWASP category, exploit scenario step by step, impact, fix with a BAD/GOOD snippet in the same language) · **Dependencies** (added/changed and any known issues) · **Open questions** · **Not checked**.
+
+**Reviewed** comes first in the body: the changed files you read, by path. `mis review add` refuses a passing review (BLOCKING 0) that names none of them, has no body, or whose VERDICT contradicts the counts.

@@ -55,3 +55,14 @@ test('resume by run id switches the current run; unknown id fails', () => {
   const cur = readFileSync(join(stateRoot(dir), 'current'), 'utf8').trim();
   assert.equal(cur, a.runId);
 });
+
+// RELIABILITY-002 review (2026-11-10): an empty or half-written marker (or a stray file) in running/ made mis resume throw.
+test('resume survives a damaged running marker and a stray file: a dead pid is reported as an interrupted check', () => {
+  const dir = makeRepo({ '.make-it-ship.json': CFG });
+  const { runId } = ok(mis(dir, ['start', '--input', 'x']));
+  const running = join(stateRoot(dir), 'runs', runId, 'running');
+  write(dir, { [join(running, '999999.json').slice(dir.length + 1)]: '', [join(running, '.DS_Store').slice(dir.length + 1)]: '' });
+  const r = ok(mis(dir, ['resume']));
+  assert.equal(r.interruptedChecks.length, 1);
+  assert.ok(!existsSync(join(running, '999999.json')), 'damaged marker of a dead pid removed');
+});

@@ -31,3 +31,5 @@ MAJOR: <n>
 ```
 
 Then: **Criteria** table (criterion | MET/PARTIAL/NOT MET | evidence) · **Scope check** · **Findings** · **Not checked**.
+
+**Reviewed** comes first in the body: the changed files you read, by path. `mis review add` refuses a passing review (BLOCKING 0) that names none of them, has no body, or whose VERDICT contradicts the counts.
