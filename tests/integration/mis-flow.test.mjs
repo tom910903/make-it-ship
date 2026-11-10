@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, write, mis, git, GUARD } from '../helpers.mjs';
+import { makeRepo, write, mis, git, GUARD, passingReview } from '../helpers.mjs';
 import { FAKE } from '../fixtures/fake-secrets.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json ?? r.out; };
@@ -272,7 +272,7 @@ test('B8 retro --git: commits, hotspots and per-author metrics plus reviewer hit
   write(dir, { 'src/a.js': '2' }); commit(dir, 'a2', { GIT_AUTHOR_NAME: 'Kim', GIT_AUTHOR_EMAIL: 'kim@x.com' });
   ok(mis(dir, ['start', '--input', 'x']));
   ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'VERDICT: REVISE\nBLOCKING: 1\nMAJOR: 0\n' }));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'VERDICT: ACCEPT\nBLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   const r = ok(mis(dir, ['retro', '--git', '--since', '7d']));
   assert.equal(r.git.commits, 3);
   assert.deepEqual(r.git.hotspots[0], { file: 'src/a.js', changes: 2 });

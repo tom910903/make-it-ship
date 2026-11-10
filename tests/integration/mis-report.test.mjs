@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, write, mis } from '../helpers.mjs';
+import { makeRepo, write, mis, passingReview } from '../helpers.mjs';
 
 const CFG = { version: 1, checks: { unit: { argv: ['node', '--test', 'test.mjs'] } } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json ?? r.out; };
-const REVIEW = 'VERDICT: ACCEPT\nBLOCKING: 0\nMAJOR: 0\n';
+const REVIEW = 'VERDICT: ACCEPT\nBLOCKING: 0\nMAJOR: 0\n\nChecked lib.mjs: mul() matches the criterion; test.mjs covers add.\n';
 
 function quickRun() {
   const dir = makeRepo({
@@ -117,7 +117,7 @@ test('quick mode: a detected user-facing surface without real-use QA is listed a
   ok(mis(dir, ['mode', 'set', 'quick', '--reason', 'r']));
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   const r = ok(mis(dir, ['report']));
   assert.equal(r.verdict, 'VERIFIED', 'quick does not require qa (Spec §14.1)');
   const s6 = readFileSync(join(dir, r.path), 'utf8').split('## 6. ')[1].split('## 7. ')[0];
@@ -151,4 +151,24 @@ test('BLOCKED and CANCELLED runs are not reopened by a review', () => {
   const res = mis(dir, ['review', 'add', 'quality', '../rev.md']);
   assert.notEqual(res.code, 0);
   assert.match(res.err, /run is BLOCKED/);
+});
+
+// ISSUE-004 (review 2026-11-10): a bare "BLOCKING: 0 / MAJOR: 0" header made a code review count. A passing code review now
+// needs a body that names a changed file, and a VERDICT line that agrees with the counts; the record keeps its scope.
+test('a passing code review must say what it checked: header-only, no changed file named, or a contradicting VERDICT is refused', () => {
+  const dir = quickRun();
+  ok(mis(dir, ['task', 'T1', 'done']));
+  ok(mis(dir, ['check', 'unit']));
+  const add = (input) => mis(dir, ['review', 'add', 'quality', '-'], { input });
+  assert.match(add('BLOCKING: 0\nMAJOR: 0\n').err, /no body/);
+  assert.match(add('VERDICT: SHIP\nBLOCKING: 0\nMAJOR: 0\n\nAll good, nothing to report here at all.\n').err, /names none of the changed files.*lib\.mjs/);
+  assert.match(add('VERDICT: SHIP\nBLOCKING: 2\nMAJOR: 0\n\nlib.mjs: mul() overflows.\n').err, /VERDICT SHIP contradicts BLOCKING: 2/);
+  assert.match(add('VERDICT: FAIL\nBLOCKING: 0\nMAJOR: 0\n\nlib.mjs: criterion not met.\n').err, /VERDICT FAIL contradicts/);
+  assert.equal(ok(mis(dir, ['verdict'])).verdict, 'PARTIAL', 'no refused review was recorded');
+  const rec = ok(add('VERDICT: SHIP\nBLOCKING: 0\nMAJOR: 0\n\nChecked lib.mjs: mul() matches the criterion and test.mjs covers it.\n'));
+  assert.deepEqual(rec.scope, ['lib.mjs']);
+  assert.match(rec.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(rec.runId && rec.baseCommit && rec.treeHash, 'run, base and reviewed tree are recorded');
+  assert.equal(ok(mis(dir, ['verdict'])).verdict, 'VERIFIED');
+  assert.equal(add('BLOCKING: 1\nMAJOR: 0\n').code, 0, 'a review with blocking issues needs no body: it can only fail the run');
 });

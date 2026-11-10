@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, write, mis, git } from '../helpers.mjs';
+import { makeRepo, write, mis, git, passingReview } from '../helpers.mjs';
 
 const CFG = { version: 1, checks: { unit: { argv: ['node', '-e', 'process.exit(require("fs").existsSync("bad") ? 1 : 0)'] } } };
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
@@ -18,7 +18,7 @@ function verifiedRun({ branch = 'feature/greet' } = {}) {
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'Add greet');
   ok(mis(dir, ['task', 'T1', 'done']));
   ok(mis(dir, ['check', 'unit']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   return dir;
 }
 

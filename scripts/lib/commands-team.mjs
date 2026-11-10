@@ -10,6 +10,7 @@ import { repoRoot } from './tree-hash.mjs';
 import { stateRoot, newRunId, pidAlive } from './state.mjs';
 import { MIS_CLI_ENV } from './cli-util.mjs';
 import { loadConfig, requiredChecks } from './config.mjs';
+import { runTree } from './proc.mjs';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
 const MIS = join(PLUGIN_ROOT, 'scripts', 'mis.mjs');
@@ -44,6 +45,8 @@ export const tmux = (...a) => spawnSync('tmux', tmuxArgs(a), { encoding: 'utf8' 
 export function requireTmux(alt = 'run the team with Claude Code subagents (Agent tool) instead') {
   if (tmux('-V').error) fail(`BLOCKED: tmux is not installed (command -v tmux failed). Install tmux, or ${alt}.`);
 }
+// the socket the team was started on, not this shell's MIS_TMUX_SOCKET: else shutdown can miss the session and leave workers running
+const teamTmux = (team, ...a) => spawnSync('tmux', 'socket' in team ? [...(team.socket ? ['-L', team.socket] : []), ...a] : tmuxArgs(a), { encoding: 'utf8' });
 export const attachHint = (s) => `tmux ${process.env.MIS_TMUX_SOCKET ? `-L ${process.env.MIS_TMUX_SOCKET} ` : ''}attach -t ${s}`;
 
 /** Keep `.worktrees/` out of `git status` (local exclude, never a tracked .gitignore change). */
@@ -204,14 +207,16 @@ async function runWorker([id, name], cwd) {
 
 function status(dir) {
   const team = readJson(join(dir, 'team.json'));
-  const alive = tmux('has-session', '-t', team.session).status === 0;
+  const alive = teamTmux(team, 'has-session', '-t', team.session).status === 0;
   // Workers before tasks: a worker writes exit.json after its last task result, so tasks read later are never older
   // than the exit state (else a task finishing in between shows in_progress on a "complete" team).
   const workers = team.workers.map((w) => {
     const hb = readJson(join(dir, 'workers', w.name, 'heartbeat.json'));
     const age = hb ? Date.now() - Date.parse(hb.at) : null;
     // Liveness comes from the heartbeat, not from has-session (which can fail transiently under load).
-    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : !hb ? 'starting' : age > STALE_MS ? 'stale' : 'running';
+    // stale = a late heartbeat from a live driver (it may recover); dead = its driver process is gone (it never comes back)
+    const late = hb && age > STALE_MS, dead = late && hb.pid && !pidAlive(hb.pid);
+    const state = existsSync(join(dir, 'workers', w.name, 'exit.json')) ? 'exited' : team.endedAt ? 'stopped' : !hb ? 'starting' : dead ? 'dead' : late ? 'stale' : 'running';
     return { ...w, state, task: hb?.task ?? null, heartbeatAgeSec: age === null ? null : Math.round(age / 1000), log: join(dir, 'workers', w.name, 'log') };
   });
   const tasks = listTasks(dir);
@@ -219,10 +224,15 @@ function status(dir) {
   // after shutdown nothing runs any more: a task that was in progress was interrupted
   for (const t of tasks) if (team.endedAt && t.status === 'in_progress') t.status = 'stopped';
   for (const t of tasks) counts[t.status]++;
-  // Complete = every worker process is gone (drivers exit as soon as no task is left), so merging can start.
-  // shortcut: a stale worker's in_progress task is reported, not re-queued; re-run it in a new team if needed.
-  const complete = Boolean(team.endedAt) || workers.every((w) => w.state === 'exited' || w.state === 'stale');
-  return { id: team.id, session: team.session, worker: team.workerCmd ? 'custom' : team.worker, ended: team.endedAt, alive, complete, counts,
+  // Complete = every driver exited on its own (it does so once no task is left), so merging can start. A stale heartbeat
+  // is not an exit (review 2026-11-10, ISSUE-003). outcome: done (every task done) | failed | stopped (shutdown) |
+  // aborted (no driver left alive, tasks unfinished) | running.
+  // shortcut: a dead worker's in_progress task is reported, not re-queued (a slow worker would run it twice); re-run it in a new team.
+  const complete = Boolean(team.endedAt) || workers.every((w) => w.state === 'exited');
+  const unfinished = counts.pending + counts.in_progress;
+  const outcome = team.endedAt ? 'stopped' : complete ? (counts.failed || unfinished ? 'failed' : 'done')
+    : workers.every((w) => w.state === 'exited' || w.state === 'dead') ? 'aborted' : 'running';
+  return { id: team.id, session: team.session, worker: team.workerCmd ? 'custom' : team.worker, ended: team.endedAt, alive, complete, outcome, counts,
     tasks: tasks.map(({ id, subject, status: s, owner, exitCode }) => ({ id, subject, status: s, owner, exitCode })), workers };
 }
 
@@ -233,6 +243,7 @@ async function wait(args, cwd) {
   for (;;) {
     const s = status(dir);
     if (s.complete) return s;
+    if (s.outcome === 'aborted') fail(`aborted: worker(s) ${s.workers.filter((w) => w.state === 'dead').map((w) => w.name).join(', ')} died with ${JSON.stringify(s.counts)}; see their log, then mis team shutdown and re-run the unfinished tasks`);
     if (Date.now() > until) fail(`timeout after ${timeout}s: ${JSON.stringify(s.counts)} (mis team status; mis team shutdown to stop)`);
     await sleep(300);
   }
@@ -242,7 +253,7 @@ function shutdown(args, cwd) {
   const dir = teamDir(cwd, args);
   const team = readJson(join(dir, 'team.json'));
   writeFileSync(join(dir, 'shutdown'), '');
-  const killed = tmux('kill-session', '-t', team.session).status === 0;
+  const killed = teamTmux(team, 'kill-session', '-t', team.session).status === 0;
   const removed = [], kept = [];
   for (const w of team.workers) {
     if (!existsSync(w.worktree)) continue;
@@ -279,7 +290,7 @@ function sessionList(root) {
   return out;
 }
 
-function session([sub, ...args], cwd) {
+async function session([sub, ...args], cwd) {
   const root = repoRoot(cwd);
   if (sub === 'list') return sessionList(root);
   if (sub === 'remove') {
@@ -316,20 +327,21 @@ function session([sub, ...args], cwd) {
     if (r.status !== 0) fail(`worktree created at ${path}, but tmux failed: ${r.stderr.trim()}`);
   }
   return { name, kind, branch, path, base: kind === 'pr' ? `${remote} pull/${ref}/head` : base, tmux: tmuxName, ...(tmuxName ? { attach: attachHint(tmuxName) } : {}),
-    baseline: args.includes('--no-baseline') ? null : baseline(path, root) };
+    baseline: args.includes('--no-baseline') ? null : await baseline(path, root) };
 }
 
 /** Superpowers using-git-worktrees: run the quick checks in a new worktree so later failures are known to be new.
  *  Not run evidence (no run is involved); the worktree's own config wins, else the main tree's. */
-function baseline(path, root) {
+async function baseline(path, root) {
   const cfg = [loadConfig(path), loadConfig(root)].find((c) => c.config);
   if (!cfg) return { status: 'BLOCKED', reason: 'no valid .make-it-ship.json (mis init) — baseline not run' };
-  const checks = requiredChecks(cfg.config, 'quick').map((name) => {
+  const checks = [];
+  for (const name of requiredChecks(cfg.config, 'quick')) {
     const def = cfg.config.checks[name];
-    const r = spawnSync(def.argv[0], def.argv.slice(1), { cwd: path, encoding: 'utf8', timeout: def.timeoutSec * 1000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, env: { CI: '1', ...MIS_CLI_ENV() } });
+    const r = await runTree(def.argv, { cwd: path, timeoutMs: def.timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024, env: { CI: '1', ...MIS_CLI_ENV() } });
     const status = r.error ? 'BLOCKED' : r.status === 0 ? 'PASS' : 'FAIL';
-    return { name, argv: def.argv, status, exitCode: r.status, tail: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n') };
-  });
+    checks.push({ name, argv: def.argv, status, exitCode: r.status, tail: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n') });
+  }
   return { status: checks.every((c) => c.status === 'PASS') ? 'PASS' : checks.some((c) => c.status === 'FAIL') ? 'FAIL' : 'BLOCKED', checks,
     note: 'baseline before any change: a FAIL here already existed on the base; tell the user before starting work' };
 }

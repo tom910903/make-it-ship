@@ -101,11 +101,13 @@ export function normalizeConfig(cfg) {
   };
 }
 
-/** Quick → required.quick; Standard/Full → required.standard plus every qa-* check; default → every defined check. */
+/** Quick → required.quick; Standard → required.standard; Full → required.standard plus required.full; each plus every qa-* check
+ *  (not Quick); a missing list → every defined check. Full never verifies less than Standard (review 2026-11-10, ISSUE-001). */
 export function requiredChecks(config, mode) {
-  const key = mode === 'quick' ? 'quick' : 'standard';
-  const base = config.required[key] ?? Object.keys(config.checks);
-  if (mode === 'quick') return base;
+  const all = Object.keys(config.checks);
+  if (mode === 'quick') return config.required.quick ?? all;
+  let base = config.required.standard ?? all;
+  if (mode === 'full') base = [...new Set([...base, ...(config.required.full ?? [])])];
   // Standard/Full: real-use QA checks (qa-*) are always required when defined (Spec §14.1 qa).
   return [...base, ...Object.keys(config.checks).filter((n) => n.startsWith('qa-') && !base.includes(n))];
 }

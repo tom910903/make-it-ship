@@ -16,7 +16,7 @@ const BASH = {
   ],
   ask: [
     'git push', 'git push origin feature', 'git -C /x push', 'cd sub && git push -u origin x', 'git push --force origin feature',
-    'gh pr create --fill', 'gh pr merge 3', 'gh release create v1',
+    'gh pr create --fill', 'gh pr merge 3', 'gh release create v1', 'gh -R o/r pr create -t x', 'gh --repo=o/r pr merge 3', 'gh --repo o/r release create v1',
     'npm install lodash', 'npm i', 'npm add x', 'pnpm add x', 'yarn add x', 'pip install x', 'pip3 install -r r.txt',
     'python -m pip install x', 'brew install jq', 'cargo add serde',
     'rm -rf /', 'rm -rf ~', 'rm -rf ~/foo', 'rm -fr /tmp/x', 'rm -rf ../other', 'rm -rf $HOME', 'rm -r -f /etc', `rm -rf ${REPO}`,

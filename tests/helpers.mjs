@@ -75,3 +75,6 @@ export async function browserLock() {
     else await new Promise((r) => setTimeout(r, 200));
   }
 }
+
+/** A passing code review for a test run: a body that names every file of the repo, so it cites whatever the run changed. */
+export const passingReview = (dir) => `VERDICT: SHIP\nBLOCKING: 0\nMAJOR: 0\n\nReviewed ${git(dir, 'ls-files', '-co', '--exclude-standard').split('\n').join(', ')}: no issues found.\n`;

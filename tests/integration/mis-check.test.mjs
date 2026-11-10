@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, write, mis } from '../helpers.mjs';
+import { makeRepo, write, mis, passingReview } from '../helpers.mjs';
 import { stateRoot } from '../../scripts/lib/state.mjs';
 
 const node = (code) => ['node', '-e', code];
@@ -130,7 +130,7 @@ test('config changed during the run (by any tool) keeps the verdict PARTIAL unti
   ok(mis(dir, ['task', 'T1', 'start'])); ok(mis(dir, ['task', 'T1', 'done']));
   write(dir, { '.make-it-ship.json': { ...C1, checks: { ...C1.checks, 'qa-x': { argv: ['node', '-e', '0'] } } } });
   ok(mis(dir, ['check', 'unit'])); ok(mis(dir, ['check', 'qa-x']));
-  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: 'BLOCKING: 0\nMAJOR: 0\n' }));
+  ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   let v = ok(mis(dir, ['verdict']));
   assert.equal(v.verdict, 'PARTIAL');
   assert.ok(v.reasons.some((r) => /changed during the run.*mis approve config/.test(r)), v.reasons.join());
@@ -160,4 +160,30 @@ test('M9 fix1 D2: a check script (MIS_CLI) cannot run mis subcommands the guard 
   }
   assert.equal(existsSync(codexLog), false, 'codex was never called');
   assert.equal(ok(mis(dir, ['check', 'readonly'], { env: h.env })).status, 'PASS');
+});
+
+// ISSUE-005 (review 2026-11-10): mis check exited 0 even when the check failed. --strict puts the result in the exit code
+// (0 PASS, 3 FAIL, 4 BLOCKED, 5 timeout; 1 stays a mis error, 2 usage); without it nothing changes (skills read the JSON).
+test('check --strict: exit code per result; default stays 0; verdict --strict is 0 only when VERIFIED', () => {
+  const dir = setup();
+  assert.equal(mis(dir, ['check', 'fail']).code, 0, 'default unchanged');
+  assert.deepEqual(['pass', 'fail', 'missingbin', 'slow', 'nope'].map((c) => mis(dir, ['check', c, '--strict']).code), [0, 3, 4, 5, 4]);
+  assert.equal(mis(dir, ['check', '--strict', 'pass']).code, 0, 'the flag can come first');
+  const v = mis(dir, ['verdict', '--strict']);
+  assert.equal(v.json.verdict, 'FAILED');
+  assert.equal(v.code, 3);
+  assert.equal(mis(dir, ['verdict']).code, 0);
+});
+
+// RELIABILITY-001 (review 2026-11-10): a timeout killed only the direct child; a grandchild kept running.
+test('check timeout kills the whole process tree, not only the direct child', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { tree: { argv: ['sh', '-c', 'sleep 30 & echo $! > grandchild.pid; sleep 30'], timeoutSec: 1 } } } });
+  ok(mis(dir, ['start', '--input', 'x']));
+  const r = ok(mis(dir, ['check', 'tree']));
+  assert.match(r.reason, /timed out/);
+  const pid = Number(readFileSync(join(dir, 'grandchild.pid'), 'utf8'));
+  let alive = true;
+  for (let i = 0; i < 20 && alive; i++) { try { process.kill(pid, 0); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100); } catch { alive = false; } }
+  if (alive) process.kill(pid, 'SIGKILL');
+  assert.equal(alive, false, 'the grandchild was killed');
 });
