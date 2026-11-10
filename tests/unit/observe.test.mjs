@@ -83,6 +83,8 @@ test('searchObservations: equal scores list the newer record first', () => {
 test('mask r2: spaced and glued option forms, secret-ish option names, openssl pass:, cookies', () => {
   const leaks = {
     'mysql -p hunter2 db': 'hunter2', 'docker login -p abc12345 reg': 'abc12345', 'curl -uadmin:hunter2 u': 'hunter2', 'curl --user=admin:hunter2 u': 'hunter2',
+    'redis-cli -a abc12345': 'abc12345', 'curl -b "sid=abc12345" u': 'abc12345', 'curl --cookie sid=abc12345 u': 'abc12345', 'curl -H "X-Auth: abc12345" u': 'abc12345',
+    'git clone https://ghtok12345@github.com/x': 'ghtok12345', 'aws configure set aws_secret_access_key abc12345': 'abc12345', 'curl -u "admin:pass word12345" u': 'word12345',
     'x --client-secret abc12345': 'abc12345', 'x --api_key abc12345': 'abc12345', 'openssl enc -pass pass:abc12345': 'abc12345', 'curl -H "Cookie: sid=abc12345" u': 'abc12345',
   };
   for (const [s, secret] of Object.entries(leaks)) assert.doesNotMatch(mask(s), new RegExp(secret), s);

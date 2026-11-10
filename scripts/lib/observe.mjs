@@ -15,8 +15,13 @@ export const OBS_MAX_BYTES = 2 * 1024 * 1024;
 // --password/--token values, any Authorization scheme, "password is x" in prose.
 const CMD_SECRETS = [
   [/\b(\w*(?:SECRET|PASS|PWD|TOKEN|KEY|CRED|AUTH(?!OR))\w*=)("[^"]*"|'[^']*'|\S+)/gi, '$1***'],
-  [/((?:authorization|cookie)\s*[:=]\s*)[^"'\n]+/gi, '$1***'],
-  [/((?:^|\s)(?:-u\s*|--user[=\s]+)[^\s:]+:)\S+/g, '$1***'],
+  [/((?:authorization|cookie|x-[\w-]*(?:auth|token|key|secret)[\w-]*)\s*[:=]\s*)[^"'\n]+/gi, '$1***'],
+  [/((?:^|\s)(?:-u\s*|--user[=\s]+)(["'])[^:"']*:)[^"']*\2/g, '$1***$2'],
+  [/((?:^|\s)(?:-u\s*|--user[=\s]+)[^\s:"']+:)[^\s"']+/g, '$1***'],
+  [/((?:^|\s)(?:-b|--cookie)[=\s]+)("[^"]*"|'[^']*'|\S+)/g, '$1***'],
+  [/(\bredis-cli\b[^\n;|&]*?\s-a\s+)\S+/g, '$1***'],
+  [/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+@/gi, '$1***@'],
+  [/(\b\w*(?:secret|token|password|api_key)\w*\s+)(?!\*\*\*)\S+$/gim, '$1***'],
   [/((?:^|\s)-p)(?=\S)\S+/g, '$1***'],
   // a spaced -p takes a password only in these tools (elsewhere: mkdir -p, docker run -p 8080:80, git log -p)
   [/(\b(?:mysql|mariadb|mysqldump|mysqladmin|docker\s+login|podman\s+login|sshpass)\b[^\n;|&]*?\s-p\s+)\S+/gi, '$1***'],
