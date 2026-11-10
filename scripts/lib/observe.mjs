@@ -1,7 +1,8 @@
 // Observations (user decision 2026-11-10, absorbs claude-mem's per-tool-use capture and search): the PostToolUse and
 // PostToolUseFailure hooks append one rule-based record per tool use to <git-common-dir>/make-it-ship/observations.jsonl
 // (per-user home outside a repo). Local only, secrets masked, nothing sent anywhere; `mis memory` and memory_search read it.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { stateRoot } from './state.mjs';
 import { homeDir } from './home.mjs';
@@ -10,36 +11,53 @@ import { isTestCommand } from './posttool.mjs';
 import { tokenize } from './wiki.mjs';
 
 export const OBS_MAX_BYTES = 2 * 1024 * 1024;
-const cut = (s, n) => { const t = maskSecrets(String(s ?? '')).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-const COMMIT_MSG = /\bgit\s+commit\b[^\n]*?\s-\w*m\s*(["'])(.*?)\1/;
+// Command-line forms maskSecrets (log values) does not cover (verifier r1): secret-looking env names, -u user:pass, -p<pw>,
+// --password/--token values, any Authorization scheme, "password is x" in prose.
+const CMD_SECRETS = [
+  [/\b(\w*(?:SECRET|PASS|PWD|TOKEN|KEY|CRED|AUTH)\w*=)("[^"]*"|'[^']*'|\S+)/gi, '$1***'],
+  [/(authorization\s*[:=]\s*)[^"'\n]+/gi, '$1***'],
+  [/((?:^|\s)(?:-u|--user)\s+[^\s:]+:)\S+/g, '$1***'],
+  [/((?:^|\s)-p)(?=\S)\S+/g, '$1***'],
+  [/((?:^|\s)--?(?:password|passwd|pass|token|secret|api-?key|apikey|auth|key)(?:=|\s+))\S+/gi, '$1***'],
+  [/\b((?:password|passwd|비밀번호|암호)\s*(?:is|=|:|는|은)?\s+)\S+/gi, '$1***'],
+];
+const mask = (s) => CMD_SECRETS.reduce((t, [re, to]) => t.replace(re, to), maskSecrets(String(s ?? '')));
+const cut = (s, n) => { const t = mask(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+// git [-C dir] commit … -m "msg" (escaped quotes allowed), or Claude Code's -m "$(cat <<'EOF'\nmsg\n…" form: first line of the message
+const COMMIT_MSG = /\bgit\b[^\n]*?\scommit\b[^\n]*?\s-\w*m\s*(?:"\$\(cat\s*<<-?\s*['"]?\w+['"]?\s*\n([^\n]*)|(["'])((?:\\.|(?!\2).)*)\2)/;
+// the file itself, resolved through symlinks when it exists (a symlinked cwd still yields repository-relative paths)
+const real = (p) => { try { return realpathSync(p); } catch { return p; } };
 
 export function obsFile(cwd) {
   let dir;
-  try { dir = stateRoot(cwd); } catch { dir = homeDir(); }
+  try { dir = stateRoot(cwd); } catch { return join(homeDir(), 'observations', `${createHash('sha256').update(resolve(cwd)).digest('hex').slice(0, 16)}.jsonl`); } // one file per non-git folder
   return join(dir, 'observations.jsonl');
 }
 
 /** One hook input → { type, title, files?, cmd?, error? }, or null for tools not worth remembering. Pure. */
 export function observation(input, root) {
   const ti = input.tool_input ?? {}, tool = input.tool_name;
-  const path = (f) => { const abs = resolve(input.cwd || root || '.', String(f)), rel = root ? relative(root, abs) : abs; return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : abs; };
+  const path = (f) => { const abs = real(resolve(input.cwd || root || '.', String(f))), rel = root ? relative(root, abs) : abs; return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : abs; };
   let o = null;
-  if (['Edit', 'MultiEdit', 'NotebookEdit'].includes(tool) || tool === 'Write') {
+  if (['Edit', 'MultiEdit', 'NotebookEdit', 'Write'].includes(tool) && (ti.file_path ?? ti.notebook_path)) {
     const f = path(ti.file_path ?? ti.notebook_path);
     o = { type: 'change', title: `${tool === 'Write' ? 'Wrote' : 'Edited'} ${f}`, files: [f] };
   } else if (tool === 'Read' && ti.file_path) {
     const f = path(ti.file_path);
     o = { type: 'read', title: `Read ${f}`, files: [f] };
   } else if (tool === 'Bash' && ti.command) {
-    const cmd = String(ti.command), msg = cmd.match(COMMIT_MSG)?.[2];
-    o = { type: msg ? 'commit' : isTestCommand(cmd) ? 'test' : 'command', title: cut(msg ?? ti.description ?? cmd.split('\n')[0], 160), cmd: cut(cmd, 300) };
+    const cmd = String(ti.command), m = cmd.match(COMMIT_MSG), msg = m && (m[1] ?? m[3]), first = cmd.split('\n')[0];
+    // only the first line is kept: a heredoc body (file content, keys) never reaches the store
+    o = { type: msg ? 'commit' : isTestCommand(cmd) ? 'test' : 'command', title: cut(msg ?? ti.description ?? first, 160), cmd: cut(first + (cmd.includes('\n') ? ' …' : ''), 300) };
   } else if (['Agent', 'Task'].includes(tool)) {
     o = { type: 'agent', title: cut(`Agent${ti.subagent_type ? ` (${ti.subagent_type})` : ''}: ${ti.description ?? ''}`, 160) };
   } else if (tool === 'Skill' && ti.skill) {
     o = { type: 'skill', title: `Skill ${cut(ti.skill, 100)}` };
   }
-  if (input.error === undefined) return o;
-  return { ...(o ?? {}), type: 'failure', title: `Failed: ${o?.title ?? cut(tool, 60)}`, error: cut(String(input.error).split('\n')[0], 200) };
+  if (input.hook_event_name !== 'PostToolUseFailure' && input.error == null) return o;
+  const f = { ...(o ?? {}), type: 'failure', title: `Failed: ${o?.title ?? cut(tool, 60)}` };
+  if (input.error != null) f.error = cut(String(input.error).split('\n')[0], 200);
+  return f;
 }
 
 /** Append one record; past the size cap keep the newer half (whole lines). Never throws. */

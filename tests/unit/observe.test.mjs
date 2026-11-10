@@ -47,3 +47,35 @@ test('searchObservations: BM25 ranks matches, filters by type and age, finds Kor
   assert.ok(searchObservations(recs, 'chart').every((r) => typeof r.score === 'number'));
   assert.ok(OBS_MAX_BYTES > 0);
 });
+
+test('observation r1: secrets in options, env, Basic auth and prose are masked; heredoc bodies are never stored', () => {
+  const leaks = {
+    'export AWS_SECRET_ACCESS_KEY=abcdefghijklmnop1234': 'abcdefghijklmnop1234',
+    'curl -H "Authorization: Basic dXNlcjpwYXNz" https://x': 'dXNlcjpwYXNz',
+    'curl -u admin:hunter2pass https://x': 'hunter2pass',
+    'mysql -u root -pHunter2pass db': 'Hunter2pass',
+    'DB_PASS=hunter2xyz ./run': 'hunter2xyz',
+    'node x --token abc123def456': 'abc123def456',
+    'node x --password=abc123def456': 'abc123def456',
+    'echo "password is hunter2xyz"': 'hunter2xyz',
+    'cat > .env <<EOF\nAPI=plainvalue123\nEOF': 'plainvalue123',
+  };
+  for (const [command, secret] of Object.entries(leaks)) assert.doesNotMatch(JSON.stringify(obs('Bash', { command })), new RegExp(secret), command);
+  assert.equal(obs('Bash', { command: 'mkdir -p out && ls' }).cmd, 'mkdir -p out && ls', 'ordinary options stay readable');
+});
+
+test('observation r1: Claude Code heredoc commits, git -C and escaped quotes are commits; odd input is skipped', () => {
+  const heredoc = `git commit -m "$(cat <<'EOF'\nfeat: add thing\n\nbody\nEOF\n)"`;
+  assert.deepEqual([obs('Bash', { command: heredoc }).type, obs('Bash', { command: heredoc }).title], ['commit', 'feat: add thing']);
+  assert.equal(obs('Bash', { command: 'git -C sub commit -m "fix \\"quoted\\" bit"' }).title, 'fix \\"quoted\\" bit');
+  assert.equal(obs('Write', {}), null);
+  const failed = observation({ tool_name: 'Bash', tool_input: { command: 'x' }, error: null, hook_event_name: 'PostToolUseFailure' }, root);
+  assert.equal(failed.type, 'failure');
+  assert.equal(failed.error, undefined);
+  assert.equal(obs('Bash', { command: 'x' }, { error: null }).type, 'command', 'a null error outside the failure hook is not a failure');
+});
+
+test('searchObservations: equal scores list the newer record first', () => {
+  const same = [{ id: 'old', at: '2026-01-01T00:00:00Z', type: 'read', title: 'Read a.md' }, { id: 'new', at: '2026-02-01T00:00:00Z', type: 'read', title: 'Read a.md' }];
+  assert.deepEqual(searchObservations(same, 'a.md').map((r) => r.id), ['new', 'old']);
+});
