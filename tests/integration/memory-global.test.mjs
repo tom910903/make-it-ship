@@ -17,7 +17,7 @@ test('normalizeRemote: one repository in every URL form, never its credentials',
   for (const u of ['git@github.com:Tom/Make-It-Ship.git', 'https://u:ghp_secret123@github.com/Tom/Make-It-Ship.git', 'ssh://git@github.com:22/Tom/Make-It-Ship', 'https://github.com/Tom/Make-It-Ship/', 'https://tok@github.com/Tom/Make-It-Ship.git?x=1'])
     assert.equal(normalizeRemote(u), 'github.com/tom/make-it-ship', u);
   // r1: unencoded @ or / in a password, and user:pw@ without a scheme
-  for (const u of ['https://user:p@ss@github.com/Tom/Make-It-Ship.git', 'https://user:p/ss@github.com/Tom/Make-It-Ship.git', 'user:tok@github.com:Tom/Make-It-Ship.git', 'user:tok@github.com/Tom/Make-It-Ship.git'])
+  for (const u of ['https://user:p@ss@github.com/Tom/Make-It-Ship.git', 'https://user:p/ss@github.com/Tom/Make-It-Ship.git', 'user:tok@github.com:Tom/Make-It-Ship.git', 'user:tok@github.com/Tom/Make-It-Ship.git', 'https://github.com/Tom/Make-It-Ship?x=https://u:t@h/'])
     assert.equal(normalizeRemote(u), 'github.com/tom/make-it-ship', u);
 });
 

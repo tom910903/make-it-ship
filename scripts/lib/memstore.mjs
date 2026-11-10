@@ -18,7 +18,7 @@ export function normalizeRemote(url) {
   let u = String(url).trim();
   const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(u);
   // userinfo up to the last @ that a host follows (a password may hold unencoded @ or /)
-  u = u.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^.*@(?=[^@/:]+[/:])/, '');
+  u = u.replace(/[?#].*$/, '').replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^.*@(?=[^@/:]+[/:])/, ''); // a query may hold another URL
   u = scheme ? u.replace(/^([^/:]+):\d*(?=\/)/, '$1') : u.replace(/^([^/:]+):/, '$1/');
   return u.replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.git$/, '').toLowerCase();
 }
