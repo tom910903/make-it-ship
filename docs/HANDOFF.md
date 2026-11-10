@@ -81,6 +81,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
 4. ~~선택 개선(PROPOSALS)~~ 2026-10-26 (b)로 해결: 보고 뒤 코드 리뷰를 기록하면 run이 REPORTED → VERIFYING으로 다시 열린다(PROGRESS SPEC_CHANGES).
 5. **브레인스토밍 단독 + 슬라이드 연결 — `feat/brainstorm`(2026-11-10 사용자 결정, master에 병합, 0.5.0)**: `/make-it-ship:brainstorm` 스킬(interview의 brainstorming 모드만 따로 실행, run 시작 안 함). 설계 문서 뒤에 `<slug>-design-slides.md`를 제안하고 `mis slides`로 HTML/PDF를 만든다. 새 코드 없음.
 6. **claude-mem 흡수 — `feat/memory`(2026-11-10 사용자 결정)**: (1) 도구 호출마다 규칙 기반 관찰 기록, (2) `mis memory search|get`/`memory_search`(BM25), (3) 턴 끝 백그라운드 `claude -p`(Haiku, 기본 켜짐)로 claude-mem 형식 기억·턴 요약을 만들고 새 세션 시작 때 claude-mem 형식으로 주입. 실제 Haiku 스모크: 16초, 3.2k 토큰, 한국어 기록 정상. 독립 검증 r1(HIGH 비밀값) → r2(HIGH 구버전 기록 재마스킹, MED 마스킹 우회·줄 위조·문서) → r3 PASS. 0.6.0으로 master에 병합(사용자 지시). 플러그인으로 설치하면 claude-mem은 끌 것(기억 블록·요약기 중복).
+7. **기억 전역화 + claude-mem 가져오기 — `feat/memory-global`(2026-11-10 사용자 결정, 미병합)**: 저장소 `~/.make-it-ship/memory/projects/<이름>-<해시>/`, 프로젝트 키 = git 원격 주소(자격 증명 제거), `--all`/`--project` 검색, `mis memory projects`, claude-mem DB(node:sqlite 읽기 전용)를 프로젝트별로 첫 세션에 자동 가져오기, 0.6.0 파일 이전, 세션별 요약 커서.
 
 ## 4. 열린 결정
 

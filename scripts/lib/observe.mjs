@@ -1,11 +1,8 @@
 // Observations (user decision 2026-11-10, absorbs claude-mem's per-tool-use capture and search): the PostToolUse and
-// PostToolUseFailure hooks append one rule-based record per tool use to <git-common-dir>/make-it-ship/observations.jsonl
-// (per-user home outside a repo). Local only, secrets masked, nothing sent anywhere; `mis memory` and memory_search read it.
-import { createHash } from 'node:crypto';
+// PostToolUseFailure hooks append one rule-based record per tool use to the project's folder of the global store (memstore.mjs). Local only, secrets masked, nothing sent anywhere; `mis memory` and memory_search read it.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { stateRoot } from './state.mjs';
-import { homeDir } from './home.mjs';
+import { projectDir } from './memstore.mjs';
 import { maskSecrets } from './mask.mjs';
 import { isTestCommand } from './posttool.mjs';
 import { tokenize } from './wiki.mjs';
@@ -36,11 +33,7 @@ const COMMIT_MSG = /\bgit\b[^\n]*?\scommit\b[^\n]*?\s-\w*m\s*(?:"\$\(cat\s*<<-?\
 // the file itself, resolved through symlinks when it exists (a symlinked cwd still yields repository-relative paths)
 const real = (p) => { try { return realpathSync(p); } catch { return p; } };
 
-export function obsFile(cwd) {
-  let dir;
-  try { dir = stateRoot(cwd); } catch { return join(homeDir(), 'observations', `${createHash('sha256').update(resolve(cwd)).digest('hex').slice(0, 16)}.jsonl`); } // one file per non-git folder
-  return join(dir, 'observations.jsonl');
-}
+export const obsFile = (cwd) => join(projectDir(cwd), 'observations.jsonl');
 
 /** One hook input → { type, title, files?, cmd?, error? }, or null for tools not worth remembering. Pure. */
 export function observation(input, root) {

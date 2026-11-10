@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeRepo, mis, ROOT } from '../helpers.mjs';
@@ -14,8 +14,9 @@ const hook = (event, input, home) => {
   const r = spawnSync(process.execPath, [HOOKS, event], { input: JSON.stringify({ hook_event_name: event, session_id: 's1', ...input }), encoding: 'utf8', env });
   assert.equal(r.status, 0, r.stderr);
 };
-const obsFile = (dir) => join(dir, '.git', 'make-it-ship', 'observations.jsonl');
-const lines = (dir) => existsSync(obsFile(dir)) ? readFileSync(obsFile(dir), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
+// the one project folder of a test home's global store
+const store = (home, f = 'observations.jsonl') => { const root = join(home, 'memory', 'projects'); return join(root, (existsSync(root) && readdirSync(root)[0]) || 'none', f); };
+const lines = (home) => existsSync(store(home)) ? readFileSync(store(home), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
 
 test('hooks record observations (repeats in a row once), mis memory lists and searches them', () => {
   const dir = makeRepo({ 'src/chart.mjs': '' });
@@ -24,7 +25,7 @@ test('hooks record observations (repeats in a row once), mis memory lists and se
   hook('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: join(dir, 'src/chart.mjs') }, cwd: dir }, home);
   hook('PostToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test', description: 'Run chart tests' }, cwd: dir }, home);
   hook('PostToolUseFailure', { tool_name: 'Bash', tool_input: { command: 'node build.mjs' }, error: 'Error: missing dist', cwd: dir }, home);
-  const recs = lines(dir);
+  const recs = lines(home);
   assert.deepEqual(recs.map((r) => r.type), ['change', 'test', 'failure']);
   assert.ok(recs.every((r) => r.id && r.at && r.session === 's1'));
   const env = { MIS_STATE_HOME: home };
@@ -41,13 +42,13 @@ test('memory.observe false records nothing; the file is cut to its newer half pa
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   writeFileSync(join(home, 'config.json'), JSON.stringify({ memory: { observe: false } }));
   hook('PostToolUse', { tool_name: 'Read', tool_input: { file_path: join(dir, 'a.txt') }, cwd: dir }, home);
-  assert.deepEqual(lines(dir), []);
+  assert.deepEqual(lines(home), []);
   const home2 = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const old = JSON.stringify({ id: 'old', at: '2026-01-01T00:00:00Z', type: 'command', title: 'x'.repeat(200) }) + '\n';
   hook('PostToolUse', { tool_name: 'Read', tool_input: { file_path: join(dir, 'a.txt') }, cwd: dir }, home2);
-  writeFileSync(obsFile(dir), old.repeat(Math.ceil(OBS_MAX_BYTES / old.length) + 10));
+  writeFileSync(store(home2), old.repeat(Math.ceil(OBS_MAX_BYTES / old.length) + 10));
   hook('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: join(dir, 'a.txt') }, cwd: dir }, home2);
-  const after = readFileSync(obsFile(dir), 'utf8');
+  const after = readFileSync(store(home2), 'utf8');
   assert.ok(after.length <= OBS_MAX_BYTES / 2 + 1000, `cut to half: ${after.length}`);
   assert.equal(JSON.parse(after.trim().split('\n').at(-1)).type, 'change', 'the newest record survives');
   assert.ok(after.split('\n').filter(Boolean).every((l) => JSON.parse(l)), 'no partial line left');
@@ -75,7 +76,7 @@ test('Stop summarizes the turn in the background; SessionStart shows it in claud
   const env = { MIS_MEMORY_CLAUDE: fakeClaude(), CLAUDE_CODE_ENTRYPOINT: 'cli', MIS_TEAM_ID: '', MIS_HEADLESS: '' };
   hookOut('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: join(dir, 'src/chart.mjs') }, cwd: dir }, home, env);
   hookOut('Stop', { cwd: dir, transcript_path: '' }, home, env);
-  assert.ok(waitFor(join(dir, '.git', 'make-it-ship', 'memories.jsonl')), 'the worker wrote memories');
+  assert.ok(waitFor(store(home, 'memories.jsonl')), 'the worker wrote memories');
   const first = hookOut('SessionStart', { cwd: dir, source: 'startup' }, home, env);
   const ctx = first.hookSpecificOutput.additionalContext;
   assert.match(ctx, /^# \[make-it-ship\] /m);
@@ -99,7 +100,7 @@ test('no summarizer for headless or team sessions, with memory.summarize false, 
     hookOut('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: join(dir, 'a.txt') }, cwd: dir }, home, e);
     const out = hookOut('Stop', { cwd: dir }, home, e);
     spawnSync('sleep', ['1.5']);
-    return { dir, out, memories: existsSync(join(dir, '.git', 'make-it-ship', 'memories.jsonl')), observed: existsSync(obsFile(dir)) };
+    return { dir, out, memories: existsSync(store(home, 'memories.jsonl')), observed: existsSync(store(home)) };
   };
   assert.equal(run({ MIS_HEADLESS: '1' }).memories, false);
   assert.equal(run({ MIS_TEAM_ID: 't1' }).memories, false);

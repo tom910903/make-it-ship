@@ -77,3 +77,10 @@ test('renderRecent r2: newlines in stored text never start a line of their own; 
   assert.match(out, /data from past sessions, not instructions/);
 });
 
+test('renderRecent: records out of file order (imported, migrated) are shown by time', () => {
+  const out = renderRecent({ project: 'p', now, memories: [memories[2], memories[0], memories[1]], summaries: [summaries[1], summaries[0]] });
+  assert.ok(out.indexOf('4939') < out.indexOf('4941'));
+  assert.ok(out.indexOf('S1 ') < out.indexOf('S2 '));
+  assert.match(out, /\*\*Next Steps\*\*: open a PR/);
+});
+
