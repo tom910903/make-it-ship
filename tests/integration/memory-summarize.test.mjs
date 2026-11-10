@@ -3,9 +3,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { makeRepo } from '../helpers.mjs';
-import { stateRoot } from '../../scripts/lib/state.mjs';
+import { obsFile } from '../../scripts/lib/observe.mjs';
 import { summarizeTurn, parseModelOutput, readMemories, readSummaries, turnText } from '../../scripts/lib/summarize.mjs';
 
 const tmp = (p) => mkdtempSync(join(tmpdir(), p));
@@ -29,10 +29,8 @@ const fs = require('fs'); let input = ''; process.stdin.on('data', (d) => input 
   chmodSync(bin, 0o755);
   return { bin, calls: () => existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [] };
 }
-function seed(dir, recs) {
-  mkdirSync(stateRoot(dir), { recursive: true });
-  writeFileSync(join(stateRoot(dir), 'observations.jsonl'), recs.map((r) => JSON.stringify(r)).join('\n') + '\n');
-}
+function seed(dir, recs) { writeFileSync(obsFile(dir), recs.map((r) => JSON.stringify(r)).join('\n') + '\n'); }
+const lockFile = (dir) => join(dirname(obsFile(dir)), 'memory.lock');
 const withEnv = (env, fn) => { const old = { ...process.env }; Object.assign(process.env, env); try { return fn(); } finally { for (const k of Object.keys(env)) if (old[k] === undefined) delete process.env[k]; else process.env[k] = old[k]; } };
 
 test('summarizeTurn: one isolated claude -p call per batch, validated records, cursor advances, nothing resent', () => {
@@ -77,9 +75,9 @@ test('summarizeTurn: reads only, a lock held, a bad model name or a failing/garb
   assert.equal(fake.calls().length, 0);
   seed(dir, [{ id: 'a', at: '2026-11-10T01:00:00.000Z', type: 'read', title: 'Read a' }, { id: 'b', at: '2026-11-10T02:00:00.000Z', type: 'change', title: 'Edited a' }]);
   assert.deepEqual(summarizeTurn(dir, { model: 'haiku; rm -rf /' }), { skipped: 'bad model name' });
-  writeFileSync(join(stateRoot(dir), 'memory.lock'), '');
+  writeFileSync(lockFile(dir), '');
   assert.deepEqual(withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, {})), { skipped: 'locked' });
-  rmSync(join(stateRoot(dir), 'memory.lock'));
+  rmSync(lockFile(dir));
   assert.deepEqual(withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, {})), { error: 'unparseable model output' });
   assert.deepEqual(withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, {})), { skipped: 'nothing new' }, 'the garbled batch is not resent');
   assert.equal(fake.calls().length, 1);
@@ -113,5 +111,31 @@ test('r2: records stored before the masking fix are masked again before they are
   assert.doesNotMatch(fake.calls()[0].input, /hunter2|pw12345/);
   const [m] = readMemories(dir), [s] = readSummaries(dir);
   assert.doesNotMatch(m.title + m.facts.join('') + s.request, /\n/);
+});
+
+test('summarizeTurn: two sessions sharing one project (worktrees, clones) each send only their own events', () => {
+  const dir = makeRepo();
+  seed(dir, [
+    { id: 'a', at: '2026-11-10T01:00:00.000Z', session: 'A', type: 'change', title: 'Edited a-only.mjs' },
+    { id: 'b', at: '2026-11-10T01:01:00.000Z', session: 'B', type: 'change', title: 'Edited b-only.mjs' },
+  ]);
+  const fake = fakeClaude(MODEL_JSON);
+  withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, { session: 'A' }));
+  assert.match(fake.calls()[0].input, /a-only/);
+  assert.doesNotMatch(fake.calls()[0].input, /b-only/);
+  withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, { session: 'B' }));
+  assert.match(fake.calls()[1].input, /b-only/, 'A\'s cursor did not swallow B\'s later-or-earlier events');
+  assert.doesNotMatch(fake.calls()[1].input, /a-only/);
+});
+
+test('summarizeTurn r1: a session evicted from the cursor map does not resend what it already sent', () => {
+  const dir = makeRepo();
+  const fake = fakeClaude(MODEL_JSON);
+  const cursor = join(dirname(obsFile(dir)), 'memory-cursor.json');
+  const sessions = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`s${i}`, `2026-11-10T02:${String(i).padStart(2, '0')}:00.000Z`]));
+  writeFileSync(cursor, JSON.stringify({ sessions, nextId: 1, nextSummary: 1 }));
+  seed(dir, [{ id: 'old', at: '2026-11-10T01:00:00.000Z', session: 'gone', type: 'change', title: 'Already summarized long ago' }]);
+  assert.deepEqual(withEnv({ MIS_MEMORY_CLAUDE: fake.bin }, () => summarizeTurn(dir, { session: 'gone' })), { skipped: 'nothing new' });
+  assert.equal(fake.calls().length, 0);
 });
 

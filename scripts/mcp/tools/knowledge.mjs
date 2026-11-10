@@ -7,7 +7,7 @@ import { CATEGORIES, WIKI_DIR, allPages, deletePage, ingest, lint, query, readIn
 import { readTrace } from '../../lib/trace.mjs';
 import { readTimeline, timelineText } from '../../lib/timeline.mjs';
 import { readObservations, searchObservations, sinceMs } from '../../lib/observe.mjs';
-import { readMemories } from '../../lib/summarize.mjs';
+import { memoryRecords } from '../../lib/summarize.mjs';
 import { loadRun, readEvents, stateRoot } from '../../lib/state.mjs';
 import { repoRoot } from '../../lib/tree-hash.mjs';
 import { cancelGate, readGate, recordAnswer, renderGate, setContent, startGate, worktreeKey } from '../../lib/merge-readiness.mjs';
@@ -364,5 +364,5 @@ export const tools = [...wikiTools, { name: 'session_search', description: 'Sear
   handler: (a, { cwd }) => searchSessions(cwd, a) },
 { name: 'memory_search', description: 'Search this project\'s memory: raw observations (one per tool use: edits, reads, commands, tests, commits, agents, skills, failures) and the summarized records made from them each turn (bugfix, feature, refactor, change, discovery, decision; numeric ids). BM25 over title, command, files and error; returns records with id, time, type and score, best first.',
   inputSchema: { type: 'object', properties: { query: str('Words to find (Korean, Japanese and Chinese work too)'), type: { type: 'string', enum: ['bugfix', 'feature', 'refactor', 'change', 'discovery', 'decision', 'read', 'test', 'commit', 'command', 'agent', 'skill', 'failure'] },
-    since: str('Relative (7d, 24h, 30m, 2w) or absolute date'), limit: { type: 'integer', minimum: 1 } }, required: ['query'] },
-  handler: (a, { cwd }) => (String(a.query ?? '').trim() ? searchObservations([...readObservations(cwd), ...readMemories(cwd)], a.query, a) : fail('query is empty')) }, ...traceTools, deepinitTool, ...mergeTools];
+    since: str('Relative (7d, 24h, 30m, 2w) or absolute date'), limit: { type: 'integer', minimum: 1 }, project: str('"current" (default), "all", or a substring of a project name or key') }, required: ['query'] },
+  handler: (a, { cwd }) => (String(a.query ?? '').trim() ? searchObservations(memoryRecords(cwd, a.project), a.query, a) : fail('query is empty')) }, ...traceTools, deepinitTool, ...mergeTools];

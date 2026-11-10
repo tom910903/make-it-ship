@@ -22,8 +22,9 @@ const readTokens = (m) => [m.title, m.subtitle, m.narrative, ...(m.facts ?? [])]
  * @param o.maxChars size budget: the oldest timeline rows go first, the last summary block stays
  */
 export function renderRecent({ project, now = new Date(), memories = [], summaries = [], raw = [], observations = 50, sessions = 10, maxChars = 6000 }) {
-  const obs = (memories.length ? memories : raw.filter((r) => r.type !== 'read')).slice(-observations);
-  const sums = summaries.slice(-sessions);
+  const byAt = (a, b) => String(a.at).localeCompare(String(b.at)); // imported and migrated records are not in file order
+  const obs = (memories.length ? memories : raw.filter((r) => r.type !== 'read')).slice().sort(byAt).slice(-observations);
+  const sums = summaries.slice().sort(byAt).slice(-sessions);
   if (!obs.length && !sums.length) return '';
   const last = sums.at(-1), lastObsAt = obs.at(-1)?.at ?? '';
   const block = last && String(last.at) >= String(lastObsAt) && ['investigated', 'learned', 'completed', 'next_steps'].some((k) => last[k])

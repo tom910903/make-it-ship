@@ -11,6 +11,9 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.ANDROID_HOME; delete process.env.ANDROID_SDK_ROOT;
 // Hooks run in tests start the memory summarizer at Stop: it must never reach the real claude (cost). Tests that need it set a fake.
 process.env.MIS_MEMORY_CLAUDE = 'false';
+// The memory store is global (~/.make-it-ship/memory) and auto-imports ~/.claude-mem: tests get a temp home and no claude-mem DB.
+process.env.MIS_STATE_HOME ??= mkdtempSync(join(tmpdir(), 'mis-test-home-'));
+process.env.MIS_CLAUDE_MEM_DB = '/nonexistent/claude-mem.db';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MIS = join(ROOT, 'scripts', 'mis.mjs');

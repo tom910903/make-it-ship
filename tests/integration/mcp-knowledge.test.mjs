@@ -142,6 +142,7 @@ test('memory_search: observations of this project, type filter, empty query refu
     assert.deepEqual((await s.call('memory_search', { query: 'webhook' })).json.map((r) => r.id).sort(), ['a', 'b']);
     assert.deepEqual((await s.call('memory_search', { query: 'webhook', type: 'test' })).json.map((r) => r.id), ['b']);
     assert.equal((await s.call('memory_search', { query: ' ' })).isError, true);
+    assert.deepEqual((await s.call('memory_search', { query: 'webhook', project: 'all' })).json.map((r) => r.project).filter(Boolean).length, 2, 'all projects carry their name');
   } finally { s.close(); }
 });
 
