@@ -14,11 +14,14 @@ export const OBS_MAX_BYTES = 2 * 1024 * 1024;
 // Command-line forms maskSecrets (log values) does not cover (verifier r1): secret-looking env names, -u user:pass, -p<pw>,
 // --password/--token values, any Authorization scheme, "password is x" in prose.
 const CMD_SECRETS = [
-  [/\b(\w*(?:SECRET|PASS|PWD|TOKEN|KEY|CRED|AUTH)\w*=)("[^"]*"|'[^']*'|\S+)/gi, '$1***'],
-  [/(authorization\s*[:=]\s*)[^"'\n]+/gi, '$1***'],
-  [/((?:^|\s)(?:-u|--user)\s+[^\s:]+:)\S+/g, '$1***'],
+  [/\b(\w*(?:SECRET|PASS|PWD|TOKEN|KEY|CRED|AUTH(?!OR))\w*=)("[^"]*"|'[^']*'|\S+)/gi, '$1***'],
+  [/((?:authorization|cookie)\s*[:=]\s*)[^"'\n]+/gi, '$1***'],
+  [/((?:^|\s)(?:-u\s*|--user[=\s]+)[^\s:]+:)\S+/g, '$1***'],
   [/((?:^|\s)-p)(?=\S)\S+/g, '$1***'],
-  [/((?:^|\s)--?(?:password|passwd|pass|token|secret|api-?key|apikey|auth|key)(?:=|\s+))\S+/gi, '$1***'],
+  // a spaced -p takes a password only in these tools (elsewhere: mkdir -p, docker run -p 8080:80, git log -p)
+  [/(\b(?:mysql|mariadb|mysqldump|mysqladmin|docker\s+login|podman\s+login|sshpass)\b[^\n;|&]*?\s-p\s+)\S+/gi, '$1***'],
+  [/((?:^|\s)--?[\w-]*(?:password|passwd|pass|token|secret|api[-_]?key|apikey|auth(?!or)|key|credential)[\w-]*(?:=|\s+))\S+/gi, '$1***'],
+  [/\b(pass:)\S+/g, '$1***'],
   [/\b((?:password|passwd|비밀번호|암호)\s*(?:is|=|:|는|은)?\s+)\S+/gi, '$1***'],
 ];
 export const mask = (s) => CMD_SECRETS.reduce((t, [re, to]) => t.replace(re, to), maskSecrets(String(s ?? '')));

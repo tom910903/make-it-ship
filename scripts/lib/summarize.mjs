@@ -43,7 +43,8 @@ export function turnText(transcriptPath) {
   return { request: cap(request, 2000), answer: cap(answer, 3000) };
 }
 
-const str = (v, n) => (typeof v === 'string' ? mask(v).trim().slice(0, n) : '');
+// one line each: model text (which a prompt injection in the turn can steer) must never forge a line of the session-start block
+const str = (v, n) => (typeof v === 'string' ? mask(v).replace(/\s+/g, ' ').trim().slice(0, n) : '');
 const strs = (v, k, n) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).slice(0, k).map((x) => str(x, n)) : []);
 
 /** The model's text → { observations, summary } with every field checked and masked; null when it is not that JSON. */
@@ -58,6 +59,7 @@ export function parseModelOutput(text) {
   return { observations, summary: summary && Object.values(summary).some(Boolean) ? summary : null };
 }
 
+// shortcut: two workers that both find a stale lock can both run once (double bill in a tiny window); add an owner check if it shows up
 function lock(cwd) {
   const f = store(cwd, 'memory.lock');
   mkdirSync(dirname(f), { recursive: true });
@@ -95,7 +97,8 @@ export function summarizeTurn(cwd, { session, transcriptPath, model = DEFAULT_MO
     const save = (extra) => writeFileSync(cursorFile(cwd), JSON.stringify({ ...cur, at: fresh.at(-1).at, ...extra }));
     if (!fresh.some((o) => o.type !== 'read')) { save({}); return { skipped: 'reads only' }; }
     const { request, answer } = transcriptPath ? turnText(transcriptPath) : { request: '', answer: '' };
-    const events = fresh.slice(-MAX_RAW).map(({ id, session: _s, ...o }) => JSON.stringify(o)).join('\n');
+    // masked again: records written before a masking fix are still on disk
+    const events = fresh.slice(-MAX_RAW).map(({ id, session: _s, ...o }) => mask(JSON.stringify(o))).join('\n');
     const r = callModel(`<request>\n${request}\n</request>\n<answer>\n${answer}\n</answer>\n<events>\n${events}\n</events>`, model);
     const parsed = r.error ? null : parseModelOutput(r.text);
     if (!parsed) { save({}); return { error: r.error ?? 'unparseable model output' }; }

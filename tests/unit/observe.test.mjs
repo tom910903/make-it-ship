@@ -1,7 +1,7 @@
 // Observations (user decision 2026-11-10, claude-mem items 1-2): one rule-based record per tool use, BM25 search over them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { observation, searchObservations, OBS_MAX_BYTES } from '../../scripts/lib/observe.mjs';
+import { observation, searchObservations, OBS_MAX_BYTES, mask } from '../../scripts/lib/observe.mjs';
 
 const root = '/repo';
 const obs = (tool_name, tool_input, extra = {}) => observation({ tool_name, tool_input, cwd: root, ...extra }, root);
@@ -78,4 +78,13 @@ test('observation r1: Claude Code heredoc commits, git -C and escaped quotes are
 test('searchObservations: equal scores list the newer record first', () => {
   const same = [{ id: 'old', at: '2026-01-01T00:00:00Z', type: 'read', title: 'Read a.md' }, { id: 'new', at: '2026-02-01T00:00:00Z', type: 'read', title: 'Read a.md' }];
   assert.deepEqual(searchObservations(same, 'a.md').map((r) => r.id), ['new', 'old']);
+});
+
+test('mask r2: spaced and glued option forms, secret-ish option names, openssl pass:, cookies', () => {
+  const leaks = {
+    'mysql -p hunter2 db': 'hunter2', 'docker login -p abc12345 reg': 'abc12345', 'curl -uadmin:hunter2 u': 'hunter2', 'curl --user=admin:hunter2 u': 'hunter2',
+    'x --client-secret abc12345': 'abc12345', 'x --api_key abc12345': 'abc12345', 'openssl enc -pass pass:abc12345': 'abc12345', 'curl -H "Cookie: sid=abc12345" u': 'abc12345',
+  };
+  for (const [s, secret] of Object.entries(leaks)) assert.doesNotMatch(mask(s), new RegExp(secret), s);
+  for (const s of ['mkdir -p out', 'git log -p', 'docker run -p 8080:80 img', 'git log --author=mason']) assert.equal(mask(s), s, s);
 });
