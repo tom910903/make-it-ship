@@ -1,5 +1,5 @@
 // Test helpers: throwaway git repos in the OS temp dir (never this project's .git).
-import { mkdtempSync, writeFileSync, mkdirSync, realpathSync, readFileSync, rmSync, statSync, readdirSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync, readFileSync, rmSync, statSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -24,7 +24,8 @@ export const SYS_PATH = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'mis-sys-path-'));
   const skip = new Set(['gh', 'tmux', 'codex', 'gemini', 'claude', 'gbrain', 'adb', 'secret-tool']);
   for (const src of ['/usr/bin', '/bin']) {
-    for (const f of readdirSync(src)) if (!skip.has(f) && !existsSync(join(dir, f))) symlinkSync(join(src, f), join(dir, f));
+    // a name, not existsSync: on Ubuntu /bin is /usr/bin and dangling links there would be linked twice
+    for (const f of readdirSync(src)) if (!skip.has(f)) { skip.add(f); symlinkSync(join(src, f), join(dir, f)); }
   }
   return dir;
 })();
