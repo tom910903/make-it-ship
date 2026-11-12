@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis } from '../helpers.mjs';
+import { makeRepo, mis, SYS_PATH } from '../helpers.mjs';
 import { classify } from '../../scripts/lib/policy.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
@@ -13,10 +13,10 @@ test('second-opinion detect finds other model CLIs on PATH', () => {
   writeFileSync(join(bin, 'codex'), '#!/bin/sh\necho codex 1.0\n');
   chmodSync(join(bin, 'codex'), 0o755);
   const dir = makeRepo();
-  const r = ok(mis(dir, ['second-opinion', 'detect'], { env: { PATH: `${bin}:/usr/bin:/bin` } }));
+  const r = ok(mis(dir, ['second-opinion', 'detect'], { env: { PATH: `${bin}:${SYS_PATH}` } }));
   assert.deepEqual(r.available.map((a) => a.name), ['codex']);
   assert.match(r.note, /external/);
-  const none = ok(mis(dir, ['second-opinion', 'detect'], { env: { PATH: '/usr/bin:/bin' } }));
+  const none = ok(mis(dir, ['second-opinion', 'detect'], { env: { PATH: SYS_PATH } }));
   assert.deepEqual(none.available, []);
 });
 

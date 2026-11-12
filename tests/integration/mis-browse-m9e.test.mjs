@@ -196,7 +196,7 @@ async function syntheticChromeProfile(home, password) {
 
 test('cookie-import-browser: lists domains without decrypting, imports only the named site (Keychain via `security`), the next goto uses them', async () => {
   if (!chrome) return blocked(b('cookie-import-browser', '--domain', 'shop.test'));
-  const pw = 'synthetic-safe-storage-pw';
+  const pw = process.platform === 'darwin' ? 'synthetic-safe-storage-pw' : 'peanuts'; // Linux v10 keys are always "peanuts"
   await syntheticChromeProfile(H.home, pw);
   const log = join(H.home, 'security.log');
   writeFileSync(join(H.bin, 'security'), `#!/bin/sh\necho "$@" >> "${log}"\necho "${pw}"\n`);

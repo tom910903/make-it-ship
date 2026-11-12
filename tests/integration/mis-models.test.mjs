@@ -3,13 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, chmodSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, mis, fakeHome } from '../helpers.mjs';
+import { makeRepo, mis, fakeHome, SYS_PATH } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 function stubs(names, body = (n) => `echo "${'$'}{0##*/} says: $*"`) {
   const h = fakeHome();
   for (const n of names) { writeFileSync(join(h.bin, n), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "${n} 9.9"; exit 0; fi\n${body(n)}\n`); chmodSync(join(h.bin, n), 0o755); }
-  const env = { ...h.env, PATH: `${h.bin}:/usr/bin:/bin`, CODEX_HOME: join(h.home, '.codex'), OPENAI_API_KEY: '', CODEX_API_KEY: '', GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ANTHROPIC_API_KEY: '' };
+  const env = { ...h.env, PATH: `${h.bin}:${SYS_PATH}`, CODEX_HOME: join(h.home, '.codex'), OPENAI_API_KEY: '', CODEX_API_KEY: '', GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ANTHROPIC_API_KEY: '' };
   return { ...h, env };
 }
 

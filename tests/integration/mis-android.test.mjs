@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { request } from 'node:http';
-import { makeRepo, mis, fakeHome } from '../helpers.mjs';
+import { makeRepo, mis, fakeHome, SYS_PATH } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -34,7 +34,7 @@ if (a[0] === '-list-avds') process.stdout.write('Medium_Phone\\n');
 else fs.writeFileSync(${JSON.stringify(join(h.home, 'devices.txt'))}, 'List of devices attached\\nemulator-5554 device model:sdk_gphone64\\n');
 `);
   for (const f of ['adb', 'emulator']) chmodSync(join(h.bin, f), 0o755);
-  const env = { ...h.env, PATH: `${h.bin}:/usr/bin:/bin`, ANDROID_HOME: '', ANDROID_SDK_ROOT: '' };
+  const env = { ...h.env, PATH: `${h.bin}:${SYS_PATH}`, ANDROID_HOME: '', ANDROID_SDK_ROOT: '' };
   const calls = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   return { ...h, env, calls };
 }
@@ -50,7 +50,7 @@ test('devices: an emulator alone (serial or qemu property) is BLOCKED for device
 
 test('without adb, Android QA is BLOCKED', () => {
   const h = fakeHome();
-  const r = ok(mis(makeRepo(), ['android', 'devices'], { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin`, ANDROID_HOME: '', ANDROID_SDK_ROOT: '' } }));
+  const r = ok(mis(makeRepo(), ['android', 'devices'], { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}`, ANDROID_HOME: '', ANDROID_SDK_ROOT: '' } }));
   assert.match(r.blocked, /adb is unavailable/);
 });
 

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, linkSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, mis, git, fakeHome, GUARD, MIS } from '../helpers.mjs';
+import { makeRepo, mis, git, fakeHome, GUARD, MIS, SYS_PATH } from '../helpers.mjs';
 import { classify } from '../../scripts/lib/policy.mjs';
 import { findChrome } from '../../scripts/lib/browse/chrome.mjs';
 
@@ -26,7 +26,7 @@ test('N2: the autoresearch evaluator, the tournament bench, deploy steps, mis he
   assert.match(readFileSync(join(dir, 'err.txt'), 'utf8'), /MIS_CLI is set/);
   ok(run(['deploy', 'setup', '--deploy-cmd', 'sh dep.sh', '--write']));
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'cfg');
-  const d = mis(dir, ['deploy', 'run'], { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } });
+  const d = mis(dir, ['deploy', 'run'], { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } });
   assert.equal(d.json?.failedStep, 'deploy', d.err + d.out); assert.match(d.out, /MIS_CLI is set/);
   writeFileSync(join(dir, 'a.diff'), '--- a/.make-it-ship/score\n+++ b/.make-it-ship/score\n@@ -1 +1 @@\n-1\n+4\n');
   const t = ok(run(['self-improve', 'tournament', '--bench', `${nested} && echo '{"score":9}'`, 'a.diff']));

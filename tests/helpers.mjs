@@ -1,5 +1,5 @@
 // Test helpers: throwaway git repos in the OS temp dir (never this project's .git).
-import { mkdtempSync, writeFileSync, mkdirSync, realpathSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync, readFileSync, rmSync, statSync, readdirSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -18,6 +18,16 @@ process.env.MIS_CLAUDE_MEM_DB = '/nonexistent/claude-mem.db';
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MIS = join(ROOT, 'scripts', 'mis.mjs');
 export const GUARD = join(ROOT, 'scripts', 'guard.mjs');
+
+// /usr/bin + /bin without the CLIs tests stub or expect missing: Linux runners ship gh and tmux in /usr/bin, macOS does not.
+export const SYS_PATH = (() => {
+  const dir = mkdtempSync(join(tmpdir(), 'mis-sys-path-'));
+  const skip = new Set(['gh', 'tmux', 'codex', 'gemini', 'claude', 'gbrain', 'adb', 'secret-tool']);
+  for (const src of ['/usr/bin', '/bin']) {
+    for (const f of readdirSync(src)) if (!skip.has(f) && !existsSync(join(dir, f))) symlinkSync(join(src, f), join(dir, f));
+  }
+  return dir;
+})();
 
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 

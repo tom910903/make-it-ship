@@ -7,7 +7,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, chmodSync, cpSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { makeRepo, mis, fakeHome, ROOT } from '../helpers.mjs';
+import { makeRepo, mis, fakeHome, ROOT, SYS_PATH } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const STUB = fileURLToPath(new URL('../fixtures/http-stub.mjs', import.meta.url));
@@ -21,7 +21,7 @@ after(() => server.kill());
 test('without a connected device, device QA is BLOCKED (xcrun devicectl stub fails)', () => {
   const h = fakeHome();
   writeFileSync(join(h.bin, 'xcrun'), '#!/bin/sh\nexit 1\n'); chmodSync(join(h.bin, 'xcrun'), 0o755);
-  const r = ok(mis(makeRepo(), ['ios', 'devices'], { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } }));
+  const r = ok(mis(makeRepo(), ['ios', 'devices'], { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } }));
   assert.deepEqual(r.devices, []); assert.match(r.blocked, /BLOCKED/);
 });
 
@@ -43,7 +43,7 @@ test('mis ios sync shows the template diff and overwrites only with --apply', ()
 test('mis ios daemon relays loopback traffic to the bridge; the tailnet listener needs a minted, unexpired token; stop ends it', async () => {
   const h = fakeHome();
   writeFileSync(join(h.bin, 'tailscale'), '#!/bin/sh\necho 127.0.0.1\n'); chmodSync(join(h.bin, 'tailscale'), 0o755);
-  const env = { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` };
+  const env = { ...h.env, PATH: `${h.bin}:${SYS_PATH}` };
   const dir = makeRepo();
   assert.match(mis(dir, ['ios', 'daemon', 'start'], { env }).err, /BLOCKED: --target/);
   try {

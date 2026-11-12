@@ -8,10 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, existsSync, chmodSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeRepo, mis, git, fakeHome, MIS } from '../helpers.mjs';
+import { makeRepo, mis, git, fakeHome, MIS, SYS_PATH } from '../helpers.mjs';
 
 const run = mis;
-const NOGH = { env: { PATH: '/usr/bin:/bin' } };
+const NOGH = { env: { PATH: SYS_PATH } };
 import { canaryAlerts, nextVersion, detectPlatform, parseLimit, sameOriginPages, versionDrift } from '../../scripts/lib/commands-ops.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
@@ -68,12 +68,12 @@ test('mis landing-report: read-only snapshot of claimed versions, collisions and
   const h = fakeHome();
   writeFileSync(join(h.bin, 'gh'), `#!/bin/sh\necho '[{"number":1,"headRefName":"feat-a","url":"u1"},{"number":2,"headRefName":"feat-b","url":"u2"}]'\n`); chmodSync(join(h.bin, 'gh'), 0o755);
   const before = git(dir, 'status', '--porcelain');
-  const r = ok(mis(dir, ['landing-report'], { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } }));
+  const r = ok(mis(dir, ['landing-report'], { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } }));
   assert.equal(r.status, 'ONLINE'); assert.equal(r.baseVersion, '1.2.0.0');
   assert.deepEqual(r.collisions, ['1.2.1.0']);
   assert.equal(r.next.patch, '1.2.2.0', 'skips the claimed 1.2.1.0');
   assert.equal(git(dir, 'status', '--porcelain'), before, 'writes nothing');
-  const off = ok(mis(dir, ['landing-report'], { env: { ...h.env, PATH: '/usr/bin:/bin' } }));
+  const off = ok(mis(dir, ['landing-report'], { env: { ...h.env, PATH: SYS_PATH } }));
   assert.equal(off.status, 'OFFLINE'); assert.match(off.reason, /gh/);
 });
 
@@ -146,7 +146,7 @@ case "$1" in
 esac
 `);
   chmodSync(join(h.bin, 'tmux'), 0o755);
-  return { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` }, log };
+  return { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` }, log };
 }
 
 test('mis wait detect/auto: finds the limit-stopped pane, waits for its reset, types the resume text into it only', () => {
@@ -159,7 +159,7 @@ test('mis wait detect/auto: finds the limit-stopped pane, waits for its reset, t
   assert.equal(r.status, 'RESUMED'); assert.deepEqual(r.resumed.map((x) => [x.pane, x.ok]), [['%1', true]]);
   assert.equal(readFileSync(t.log, 'utf8'), 'send-keys -t %1 -l continue\nsend-keys -t %1 Enter\n');
   assert.match(mis(dir, ['wait', 'auto', '--pane', '1;rm'], { env: t.env }).err, /bad pane id/);
-  assert.match(mis(dir, ['wait', 'detect'], { env: { PATH: '/usr/bin:/bin' } }).err, /BLOCKED: tmux is not installed/);
+  assert.match(mis(dir, ['wait', 'detect'], { env: { PATH: SYS_PATH } }).err, /BLOCKED: tmux is not installed/);
 });
 
 test('mis wait auto --watch: armed before the stop, it scans until a limit appears, then resumes', () => {
@@ -231,7 +231,7 @@ test('mis deploy run: waits for CI (pending, then green) before merging; red CI 
   assert.equal(existsSync(join(dir, 'merged.txt')), false, 'no merge after red CI');
   const d2 = featRepo(), h = fakeHome();
   writeFileSync(join(h.bin, 'gh'), '#!/bin/sh\necho "$*" >> "$(dirname "$0")/gh.log"\nexit 0\n'); chmodSync(join(h.bin, 'gh'), 0o755);
-  const env = { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } };
+  const env = { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } };
   configure(d2, ['--deploy-cmd', 'true'], env);
   assert.equal(ok(mis(d2, ['deploy', 'run'], env)).ci.status, 'passed');
   assert.equal(readFileSync(join(h.bin, 'gh.log'), 'utf8'), 'pr checks\n');
@@ -266,7 +266,7 @@ const exited = (log) => existsSync(log) && /mis-detach EXIT=/.test(readFileSync(
 test('mis detach --lock: jobs with the same lock run one after another; a dead holder\'s lock is reclaimed; caffeinate wraps the job when present', async () => {
   const dir = makeRepo(), h = fakeHome(), tmp = mkdtempSync(join(tmpdir(), 'mis-lock-'));
   writeFileSync(join(h.bin, 'caffeinate'), `#!/bin/sh\necho "caffeinate $1" >> "${tmp}/caf"\nshift\nexec "$@"\n`); chmodSync(join(h.bin, 'caffeinate'), 0o755);
-  const env = { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } };
+  const env = { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } };
   const order = join(tmp, 'order'), gate = join(tmp, 'gate');
   // job 1 holds the lock until the test creates the gate file; no sleeps decide the outcome
   const one = ok(mis(dir, ['detach', '--lock', 'evals', '--label', 'one', '--', 'sh', '-c', `echo start1 >> "${order}"; while [ ! -f "${gate}" ]; do sleep 0.1; done; echo end1 >> "${order}"`], env));
@@ -292,7 +292,7 @@ test('mis detach --lock: jobs with the same lock run one after another; a dead h
 test('mis detach --timeout kills the whole job, also when a wrapper (like caffeinate) does not exec into it', async () => {
   const dir = makeRepo(), h = fakeHome(), tmp = mkdtempSync(join(tmpdir(), 'mis-to-')), pidFile = join(tmp, 'pid');
   writeFileSync(join(h.bin, 'caffeinate'), '#!/bin/sh\nshift\n"$@"\nexit $?\n'); chmodSync(join(h.bin, 'caffeinate'), 0o755); // a child, not exec
-  const env = { env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } };
+  const env = { env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } };
   const r = ok(mis(dir, ['detach', '--timeout', '1s', '--', 'sh', '-c', `echo $$ > "${pidFile}"; exec sleep 300`], env));
   await until(() => existsSync(pidFile) && readFileSync(pidFile, 'utf8').trim());
   const pid = Number(readFileSync(pidFile, 'utf8'));

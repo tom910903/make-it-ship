@@ -5,13 +5,13 @@ import { writeFileSync, chmodSync, readFileSync, existsSync, mkdtempSync, mkdirS
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { makeRepo, mis, fakeHome } from '../helpers.mjs';
+import { makeRepo, mis, fakeHome, SYS_PATH } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 function env({ gbrain = true } = {}) {
   const h = fakeHome();
   if (gbrain) { writeFileSync(join(h.bin, 'gbrain'), '#!/bin/sh\necho "$*" >> "$HOME/gbrain.log"\n[ "$1" = "--version" ] && echo "gbrain 0.18.2"\nexit 0\n'); chmodSync(join(h.bin, 'gbrain'), 0o755); }
-  return { ...h, env: { ...h.env, PATH: `${h.bin}:/usr/bin:/bin` } };
+  return { ...h, env: { ...h.env, PATH: `${h.bin}:${SYS_PATH}` } };
 }
 
 test('without gbrain every command is BLOCKED with an install hint; detect reports it; uninstall still removes the config', () => {
