@@ -73,7 +73,10 @@ test('--tmux opens a tmux session in the worktree (real tmux) or reports BLOCKED
   if (!HAS_TMUX) { assert.match(r.err, /BLOCKED: tmux is not installed/); return; }
   const s = ok(r);
   assert.equal(s.tmux, 'mis-feat-ui');
-  assert.equal(tmux('display-message', '-p', '-t', s.tmux, '#{pane_current_path}').stdout.trim(), s.path);
+  // on Linux tmux reads /proc: right after new-session the pane can still show the server's cwd before its chdir
+  const cwd = () => tmux('display-message', '-p', '-t', s.tmux, '#{pane_current_path}').stdout.trim();
+  for (const end = Date.now() + 5000; cwd() !== s.path && Date.now() < end;) spawnSync('sleep', ['0.1']);
+  assert.equal(cwd(), s.path);
   ok(mis(dir, ['session', 'remove', 'feat-ui'], { env }));
   assert.notEqual(tmux('has-session', '-t', s.tmux).status, 0, 'tmux session closed on remove');
 });
