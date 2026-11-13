@@ -103,7 +103,7 @@ test('every command shape the skills and phases tell the model to run is allowed
   for (const c of shapes) assert.equal(decide(c), 'allow', c);
 });
 
-test('documented choice (revised after M5 L-7, matches Spec §7): text naming runs/ or current is denied even in a commit message; the bare dir name is not', () => {
+test('documented choice (revised after M5 L-7): text naming runs/ or current is denied even in a commit message; the bare dir name is not', () => {
   assert.equal(decide('git commit -m "docs: explain .git/make-it-ship/runs layout"'), 'deny');
   assert.equal(decide('git commit -m "docs: explain the .git/make-it-ship layout"'), 'allow');
 });

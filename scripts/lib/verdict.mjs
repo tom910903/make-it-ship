@@ -1,4 +1,4 @@
-// Verdict rules (Spec §6). The model never decides the verdict; this function does.
+// Verdict rules. The model never decides the verdict; this function does.
 
 /** Effective status of one evidence record against the current tree/config. */
 export function evidenceStatus(e, { treeHash, configHash }) {

@@ -1,4 +1,4 @@
-// plan.json schema (Spec §8 `plan set`), hand-rolled.
+// plan.json schema (`mis plan set`), hand-rolled.
 import { createHash } from 'node:crypto';
 
 export const RISK_FLAGS = ['auth', 'payment', 'pii', 'migration', 'security'];

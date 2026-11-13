@@ -1,4 +1,4 @@
-// iOS device support (Spec §14 ios, M5): debug-bridge leftovers scan and connected-device detection.
+// iOS device support (M5): debug-bridge leftovers scan and connected-device detection.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

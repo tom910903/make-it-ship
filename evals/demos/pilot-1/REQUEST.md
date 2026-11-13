@@ -1,1 +1,0 @@
-Add a `--lines` flag to `wc.py`: when given, print the number of lines instead of words (a trailing newline does not add an extra line; an empty file has 0 lines). Keep the default behavior unchanged. Add tests.

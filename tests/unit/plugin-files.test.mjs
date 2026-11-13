@@ -78,7 +78,7 @@ test('every `mis <command>` mentioned in skills and phases exists', () => {
   }
 });
 
-test('phases name the source features they absorb (Spec §14.2)', () => {
+test('phases name the source features they absorb', () => {
   const expect = {
     discover: [/deepinit|explore/i, /health/i], interview: [/deep-interview/i, /office-hours/i, /brainstorming/i],
     plan: [/writing-plans/i, /planner/i], 'plan-critique': [/ralplan|critic/i, /autoplan/i],

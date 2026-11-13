@@ -14,8 +14,6 @@ import { loadRuns, retroMetrics } from './retro.mjs';
 import { shortcutDebt } from './debt.mjs';
 
 export const LOCKFILE = '.make-it-ship/capabilities.lock.json';
-// M10 writes its comparison benchmark results here; `mis gain` only reads them.
-export const BENCH_DIR = join(PLUGIN_ROOT, 'evals', 'benchmarks');
 const TOPICS = ['commands', 'skills', 'agents', 'keywords', 'styles', 'mcp', 'hooks'];
 
 const fail = (msg) => { throw new Error(msg); };
@@ -121,7 +119,7 @@ async function capabilities(args, cwd) {
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
 
-/** Measured local evidence only: run verdicts, check pass rates, bench deltas, shortcut debt, M10 results if present. */
+/** Measured local evidence only: run verdicts, check pass rates, bench deltas, shortcut debt. */
 function gainData(cwd) {
   const root = repoRoot(cwd);
   let runs = [];
@@ -138,11 +136,8 @@ function gainData(cwd) {
   const bench = runs.flatMap((r) => (r.state.notes ?? []).filter((n) => n.kind === 'bench').map((n) => ({ run: r.state.runId, check: n.check,
     medianMs: n.medianMs, baselineMs: n.baselineMs ?? null, deltaPct: n.deltaPct ?? null, status: n.status })));
   const debt = shortcutDebt(root);
-  const files = existsSync(BENCH_DIR) ? readdirSync(BENCH_DIR).filter((f) => f.endsWith('.json')).sort() : [];
-  // shortcut: lists the M10 result files by name only, show their numbers once M10 fixes the result format
-  const benchmarks = files.length ? { status: 'PRESENT', files: files.map((f) => join('evals', 'benchmarks', f)) } : { status: 'BLOCKED', reason: 'no benchmark results' };
   return { runs: m.runs, verdicts: m.finalVerdicts, checks: { total: m.checks.total, pass, fail: m.checks.failed, blocked: m.checks.blocked,
-    passRate: pct(pass, m.checks.total), failToPass: m.checks.failToPass, byCheck }, bench, debt: { markers: debt.length, noTrigger: debt.filter((d) => !d.trigger).length }, benchmarks };
+    passRate: pct(pass, m.checks.total), failToPass: m.checks.failToPass, byCheck }, bench, debt: { markers: debt.length, noTrigger: debt.filter((d) => !d.trigger).length } };
 }
 
 function gain(args, cwd) {
@@ -157,7 +152,6 @@ function gain(args, cwd) {
     `Bench:${g.bench.length ? "" : " no `mis bench` results"}`,
     ...g.bench.map((b) => `  - ${b.check}: median ${b.medianMs} ms${b.baselineMs !== null ? `, baseline ${b.baselineMs} ms (${b.deltaPct > 0 ? '+' : ''}${b.deltaPct}%, ${b.status})` : ` (${b.status})`} [run ${b.run}]`),
     `Shortcut debt: ${g.debt.markers} markers (${g.debt.noTrigger} without an upgrade trigger) — \`mis debt\` lists them`,
-    `Benchmark against the original plugins: ${g.benchmarks.status === 'BLOCKED' ? 'BLOCKED: no benchmark results (M10 writes them to evals/benchmarks/*.json)' : g.benchmarks.files.join(', ')}`,
   ].join('\n');
 }
 

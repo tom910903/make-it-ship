@@ -1,4 +1,4 @@
-// mis learn (Spec §14 learn): project learnings in docs/make-it-ship/learnings.jsonl (append-only, latest wins),
+// mis learn: project learnings in docs/make-it-ship/learnings.jsonl (append-only, latest wins),
 // rendered to learnings.md. Learnings never change the process by themselves; proposals need user approval.
 import { existsSync, readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';

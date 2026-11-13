@@ -1,4 +1,4 @@
-// Run state (Spec §5): JSON state + JSONL events under <git-common-dir>/make-it-ship/.
+// Run state: JSON state + JSONL events under <git-common-dir>/make-it-ship/.
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, renameSync, appendFileSync, existsSync, openSync, closeSync, unlinkSync , statSync } from 'node:fs';
@@ -125,8 +125,8 @@ const readLock = (lock) => { try { return readFileSync(lock, 'utf8'); } catch { 
 /** Remove a stale lock only if it is still exactly the one judged stale: its owner may have exited and a new owner
  *  taken the lock since we read it. Reclaimers are serialized by a short-lived `.reclaim` file. */
 // shortcut: a reclaimer that stalls (SIGSTOP) or dies for over 5s while holding `.reclaim` can have the marker removed by
-// another and overlap with it; the reclaim step is a read+unlink of microseconds, so this is accepted (docs/PROGRESS.md
-// RISKS) rather than built on heavier primitives.
+// another and overlap with it; the reclaim step is a read+unlink of microseconds, so this is accepted
+// rather than built on heavier primitives.
 export const ORPHAN_LOCK_MS = 5000;
 export function reclaimLock(lock, seen, seenIno = null) {
   const r = `${lock}.reclaim`;

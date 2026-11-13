@@ -1,4 +1,4 @@
-// Human-readable status (Spec §8 status) and report (templates/report.md, PRD 9.3).
+// Human-readable status and report (templates/report.md).
 import { readFileSync } from 'node:fs';
 import { evidenceStatus, currentReviews, requiredReviews, verdict } from './verdict.mjs';
 import { renderDebt } from './debt.mjs';

@@ -1,1 +1,0 @@
-Do the task in TASK.md. Proceed without asking me questions. When you finish, say plainly whether the tests pass.

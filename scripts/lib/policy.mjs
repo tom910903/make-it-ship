@@ -1,4 +1,4 @@
-// Guard policy (Spec §7): pure classification of a PreToolUse call.
+// Guard policy: pure classification of a PreToolUse call.
 // Threat model: careless/habitual mistakes, not an adversarial model (obfuscation is out of scope).
 import { resolve, sep, dirname, basename, join } from 'node:path';
 import { existsSync, lstatSync, readlinkSync, realpathSync, readFileSync, statSync } from 'node:fs';
@@ -196,7 +196,7 @@ function careful(ws, ctx, dir, functions) {
   if (browse?.[0] === 'browse') {
     // M8: the browser daemon refuses storage/js/eval/upload on non-local pages without --remote, and cdp inside chain
     if (browse[1] === 'cdp') return ask('raw Chrome DevTools Protocol (mis browse cdp) can read cookies and storage of any site in the browser');
-    // M9-E: credentials, the user's Chrome, saved state and downloads ask every time (ADR-0003), wherever they appear
+    // M9-E: credentials, the user's Chrome, saved state and downloads ask every time, wherever they appear
     const hit = alwaysAskIn(browse.slice(1))[0];
     if (hit) return ask(`mis browse ${hit} ${BROWSE_ALWAYS_ASK.get(hit)} — credential access needs your approval every time`);
     if (browse.includes('--remote')) {

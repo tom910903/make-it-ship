@@ -1,4 +1,4 @@
-// mis subcommands (Spec §8). Every state change goes through mutate(): lock → change → atomic save + event.
+// mis subcommands. Every state change goes through mutate(): lock → change → atomic save + event.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';

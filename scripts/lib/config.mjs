@@ -1,4 +1,4 @@
-// .make-it-ship.json: hand-rolled schema validation (Spec §8.1), defaults, hash.
+// .make-it-ship.json: hand-rolled schema validation, defaults, hash.
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -108,7 +108,7 @@ export function requiredChecks(config, mode) {
   if (mode === 'quick') return config.required.quick ?? all;
   let base = config.required.standard ?? all;
   if (mode === 'full') base = [...new Set([...base, ...(config.required.full ?? [])])];
-  // Standard/Full: real-use QA checks (qa-*) are always required when defined (Spec §14.1 qa).
+  // Standard/Full: real-use QA checks (qa-*) are always required when defined.
   return [...base, ...Object.keys(config.checks).filter((n) => n.startsWith('qa-') && !base.includes(n))];
 }
 

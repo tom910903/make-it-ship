@@ -1,4 +1,4 @@
-// mis retro (Spec §14 retro): metrics aggregated from runs/*/events.jsonl. Observations are rule-based; the
+// mis retro: metrics aggregated from runs/*/events.jsonl. Observations are rule-based; the
 // retro phase asks the model to add judgment on top, clearly separated.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

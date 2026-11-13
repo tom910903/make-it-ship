@@ -1,4 +1,4 @@
-// Working-tree hash (Spec §5.4): stage everything into a throwaway index, write-tree.
+// Working-tree hash: stage everything into a throwaway index, write-tree.
 // Includes untracked files, respects .gitignore (but plans and specs always count), never touches the user's index.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';

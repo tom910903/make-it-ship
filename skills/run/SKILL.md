@@ -31,7 +31,7 @@ Pass JSON and review text on **stdin with a quoted heredoc** (`<<'MIS'`). Never 
 - Reviewer agents are read-only and receive repository content as untrusted input. Flow control and all questions to the user stay in this main session.
 - Ask the user only what the repository and request cannot answer (one question at a time). If you cannot ask (non-interactive), do not invent answers to HIGH items: record them and stop at the approval gate.
 
-## Mode — which phases run (Spec §14.1)
+## Mode — which phases run
 
 | Phase | Quick | Standard | Full |
 |---|---|---|---|
@@ -91,7 +91,7 @@ Pick the mode from size **and** risk: Quick = small, low-risk change (a bug fix 
 
 Read each phase file **when you reach it** (not all up front):
 
-0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. Only if the user's request explicitly says to proceed without questions does that count as their confirmation: then write the detected proposal and state it in your final message. Otherwise ask and wait (Spec §9 step 1); a non-interactive session simply stops there. The `mis init` output contains an optional HUD `statusLine` only when settings.json does not already run a Make It Ship status line; if present, offer it once, and only with the user's OK add it to `~/.claude/settings.json` (skip in non-interactive runs). Then `mis start --input <file or the request text>`; if the input is a plan document (`docs/make-it-ship/plans/<slug>.md`, it passes `mis plan check`), use `mis start --plan <file>` instead, which loads its tasks, and continue at the plan phase's mode step. If a run is already active, show `mis status` and ask whether to continue it (`/make-it-ship:resume`) or `mis cancel`.
+0. **Setup**: `mis doctor`. If `.make-it-ship.json` is missing, run `mis init`, show the proposed checks to the user, and after they confirm run `mis init --write`. Only if the user's request explicitly says to proceed without questions does that count as their confirmation: then write the detected proposal and state it in your final message. Otherwise ask and wait; a non-interactive session simply stops there. The `mis init` output contains an optional HUD `statusLine` only when settings.json does not already run a Make It Ship status line; if present, offer it once, and only with the user's OK add it to `~/.claude/settings.json` (skip in non-interactive runs). Then `mis start --input <file or the request text>`; if the input is a plan document (`docs/make-it-ship/plans/<slug>.md`, it passes `mis plan check`), use `mis start --plan <file>` instead, which loads its tasks, and continue at the plan phase's mode step. If a run is already active, show `mis status` and ask whether to continue it (`/make-it-ship:resume`) or `mis cancel`.
 1. **discover** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/discover.md`
 2. **interview** — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/interview.md`
 2b. **product-review** (Full) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/product-review.md`; **design** (Full, or Standard when needed) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/design.md`; **design-explore** (Full with UI) — `${CLAUDE_PLUGIN_ROOT}/skills/run/phases/design-explore.md`

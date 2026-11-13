@@ -1,1 +1,0 @@
-Add a small settings panel to the page: a number input for the focus length in minutes (1–90, default 25) and a "Reset" button that stops the timer and shows the new length. Invalid input shows an inline error and keeps the previous value. Keep the existing look.

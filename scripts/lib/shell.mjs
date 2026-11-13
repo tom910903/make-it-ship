@@ -1,4 +1,4 @@
-// Minimal POSIX-ish shell tokenizer for the guard (Spec §7). Not a full shell: it covers the habitual forms
+// Minimal POSIX-ish shell tokenizer for the guard. Not a full shell: it covers the habitual forms
 // (quotes, separators, subshells/groups, $( ) and backticks, heredocs) so the policy sees real commands, and
 // heredoc bodies — data such as plans and reviews — are never treated as commands.
 

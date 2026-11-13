@@ -118,7 +118,7 @@ const ROUND2 = {
 for (const [want, cmds] of Object.entries(ROUND2)) {
   for (const c of cmds) test(`bash round2 ${want}: ${c.split('\n')[0]}`, () => assert.equal(d(bash(c)), want));
 }
-test('edits outside the plan\'s planned files ask (scope change, PRD 8.2)', () => {
+test('edits outside the plan\'s planned files ask (scope change)', () => {
   const c = { ...ctx, plannedFiles: ['src/**', 'test/*.test.ts', 'README.md'] };
   const w = (file_path) => d({ tool_name: 'Write', tool_input: { file_path }, cwd: REPO }, c);
   assert.equal(w(`${REPO}/src/a/b.ts`), 'allow');

@@ -1,1 +1,0 @@
-Load gstack. Run /autoplan, implement the plan, then run /ship. Do the task in TASK.md. Proceed without asking me questions. When you finish, say plainly whether the tests pass.

@@ -119,7 +119,7 @@ test('quick mode: a detected user-facing surface without real-use QA is listed a
   ok(mis(dir, ['check', 'unit']));
   ok(mis(dir, ['review', 'add', 'quality', '-'], { input: passingReview(dir) }));
   const r = ok(mis(dir, ['report']));
-  assert.equal(r.verdict, 'VERIFIED', 'quick does not require qa (Spec §14.1)');
+  assert.equal(r.verdict, 'VERIFIED', 'quick does not require qa');
   const s6 = readFileSync(join(dir, r.path), 'utf8').split('## 6. ')[1].split('## 7. ')[0];
   assert.match(s6, /web.*실사용 QA.*qa-web/);
 });

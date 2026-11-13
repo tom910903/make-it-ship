@@ -36,11 +36,9 @@ On the first run it detects your test and build commands and shows a draft `.mak
 - **Remove:** `claude plugin uninstall make-it-ship@make-it-ship`, `claude plugin marketplace remove make-it-ship`, then `rm -rf ~/.claude/plugins/cache/make-it-ship` (uninstall leaves this copy behind).
 - **Try a clone for one session:** `claude --plugin-dir ~/make-it-ship` after `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship`; update it with `git -C ~/make-it-ship pull`.
 
-Claude checked the marketplace install from GitHub on 2026-10-21 (`docs/milestones/NH-auto-check.md`). A person has not yet checked it.
-
 ## See it work
 
-Real output from driving `mis` by hand on the demo repository `evals/demos/a` (an "add `slugify`" request), with the plan still awaiting approval: the `unit` check passed, but the task was not done and no reviews were recorded yet. `mis verdict` refuses to call that done:
+Real output from driving `mis` by hand on a small demo repository (an "add `slugify`" request), with the plan still awaiting approval: the `unit` check passed, but the task was not done and no reviews were recorded yet. `mis verdict` refuses to call that done:
 
 ```json
 {
@@ -61,7 +59,7 @@ The report goes to `docs/make-it-ship/<run>/report.md`. Its template (`templates
 
 ```
 > **판정: PARTIAL** — 배포 준비 완료 아님
-> 판정은 `mis verdict`가 규칙(Spec §6)으로 계산했다. 모델이 정한 값이 아니다.
+> 판정은 `mis verdict`가 규칙으로 계산했다. 모델이 정한 값이 아니다.
 
 ## 4. 수행한 검증과 실제 결과 (기계 검증)
 | ID | check | 명령(argv) | exit | 기록 당시 | 현재 코드 기준 | 종료 시각 |
@@ -243,7 +241,7 @@ docs/             for people, one file per language: guide/x.md + guide/x.ko.md
 
 ## FAQ
 
-**How is this different from oh-my-claudecode, superpowers, gstack or ponytail?** It absorbs their workflows into one plugin (`THIRD_PARTY_NOTICES.md`) and adds one rule: the verdict comes from recorded check results, not from the model. We measured it ([docs/m10/report.html](docs/m10/report.html)): six arms × three small demos × N=3 gave 54 runs, and all 54 passed and described the outcome honestly, so accuracy and honesty did not tell the arms apart. What differed was overhead against a no-plugin control (median cost): Make It Ship 4.1–6.1× with 2.2–2.6× the turns, gstack 7.5–8.2×, oh-my-claudecode, superpowers and ponytail 1.1–1.8×. The OMC workflow activated in 1 of 9 runs and superpowers in 6 of 9, so those arms partly measure an installed plugin. Medians only, no significance testing, one noisy machine; larger Standard and Full tasks were not measured.
+**How is this different from oh-my-claudecode, superpowers, gstack or ponytail?** It absorbs their workflows into one plugin (`THIRD_PARTY_NOTICES.md`) and adds one rule: the verdict comes from recorded check results, not from the model.
 
 **Does it send my code anywhere?** Not by itself. Commands that send data off the machine (other models, deploys, telemetry, which is off by default) always ask first, and their skills say company policy may forbid them.
 
@@ -261,18 +259,14 @@ docs/             for people, one file per language: guide/x.md + guide/x.ko.md
 
 ## Docs, development, limits
 
-- **Docs:** [docs/reference.md](docs/reference.md) (every feature in detail), [docs/HANDOFF.md](docs/HANDOFF.md) (current state), [docs/PROGRESS.md](docs/PROGRESS.md), [docs/Make_It_Ship_Spec_v1.1.md](docs/Make_It_Ship_Spec_v1.1.md) (authoritative spec), [docs/adr/](docs/adr/), [docs/m10/report.html](docs/m10/report.html) (comparison).
+- **Docs:** [docs/reference.md](docs/reference.md) (every feature in detail), [CHANGELOG.md](CHANGELOG.md) (what changed in each version).
 - **Development:**
   ```sh
   npm test                                         # node:test, no dependencies
   claude plugin validate .claude-plugin/plugin.json
-  node evals/setup-demo.mjs a                      # demo repo in a temp dir
   claude plugin validate .                         # marketplace manifest
   node scripts/mis.mjs capabilities --write        # after adding a command, skill, agent, MCP tool or hook
-  node scripts/gap-matrix.mjs --write              # recount docs/research/gap-matrix.md from its rows
-  node evals/m10/run.mjs --arms control,mis --demos b --n 1   # comparison harness (runs real claude)
-  node evals/m10/report.mjs <summary.json> [out.html]         # HTML report from the results
   ```
-  To release, bump `version` in `.claude-plugin/plugin.json`.
+  To release, bump `version` in `.claude-plugin/plugin.json` and `package.json`, add a `CHANGELOG.md` entry and tag the release commit `v<version>`. Write the failing test first, never weaken, skip or delete a test to get green, and record only checks that actually ran. Runtime code has no npm dependencies: a marketplace install does not run `npm install`.
 - **Limits:** the guard stops careless mistakes, not deliberate obfuscation. Token budgets are not supported (plugins cannot read token usage); runtime and retry limits are enforced instead. Headless runs stop at approval steps.
 - **License:** this private repository has no license file yet. Bundled third-party work is listed in `THIRD_PARTY_NOTICES.md`.

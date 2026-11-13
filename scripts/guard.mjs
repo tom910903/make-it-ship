@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse hook entry (Spec §7). Prints a decision only for ask/deny; errors fail closed (ask).
+// PreToolUse hook entry. Prints a decision only for ask/deny; errors fail closed (ask).
 import { execFileSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

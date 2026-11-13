@@ -1,4 +1,4 @@
-// mis ship (Spec §14 ship): PR draft, changelog draft, release checklist. Never pushes; push/PR stay behind the guard.
+// mis ship: PR draft, changelog draft, release checklist. Never pushes; push/PR stay behind the guard.
 import { execFileSync } from 'node:child_process';
 import { currentVersion, versionAt, prTitle } from './release.mjs';
 

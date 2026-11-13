@@ -1,4 +1,4 @@
-// QA profiles (Spec §14 qa): detect runtime surfaces and propose `qa-*` checks. Proposals only; adding a check
+// QA profiles: detect runtime surfaces and propose `qa-*` checks. Proposals only; adding a check
 // to .make-it-ship.json is a config change the user confirms. Where nothing can run, say BLOCKED instead of faking it.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';

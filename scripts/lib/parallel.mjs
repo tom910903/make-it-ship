@@ -1,4 +1,4 @@
-// Parallel waves (Spec §11 M3): tasks may run together only if their owned files cannot overlap
+// Parallel waves (M3): tasks may run together only if their owned files cannot overlap
 // and their dependencies are already done or in an earlier wave.
 import { globToRegExp } from './policy.mjs';
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// HUD (Spec §14.2 hud, M6 §6.2): the one status line — run progress when a run exists, plus style level, loop,
+// HUD: the one status line — run progress when a run exists, plus style level, loop,
 // subagents (5 min = stale), todos, branch, model, context use and plan usage (5-hour / 7-day limits), what Claude Code passes in (effort, cost, prompt cache, PR, ...) and the OMC parts (git changes, call counts, background tasks, ...;
 // hud-sources.mjs); which parts and in what order is
 // statusLine.items (mis hud). Absorbs the OMC HUD core and Ponytail's level badge. Registered by the user as statusLine.

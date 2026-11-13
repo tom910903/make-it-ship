@@ -135,12 +135,12 @@ test('help, info, gain and capabilities (no flag) write nothing', () => {
   assert.deepEqual(snapshot(repo), repo0);
 });
 
-test('mis gain shows only measured local data and BLOCKED for missing benchmark results', () => {
+test('mis gain shows only measured local data', () => {
   const repo = makeRepo({ 'README.md': '# demo\n', 'a.js': '// shortcut: no cache, add one past 1k items\n// shortcut: no trigger here\n' });
   const empty = mis(repo, ['gain']);
   assert.equal(empty.code, 0, empty.err);
   assert.match(empty.out, /Runs: 0/);
-  assert.match(empty.out, /BLOCKED: no benchmark results/);
+  assert.doesNotMatch(empty.out, /original plugins|benchmark results/, 'no comparison with the original plugins (the M10 harness was removed)');
   assert.match(empty.out, /Shortcut debt: 2 markers \(1 without an upgrade trigger\)/);
   assert.doesNotMatch(empty.out, /sav(ed|ing)/i);
 
@@ -161,7 +161,7 @@ test('mis gain shows only measured local data and BLOCKED for missing benchmark 
   assert.equal(json.checks.failToPass, 1);
   assert.deepEqual(json.bench, [{ run: '20261020-1200-abcd', check: 'test', medianMs: 120, baselineMs: 100, deltaPct: 20, status: 'OK' }]);
   assert.deepEqual(json.debt, { markers: 2, noTrigger: 1 });
-  assert.equal(json.benchmarks.status, 'BLOCKED');
+  assert.equal(json.benchmarks, undefined, 'no comparison with the original plugins (the M10 harness was removed)');
   const text = mis(repo, ['gain']).out;
   assert.match(text, /Checks: 4 recorded, 2 PASS \(50%\), 1 FAIL, 1 BLOCKED/);
   assert.match(text, /test: median 120 ms, baseline 100 ms \(\+20%, OK\)/);

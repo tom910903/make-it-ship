@@ -1088,7 +1088,7 @@ async function navTargets(b, tab, cmd, args, ctx) {
 
 async function gated(b, h, cmd, args, ctx) {
   const tab = b.current();
-  // ADR-0003 (credentials always ask): with imported sessions, browsing a non-local site they log into needs --remote,
+  // Credentials always ask: with imported sessions, browsing a non-local site they log into needs --remote,
   // which the guard asks about. shortcut: a click that follows a link there is not checked beforehand (RISKS).
   if (b.credentialDomains?.size && !ctx.remote) {
     for (const u of await navTargets(b, tab, cmd, args, ctx)) {

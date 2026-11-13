@@ -5,7 +5,7 @@ Absorbs: OMC deep-interview, deep-dive · gstack office-hours, spec, plan-tune �
 Goal: remove the ambiguity that would make the plan wrong, asking the user as little as possible.
 
 1. **Extract** ambiguity items from the input against what discover found. Judge Goal, Constraints, and Success criteria: what exactly happens, what must not change, how we will know it works.
-2. **Answer from the repo first.** A question whose answer is in the code, docs, or request is not asked (PRD 8.2). Cite the `path:line` that answered it.
+2. **Answer from the repo first.** A question whose answer is in the code, docs, or request is not asked. Cite the `path:line` that answered it.
 3. **Classify** each remaining item:
    - HIGH — a wrong guess changes behavior users see, loses data, breaks compatibility, or touches security/cost; or two reasonable readings lead to different implementations.
    - MED — affects design but has a safe default you can state.

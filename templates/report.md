@@ -1,7 +1,7 @@
 # Make It Ship 결과 보고서 — {{runId}}
 
 > **판정: {{verdict}}** — {{readiness}}
-> 판정은 `mis verdict`가 규칙(Spec §6)으로 계산했다. 모델이 정한 값이 아니다.
+> 판정은 `mis verdict`가 규칙으로 계산했다. 모델이 정한 값이 아니다.
 > 코드 상태(tree): `{{treeHash}}` · 모드: {{mode}} · 생성: {{generatedAt}}
 
 ## 1. 목표와 달성 여부

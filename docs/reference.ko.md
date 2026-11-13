@@ -88,7 +88,7 @@ run 상태는 `.git/make-it-ship/`에 있으므로 커밋되지 않고 코드 �
 - 도움말과 참조: `mis help [topic]`은 모든 `mis` 명령(그룹별), 스킬, 에이전트, 키워드(ralph 접두어 규칙 포함), 스타일 수준, MCP 도구, 훅을 나열합니다. topic은 `commands`, `skills`, `agents`, `keywords`, `styles`, `mcp`, `hooks`입니다. 목록은 코드에서 읽으므로 낡지 않습니다. `/make-it-ship:help`가 이를 보여 주고, `/make-it-ship:reference`는 위임이나 커밋 전에 읽는 에이전트·도구·키워드 참조입니다.
 - `mis info`는 플러그인 버전, Node 버전, 커밋, 명령과 스킬 수, 에이전트, 도구 레지스트리 기준 MCP 도구 수, 훅 이벤트를 출력합니다.
 - `mis capabilities`는 현재 명령, 스킬, 에이전트, MCP 도구, 훅 이벤트를 저장소의 `.make-it-ship/capabilities.lock.json`과 비교합니다. `mis capabilities --write`는 기록하고, `mis capabilities --check`는 달라졌을 때 추가·삭제된 것을 나열하고 1로 종료합니다. 이 저장소는 잠금 파일을 커밋하고 테스트가 이를 확인합니다. 이 네 명령이 쓰는 파일은 이 잠금 파일뿐입니다.
-- `mis gain [--json]`은 이 저장소에서 잰 결과만 보여 줍니다: run 판정 수, check 통과율(전체와 check별), 나중에 고친 실패, 기준 대비 `mis bench` 중앙값, shortcut 부채. 절감 효과를 추정하지는 않습니다. `evals/benchmarks/*.json`에 결과가 없으면 원래 플러그인과의 비교는 `BLOCKED: no benchmark results`를 출력합니다. M10 비교 도구(`evals/m10/run.mjs`)는 결과를 `evals/m10/`에 따로 둡니다.
+- `mis gain [--json]`은 이 저장소에서 잰 결과만 보여 줍니다: run 판정 수, check 통과율(전체와 check별), 나중에 고친 실패, 기준 대비 `mis bench` 중앙값, shortcut 부채. 절감 효과를 추정하지는 않습니다.
 
 ## 팀과 세션
 - **팀 파이프라인:** `/make-it-ship:team [N[:claude|codex|gemini]] <task>`는 일반 run 위에서 plan → exec → verify → fix(최대 3회)를 돌립니다. 그래서 승인, `mis check`, `mis verdict`가 여전히 결정합니다. 명시적으로 요청할 때만 동작하며, 프롬프트에 "team"이라는 말이 있다고 발동하지 않습니다.
