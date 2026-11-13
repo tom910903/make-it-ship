@@ -12,7 +12,7 @@ test('gitCounts: staged, modified, untracked, ahead and behind from git status; 
   const src = makeRepo({ 'a.txt': '1\n', 'b.txt': '1\n' });
   git(src, 'push', '-q', origin, 'main');
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'mis-clone-')));
-  git(dir, 'clone', '-q', origin, '.');
+  git(dir, 'clone', '-q', '-b', 'main', origin, '.'); // -b: a bare repo's HEAD is master where git's default branch is (Linux CI), and nothing would be checked out
   for (const [k, v] of [['user.name', 'T'], ['user.email', 't@e.x'], ['commit.gpgsign', 'false']]) git(dir, 'config', k, v);
   let t = Date.now();
   const counts = (d) => gitCounts(d, t += 61_000); // past the cache: every call runs git status
