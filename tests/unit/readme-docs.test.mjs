@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ROOT } from '../helpers.mjs';
 import { commands } from '../../scripts/lib/commands.mjs';
 
-// Every `/make-it-ship:<skill>` and `mis <command>` named in a README must exist. Scanning the whole text (not only code)
+// Every `/make-it-ship:<skill>` and `mis <command>` named in a README or the manual checks must exist. Scanning the whole text (not only code)
 // is a superset of code blocks and inline code; `mis.mjs <cmd>` counts too; lowercase-only names skip MIS_CLI and Korean prose.
 function unknownNames(text) {
   const skills = [...text.matchAll(/\/make-it-ship:([a-z0-9-]+)/g)].map((m) => m[1]).filter((s) => !existsSync(join(ROOT, 'skills', s, 'SKILL.md')));
@@ -17,7 +17,7 @@ test('the checker reports a wrong skill and a wrong mis command', () => {
   assert.deepEqual(unknownNames('run `mis nosuch`, `node scripts/mis.mjs nothere` or /make-it-ship:nope, but `mis check` and /make-it-ship:run are real'), { skills: ['nope'], commands: ['nosuch', 'nothere'] });
 });
 
-for (const f of ['README.md', 'README.ko.md']) {
+for (const f of ['README.md', 'README.ko.md', 'docs/manual-checks.md']) {
   test(`${f}: every /make-it-ship:<skill> and mis <command> it names exists`, () => {
     assert.ok(existsSync(join(ROOT, f)), `${f} exists`);
     assert.deepEqual(unknownNames(readFileSync(join(ROOT, f), 'utf8')), { skills: [], commands: [] });

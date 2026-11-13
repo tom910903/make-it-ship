@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
@@ -259,7 +259,7 @@ docs/             for people, one file per language: guide/x.md + guide/x.ko.md
 
 ## Docs, development, limits
 
-- **Docs:** [docs/reference.md](docs/reference.md) (every feature in detail), [CHANGELOG.md](CHANGELOG.md) (what changed in each version).
+- **Docs:** [docs/reference.md](docs/reference.md) (every feature in detail), [CHANGELOG.md](CHANGELOG.md) (what changed in each version), [docs/manual-checks.md](docs/manual-checks.md) (what only a person can check: dialogs, the status line on screen, install and update, devices, other models).
 - **Development:**
   ```sh
   npm test                                         # node:test, no dependencies
@@ -267,6 +267,6 @@ docs/             for people, one file per language: guide/x.md + guide/x.ko.md
   claude plugin validate .                         # marketplace manifest
   node scripts/mis.mjs capabilities --write        # after adding a command, skill, agent, MCP tool or hook
   ```
-  To release, bump `version` in `.claude-plugin/plugin.json` and `package.json`, add a `CHANGELOG.md` entry and tag the release commit `v<version>`. Write the failing test first, never weaken, skip or delete a test to get green, and record only checks that actually ran. Runtime code has no npm dependencies: a marketplace install does not run `npm install`.
+  To release, bump `version` in `.claude-plugin/plugin.json` and `package.json`, add a `CHANGELOG.md` entry, go through the [manual checks](docs/manual-checks.md) the change touches and tag the release commit `v<version>`. Write the failing test first, never weaken, skip or delete a test to get green, and record only checks that actually ran. Runtime code has no npm dependencies: a marketplace install does not run `npm install`.
 - **Limits:** the guard stops careless mistakes, not deliberate obfuscation. Token budgets are not supported (plugins cannot read token usage); runtime and retry limits are enforced instead. Headless runs stop at approval steps.
 - **License:** this private repository has no license file yet. Bundled third-party work is listed in `THIRD_PARTY_NOTICES.md`.

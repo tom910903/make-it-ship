@@ -1,6 +1,6 @@
 {
   "name": "make-it-ship",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Idea or requirements to verified code: plan, approve, build, check with real evidence, review, and report VERIFIED/PARTIAL/BLOCKED/FAILED.",
   "author": { "name": "Make It Ship" }
 }

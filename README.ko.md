@@ -4,7 +4,7 @@
 
 **아이디어에서 검증된 코드까지, 믿을 수 있는 판정과 함께.**
 
-![version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship은 git 저장소의 아이디어, 요구사항 `.md`, 이슈를 받아 계획 → 구현 → **실제** 검증 → 리뷰까지 진행하는 Claude Code 플러그인입니다. 결과는 항상 `VERIFIED`, `PARTIAL`, `BLOCKED`, `FAILED` 네 가지 판정 중 하나입니다. 판정은 모델이 정하지 않습니다. `mis check`가 프로젝트의 테스트·빌드 명령을 직접 실행해 그 코드 상태의 종료 코드를 기록하고, `mis verdict`가 그 증거에 고정된 규칙을 적용합니다. 위험한 작업은 PreToolUse 훅(guard)이 먼저 묻습니다.
 
@@ -259,7 +259,7 @@ docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
 
 ## 문서, 개발, 한계
 
-- **문서:** [docs/reference.ko.md](docs/reference.ko.md)(기능 상세), [CHANGELOG.md](CHANGELOG.md)(버전별 변경 내용).
+- **문서:** [docs/reference.ko.md](docs/reference.ko.md)(기능 상세), [CHANGELOG.md](CHANGELOG.md)(버전별 변경 내용), [docs/manual-checks.md](docs/manual-checks.md)(사람만 확인할 수 있는 항목: 확인 창, 화면의 상태 표시줄, 설치와 업데이트, 실기기, 다른 모델. 영어).
 - **개발:**
   ```sh
   npm test                                         # node:test, 의존성 없음
@@ -267,6 +267,6 @@ docs/             사람용, 언어마다 한 파일: guide/x.md + guide/x.ko.md
   claude plugin validate .                         # 마켓플레이스 매니페스트
   node scripts/mis.mjs capabilities --write        # 명령, 스킬, 에이전트, MCP 도구, 훅을 추가한 뒤
   ```
-  릴리스할 때는 `.claude-plugin/plugin.json`과 `package.json`의 `version`을 올리고, `CHANGELOG.md`에 항목을 추가하고, 릴리스 커밋에 `v<버전>` 태그를 찍으세요. 실패하는 테스트를 먼저 쓰고, 통과시키려고 테스트를 약화·건너뛰기·삭제하지 말고, 실제로 실행한 검증만 기록하세요. 런타임 코드는 npm 의존성이 없습니다. 마켓플레이스 설치는 `npm install`을 실행하지 않기 때문입니다.
+  릴리스할 때는 `.claude-plugin/plugin.json`과 `package.json`의 `version`을 올리고, `CHANGELOG.md`에 항목을 추가하고, 바뀐 부분에 해당하는 [수동 확인](docs/manual-checks.md)을 한 뒤, 릴리스 커밋에 `v<버전>` 태그를 찍으세요. 실패하는 테스트를 먼저 쓰고, 통과시키려고 테스트를 약화·건너뛰기·삭제하지 말고, 실제로 실행한 검증만 기록하세요. 런타임 코드는 npm 의존성이 없습니다. 마켓플레이스 설치는 `npm install`을 실행하지 않기 때문입니다.
 - **한계:** guard는 부주의한 실수를 막을 뿐, 의도적인 난독화까지 막지는 못합니다. 플러그인은 토큰 사용량을 읽을 수 없어서 토큰 예산은 지원하지 않고, 대신 실행 시간과 재시도 횟수를 제한합니다. headless 실행은 승인 단계에서 멈춥니다.
 - **라이선스:** 이 비공개 저장소에는 아직 라이선스 파일이 없습니다. 함께 들어 있는 외부 작업은 `THIRD_PARTY_NOTICES.md`에 있습니다.

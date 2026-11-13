@@ -2,6 +2,12 @@
 
 Each version is tagged `v<version>` on the commit that set it (`v0.9.0`: the release head).
 
+## 1.0.0 — 2026-11-13
+- The repository keeps only what the plugin needs to run. The specs, design records, development logs, milestone reports, the comparison experiment and the demo repositories were removed; git history and the `v0.9.0` tag keep them. An install shrinks from about 12 MB to about 3 MB.
+- `mis gain` no longer shows the benchmark against the original plugins: its results were part of the removed experiment.
+- `docs/manual-checks.md`: what only a person can check before a release (permission dialogs, the status line on screen, install and update, real iOS and Android devices, other models), with the last recorded result of each.
+- Version history moves to this file. Test titles and file names no longer carry development-stage labels, and the docs test also checks the commands that `docs/manual-checks.md` names.
+
 ## 0.9.0 — 2026-11-13
 - HUD presets `minimal`, `focused` (default: two rows plus a row per running subagent) and `full`. A user's choice is kept as changes on top of the preset (`statusLine.preset`, `add`, `remove`), so parts a later version adds to the preset still show; `mis hud set` makes a fixed custom list (a 0.8.0 `statusLine.items` list keeps working as one).
 - `mis hud preset|add|remove|set|reset|preview`; `mis hud` returns the groups and a preview of each preset rendered from the last status line input. `/make-it-ship:hud` walks through preset, then parts by group.
