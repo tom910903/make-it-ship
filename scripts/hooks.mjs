@@ -85,6 +85,7 @@ const handlers = {
       const c = loadConfig((await import('./lib/tree-hash.mjs')).repoRoot(cwd));
       if (c.exists && c.errors.length) parts.push(`.make-it-ship.json is invalid (${c.errors.slice(0, 3).join('; ')}): mis start and mis check refuse it until it is fixed. Tell the user.`);
     } catch { /* outside a repo */ }
+    try { parts.push((await import('./lib/update.mjs')).followUpgrade()); } catch { /* fail-open */ }
     try { parts.push((await import('./lib/update.mjs')).updateNotice()); } catch { /* fail-open */ }
     try { parts.push((await import('./lib/install.mjs')).statusLineNotice()); } catch { /* fail-open */ }
     try {

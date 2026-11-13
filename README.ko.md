@@ -4,7 +4,7 @@
 
 **아이디어에서 검증된 코드까지, 믿을 수 있는 판정과 함께.**
 
-![version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 1.0.1](https://img.shields.io/badge/version-1.0.1-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship은 git 저장소의 아이디어, 요구사항 `.md`, 이슈를 받아 계획 → 구현 → **실제** 검증 → 리뷰까지 진행하는 Claude Code 플러그인입니다. 결과는 항상 `VERIFIED`, `PARTIAL`, `BLOCKED`, `FAILED` 네 가지 판정 중 하나입니다. 판정은 모델이 정하지 않습니다. `mis check`가 프로젝트의 테스트·빌드 명령을 직접 실행해 그 코드 상태의 종료 코드를 기록하고, `mis verdict`가 그 증거에 고정된 규칙을 적용합니다. 위험한 작업은 PreToolUse 훅(guard)이 먼저 묻습니다.
 
@@ -32,7 +32,7 @@ claude plugin install make-it-ship@make-it-ship
 처음 실행하면 테스트·빌드 명령을 찾아 `.make-it-ship.json` 초안을 보여 줍니다. 이 파일이 "무엇이 통과해야 검증된 것인가"를 정하므로 내용을 확인하고 승인하세요. 설치 점검은 `/make-it-ship:setup doctor`, 진행 상황은 `/make-it-ship:status`, 전체 목록은 `/make-it-ship:help`로 봅니다.
 
 - **저장소 하나에만 설치:** 그 저장소 안에서 두 명령에 `--scope project`를 붙입니다.
-- **업데이트:** `claude plugin marketplace update make-it-ship` → `claude plugin update make-it-ship@make-it-ship` → Claude Code 재시작. 순서를 지켜야 합니다. 새 릴리스는 `.claude-plugin/plugin.json`의 `version`이 바뀌어야만 배포됩니다.
+- **업데이트:** `mis setup --write`로 마켓플레이스 자동 업데이트를 켜 두면 자동입니다(Claude Code가 백그라운드에서 업데이트하고, 다음 세션부터 새 버전을 씁니다). 직접 하려면 `claude plugin marketplace update make-it-ship` → `claude plugin update make-it-ship@make-it-ship` → Claude Code 재시작. 순서를 지켜야 합니다. 새 릴리스는 `.claude-plugin/plugin.json`의 `version`이 바뀌어야만 배포됩니다.
 - **제거:** `claude plugin uninstall make-it-ship@make-it-ship`, `claude plugin marketplace remove make-it-ship`, 그리고 `rm -rf ~/.claude/plugins/cache/make-it-ship`(uninstall 후에도 이 캐시가 남습니다).
 - **클론을 한 세션에만:** `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship` 후 `claude --plugin-dir ~/make-it-ship`. 클론은 `git -C ~/make-it-ship pull`로 업데이트합니다.
 

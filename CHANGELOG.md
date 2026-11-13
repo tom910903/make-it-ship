@@ -2,6 +2,10 @@
 
 Each version is tagged `v<version>` on the commit that set it (`v0.9.0`: the release head).
 
+## 1.0.1 — 2026-11-13
+- Updates arrive by themselves: `mis setup` on a marketplace install also turns on Claude Code's auto-update for its marketplace (`autoUpdate` under `extraKnownMarketplaces`; off by default for a GitHub marketplace).
+- After an update, session start points the status line and the CLAUDE.md block at the new version folder, with backups, so the status line no longer breaks when the old folder goes. Only our own entries, and only to a newer version.
+
 ## 1.0.0 — 2026-11-13
 - The repository keeps only what the plugin needs to run. The specs, design records, development logs, milestone reports, the comparison experiment and the demo repositories were removed; git history and the `v0.9.0` tag keep them. An install shrinks from about 12 MB to about 3 MB.
 - `mis gain` no longer shows the benchmark against the original plugins: its results were part of the removed experiment.

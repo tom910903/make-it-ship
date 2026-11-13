@@ -6,7 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { claudeDir, globalConfig, readHome, writeHome } from './home.mjs';
-import { PLUGIN_ROOT } from './install.mjs';
+import { applyChanges, cacheInstall, misBlock, MIS_RE, PLUGIN_ROOT, statusLineCommand } from './install.mjs';
 
 export const CACHE_MS = 24 * 3600 * 1000;
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
@@ -99,6 +99,30 @@ export function updateNotice() {
   }
   if (!c?.updateAvailable || !c.current?.startsWith(pluginVersion() ?? '')) return null;
   return `Make It Ship ${c.latest} is available (installed ${c.current}). Mention it once; the user can run \`mis upgrade\` to see the update command (it asks before running).`;
+}
+
+/**
+ * SessionStart after Claude Code updated the plugin: the status line and the CLAUDE.md block still name an older version
+ * folder of this same install, which goes away once no session uses it. Point them at this version (backups kept).
+ * Only our own entries, only to a newer version (a session still running an old one never moves them back).
+ */
+export function followUpgrade(root = PLUGIN_ROOT) {
+  const me = cacheInstall(root);
+  if (!me) return null;
+  const older = (text) => [...String(text ?? '').matchAll(/plugins\/cache\/([^/"]+)\/([^/"]+)\/([^/"]+)\/scripts\/(?:statusline|mis)\.mjs/g)]
+    .some(([, mp, name, v]) => mp === me.marketplace && name === me.name && v !== me.version && semverCmp(me.version, v) > 0);
+  const changes = [];
+  const sp = join(claudeDir(), 'settings.json'), mp = join(claudeDir(), 'CLAUDE.md');
+  const sText = existsSync(sp) ? readFileSync(sp, 'utf8') : null;
+  let s = null; try { s = JSON.parse(sText); } catch { /* unreadable settings: leave them to mis doctor */ }
+  if (s && older(s.statusLine?.command)) changes.push({ file: sp, before: sText, after: JSON.stringify({ ...s, statusLine: { ...s.statusLine, command: statusLineCommand(root) } }, null, 2) + '\n' });
+  const mText = existsSync(mp) ? readFileSync(mp, 'utf8') : null;
+  const block = mText?.match(MIS_RE)?.[0];
+  if (block && older(block)) changes.push({ file: mp, before: mText, after: mText.replace(MIS_RE, misBlock(root)) });
+  if (!changes.length) return null;
+  const backups = applyChanges(changes);
+  return `Make It Ship was updated to ${me.version}: ${changes.map((c) => c.file).join(' and ')} now point at it (backups: ${backups.join(', ')}). `
+    + `The CLI is now \`node "${join(root, 'scripts', 'mis.mjs')}"\`. Mention this once.`;
 }
 
 /** Commands that update the installed plugin (shown by `mis upgrade`, run with --yes). */

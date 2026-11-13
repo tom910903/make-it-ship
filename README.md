@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 1.0.1](https://img.shields.io/badge/version-1.0.1-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
@@ -32,7 +32,7 @@ The repository is private, so your machine needs git access to `github.com/tom91
 On the first run it detects your test and build commands and shows a draft `.make-it-ship.json`; confirm it, because this file decides what must pass. `/make-it-ship:setup doctor` checks the installation, `/make-it-ship:status` shows progress, and `/make-it-ship:help` lists everything.
 
 - **One repository only:** add `--scope project` to both commands, run inside that repository.
-- **Update:** `claude plugin marketplace update make-it-ship`, then `claude plugin update make-it-ship@make-it-ship`, then restart. A release reaches users only when `version` in `.claude-plugin/plugin.json` changes.
+- **Update:** automatic once `mis setup --write` has turned on auto-update for the marketplace (Claude Code updates it in the background; the next session uses the new version). By hand: `claude plugin marketplace update make-it-ship`, then `claude plugin update make-it-ship@make-it-ship`, then restart. A release reaches users only when `version` in `.claude-plugin/plugin.json` changes.
 - **Remove:** `claude plugin uninstall make-it-ship@make-it-ship`, `claude plugin marketplace remove make-it-ship`, then `rm -rf ~/.claude/plugins/cache/make-it-ship` (uninstall leaves this copy behind).
 - **Try a clone for one session:** `claude --plugin-dir ~/make-it-ship` after `git clone git@github.com:tom910903/make-it-ship.git ~/make-it-ship`; update it with `git -C ~/make-it-ship pull`.
 

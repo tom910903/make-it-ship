@@ -7,7 +7,7 @@
 | 1 | Approval dialog (`mis approve plan`) | Passed with Claude driving an interactive session in tmux (2026-10-22); not checked by a person | | | |
 | 2 | Continue dialog after a limit (`mis approve continue`) | Same, for the time limit and the retry limit (2026-10-22) | | | |
 | 3 | Edit outside the plan's files in a parallel run | Same, merge conflict included (2026-10-22) | | | |
-| 4 | Install and update from the marketplace | Install from GitHub passed in tmux (2026-10-21, again 2026-10-22); the update path was not checked | | | |
+| 4 | Install and update from the marketplace | Install from GitHub passed in tmux (2026-10-21, again 2026-10-22); manual update done once by Claude (0.9.0 to 1.0.0, 2026-11-13); auto-update not checked | | | |
 | 5 | Status line (HUD) | Passed in tmux for the one-line HUD before 0.8.0; the presets and rows of 0.9.0 were not checked on screen | | | |
 | 6 | iOS debug bridge on a real iPhone | Passed on the iOS simulator only (2026-10-22); a simulator does not count as a device | | | |
 | 7 | Android on a real phone | Passed on the emulator only (2026-10-22); an emulator does not count as a device | | | |
@@ -68,6 +68,12 @@ Update, where an older version is installed:
 1. Update with the README's commands and restart Claude Code. Session start may mention the new version first.
 2. Use the installed copy here, not the clone: setup and the doctor write the path of the copy they run from into your settings. With `I=~/.claude/plugins/cache/make-it-ship/make-it-ship/<new version>`, `node "$I/scripts/mis.mjs" version` shows the new version and `node "$I/scripts/mis.mjs" doctor` reports no errors. A status line that still points at the old version's folder is repaired by `doctor --fix`; `setup` shows the change to the CLAUDE.md block, and `setup --write` applies it.
 3. After a restart the status line shows and a skill such as `/make-it-ship:status` works.
+
+Auto-update, after `mis setup --write` turned it on (`autoUpdate: true` under `extraKnownMarketplaces` in `~/.claude/settings.json`):
+
+1. Release a new version. Start Claude Code and send a message; within about ten minutes Claude Code reports the plugin updated.
+2. In the next session, session start says the status line and the CLAUDE.md block now point at the new version, and both files have a backup next to them.
+3. A session still running the old version leaves the paths alone.
 
 Pass: every step behaves as described.
 
