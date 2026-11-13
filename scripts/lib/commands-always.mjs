@@ -1,10 +1,11 @@
-// mis commands of the always-on layer (M6): style level. Run-independent; state lives in home.mjs.
+// mis commands of the always-on layer (M6): style level, HUD items. Run-independent; state lives in home.mjs.
 import { currentStyle, setStyle, normalizeStyle } from './style.mjs';
 import { globalConfig, setGlobalConfig, homeDir, envSession } from './home.mjs';
 import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './keywords.mjs';
 import { repoRoot } from './tree-hash.mjs';
 import { readLoop, startLoop, cancelLoop } from './loop.mjs';
 import { readHome, writeHome } from './home.mjs';
+import { HUD_ITEMS, DEFAULT_HUD_ITEMS, hudItems } from './hud-items.mjs';
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { routingChange, sectionDiff } from './routing.mjs';
@@ -23,6 +24,21 @@ function style([a, b]) {
   }
   if (a !== undefined) return { level: setStyle(a, envSession()) };
   return { level: currentStyle(envSession()), default: globalConfig().style.default };
+}
+
+/** mis hud [set|add|remove <item...>|reset]: which status line items show, in order (statusLine.items). */
+function hud([sub, ...names]) {
+  const c = readHome('config.json', {}) ?? {};
+  const cur = hudItems(c.statusLine?.items);
+  const save = (items) => { writeHome('config.json', { ...c, statusLine: { ...c.statusLine, items } }); return items; };
+  const known = (list) => { const bad = list.filter((n) => !(n in HUD_ITEMS)); if (bad.length) throw new Error(`unknown HUD item ${bad.join(', ')} (known: ${Object.keys(HUD_ITEMS).join(', ')})`); return list; };
+  let items = cur;
+  if (sub === 'set') items = save(known(names));
+  else if (sub === 'add') items = save([...cur.filter((n) => !known(names).includes(n) || n === 'br'), ...names]);
+  else if (sub === 'remove') items = save(cur.filter((n) => !known(names).includes(n)));
+  else if (sub === 'reset') { const { items: _, ...rest } = c.statusLine ?? {}; writeHome('config.json', { ...c, statusLine: rest }); items = DEFAULT_HUD_ITEMS; }
+  else if (sub !== undefined) throw new Error('usage: mis hud [set <item...> | add <item...> | remove <item...> | reset]');
+  return { items, available: Object.entries(HUD_ITEMS).map(([name, doc]) => ({ name, on: items.includes(name), doc })), next: 'shows on the next status line refresh; no restart needed' };
 }
 
 /** Dry run of the UserPromptSubmit router: what a prompt would trigger. Changes nothing. */
@@ -134,4 +150,4 @@ function memory([sub, ...rest], cwd) {
   return readObservations(cwd).sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-n).map((o) => `${o.at}  ${o.type} ${o.title}${o.error ? ` — ${o.error}` : ''}`).join('\n') || 'no observations';
 }
 
-export const alwaysCommands = { freeze, unfreeze, style, 'test-prompt': testPrompt, loop, debug, timeline, memory };
+export const alwaysCommands = { freeze, unfreeze, style, hud, 'test-prompt': testPrompt, loop, debug, timeline, memory };

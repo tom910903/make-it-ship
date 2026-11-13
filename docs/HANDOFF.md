@@ -75,6 +75,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
    - 0.4.0(2026-11-04): 시각화 기능(`mis chart`, `mis diagram` 확장, `mis doc`, `mis slides`), 아래 3번.
    - 0.5.0(2026-11-10): `/make-it-ship:brainstorm`(브레인스토밍 단독)과 설계 → 슬라이드 덱, 아래 5번. 작업 브랜치는 모두 master에 병합된 뒤 로컬·원격에서 지웠다(사용자 결정).
    - 0.6.0(2026-11-10): claude-mem 흡수(관찰 기록, `mis memory`/`memory_search`, 턴 끝 Haiku 요약, 세션 시작 주입), 아래 6번. 독립 검증 r1·r2 FAIL → 수정 → r3 PASS.
+   - 0.8.0(2026-11-13): HUD 항목 구성. Claude Code 입력의 effort·thinking·fast·PR·지출 한도·비용·줄 수·세션 시간·프롬프트 캐시·워크트리·세션/에이전트 이름·vim·출력 스타일 추가, ctx는 `context_window` 우선. `mis hud`·`/make-it-ship:hud`로 항목과 순서(`statusLine.items`), `br`로 줄바꿈.
    - 0.7.0(2026-11-10): 기억 전역화(`~/.make-it-ship/memory`, 프로젝트 = git 원격 주소), 프로젝트 간 검색, claude-mem 기록 자동 가져오기, 아래 7번. 독립 검증 r1 조건부 PASS → 수정 → r2 PASS.
    - 0.3.3(2026-10-30): HUD를 OMC처럼 시각화. ctx·5h·7d를 10칸 막대로 표시하고 리셋까지 남은 시간을 붙임. 70%부터 노랑, 85%부터 빨강. 검사 표시·판정·브랜치·모델에 색. `NO_COLOR`면 색 없음.
    - version 0.3.0: 0.2.0 이후의 `.ai/` layout, Android 기기·에뮬레이터 지원(`mis android`), 보고 뒤 리뷰로 run 다시 열기(PROPOSALS b), HUD 요금제 사용량(5h/7d). MCP 서버는 `plugin.json`의 version을 읽는다. 다음 릴리스 때도 version을 올려야 이미 설치한 사용자가 `plugin update`로 받는다(실측).

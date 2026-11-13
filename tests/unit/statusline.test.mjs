@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { renderHud, renderExtras } from '../../scripts/statusline.mjs';
 import { fakeHome, makeRepo, mis, ROOT } from '../helpers.mjs';
@@ -128,4 +128,51 @@ test('statusline script colors its output unless NO_COLOR is set', () => {
   const run = (e) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env: e }).stdout;
   assert.match(run(env), /\x1b\[/);
   assert.doesNotMatch(run({ ...env, NO_COLOR: '1' }), /\x1b\[/);
+});
+
+test('host items: effort, thinking, fast, PR, spend, cost, lines, duration, prompt cache, worktree, session, agent, vim, output style from the Claude Code input', () => {
+  const now = 1_000_000_000_000, s = now / 1000;
+  const host = {
+    effort: { level: 'high' }, thinking: { enabled: true }, fast_mode: true, pr: { number: 12, review_state: 'CHANGES_REQUESTED' },
+    cost: { total_cost_usd: 3.456, total_duration_ms: 4_380_000, total_lines_added: 120, total_lines_removed: 35 },
+    prompt_cache: { warm: true, expires_at: s + 250, hit_ratio: 0.92 }, worktree: { name: 'feat-x' }, session_name: 'hud-work',
+    agent: { name: 'reviewer' }, vim: { mode: 'NORMAL' }, output_style: { name: 'Explanatory' },
+  };
+  const limits = { spend_limit: { used_percentage: 40, used_usd: 12, limit_usd: 30, resets_at: s + 86400 } };
+  assert.equal(renderExtras({ branch: 'main', model: 'Opus', limits, host, now }),
+    ' · main · PR #12 changes requested · Opus · effort high · think · fast · spend ████░░░░░░ 40% $12.00/$30.00 (1d0h) · $3.46 · +120 -35 · 1h13m · cache 5m 92% · wt feat-x · hud-work · @reviewer · vim NORMAL · out Explanatory');
+  assert.equal(renderExtras({ host: { thinking: { enabled: false }, fast_mode: false, output_style: { name: 'default' }, cost: { total_lines_added: 0, total_lines_removed: 0 }, prompt_cache: { warm: false, hit_ratio: null } }, now }),
+    ' · cache cold', 'off flags, the default style and zero lines are hidden; a cold cache says so');
+});
+
+test('statusLine.items picks and orders the parts, br starts a new row; mis hud set/add/remove/reset edits it', () => {
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { MIS_STATE_HOME: home };
+  const dir = makeRepo();
+  const input = JSON.stringify({ cwd: dir, model: { display_name: 'Opus' }, effort: { level: 'max' }, context_window: { used_percentage: 42 }, cost: { total_cost_usd: 1 } });
+  const sl = () => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input, encoding: 'utf8', env: { ...process.env, ...env, NO_COLOR: '1' } }).stdout;
+  assert.equal(sl(), 'MIS ▸ idle · style full · main · Opus · effort max · ctx ████░░░░░░ 42% · $1.00\n', 'default: every item; ctx from context_window');
+  assert.deepEqual(mis(dir, ['hud', 'set', 'effort', 'model', 'br', 'cost'], { env }).json.items, ['effort', 'model', 'br', 'cost']);
+  assert.equal(sl(), 'MIS ▸ idle · effort max · Opus\n$1.00\n');
+  assert.deepEqual(mis(dir, ['hud', 'remove', 'br', 'model'], { env }).json.items, ['effort', 'cost']);
+  assert.deepEqual(mis(dir, ['hud', 'add', 'effort', 'ctx'], { env }).json.items, ['cost', 'effort', 'ctx'], 'add moves a present item to the end');
+  assert.equal(sl(), 'MIS ▸ idle · $1.00 · effort max · ctx ████░░░░░░ 42%\n');
+  const bad = mis(dir, ['hud', 'add', 'nope'], { env });
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /unknown HUD item nope/);
+  const all = mis(dir, ['hud', 'reset'], { env }).json;
+  assert.ok(all.available.find((i) => i.name === 'effort').on && !all.available.find((i) => i.name === 'br').on);
+  assert.equal(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).statusLine.items, undefined);
+  assert.equal(mis(dir, ['config', 'set', 'statusLine.items', '["model","nope"]'], { env }).code, 1, 'config set validates the names too');
+});
+
+test('a run head drops its own cost when the cost item is on, so the dollars show once', () => {
+  const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
+  mis(dir, ['start', '--input', 'x'], { env });
+  const sl = () => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, cost: { total_cost_usd: 2 } }), encoding: 'utf8', env }).stdout;
+  assert.equal(sl().match(/\$2\.00/g).length, 1);
+  mis(dir, ['hud', 'remove', 'cost'], { env });
+  assert.match(sl(), /PARTIAL · \$2\.00 · /, 'without the cost item the run head shows it, as before');
 });

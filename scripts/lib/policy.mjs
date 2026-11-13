@@ -467,7 +467,7 @@ function outsideRepoMis(m) {
 // M9 r1 D1/D8/D9/D10/D13: lasting changes outside this repository that a wrapper's ask alone would not catch.
 // Keys of `mis config` that neither run a command nor contact a URL (commands-setup.mjs CONFIG_KEYS without `sensitive`;
 // a test keeps the two equal). Any other key, including an unknown or variable one, asks.
-export const NON_SENSITIVE_CONFIG = ['style.default', 'keywords.disabled', 'subagentMatcher', 'update.check', 'maintenance.retainDays',
+export const NON_SENSITIVE_CONFIG = ['style.default', 'keywords.disabled', 'subagentMatcher', 'statusLine.items', 'update.check', 'maintenance.retainDays',
   'telemetry.enabled', 'simplifier.enabled', 'simplifier.maxFiles', 'proactive', 'memory.observe', 'memory.importClaudeMem', 'memory.context', 'memory.contextObservations', 'memory.contextMaxChars'];
 const CLAUDE_CHANGES = { mcp: ['add', 'add-json', 'add-from-claude-desktop', 'remove', 'reset-project-choices'], plugin: ['install', 'i', 'uninstall', 'remove', 'update', 'enable', 'disable'],
   'plugin marketplace': ['add', 'remove', 'rm', 'update'], config: ['set', 'add', 'remove'] };
