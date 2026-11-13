@@ -5,7 +5,8 @@ import { detectKeywords, styleSwitch, learnedSkills, promptContext } from './key
 import { repoRoot } from './tree-hash.mjs';
 import { readLoop, startLoop, cancelLoop } from './loop.mjs';
 import { readHome, writeHome } from './home.mjs';
-import { HUD_ITEMS, DEFAULT_HUD_ITEMS, hudItems } from './hud-items.mjs';
+import { HUD_GROUPS, HUD_ITEMS, PRESETS, isCustom, isItem, isPreset, presetName, resolveHudItems } from './hud-items.mjs';
+import { lastInput } from './hud-sources.mjs';
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { routingChange, sectionDiff } from './routing.mjs';
@@ -26,19 +27,78 @@ function style([a, b]) {
   return { level: currentStyle(envSession()), default: globalConfig().style.default };
 }
 
-/** mis hud [set|add|remove <item...>|reset]: which status line items show, in order (statusLine.items). */
-function hud([sub, ...names]) {
+// Rendered when no status line refresh has been seen yet (mis hud previews).
+const SAMPLE_INPUT = {
+  session_id: 'mis-hud-preview', model: { display_name: 'Opus' }, effort: { level: 'high' }, context_window: { used_percentage: 42 },
+  rate_limits: { five_hour: { used_percentage: 23 }, seven_day: { used_percentage: 41 } },
+  cost: { total_cost_usd: 1.23, total_duration_ms: 2_520_000, total_lines_added: 120, total_lines_removed: 35 },
+};
+
+/**
+ * mis hud [preset <name> | add|remove <item...> | set <item...> | reset | preview [--preset <name>]]: which status line
+ * parts show. A preset plus add/remove (statusLine.preset/add/remove), or with `set` a fixed list (preset custom, items).
+ * The output carries what /make-it-ship:hud asks from: the groups with each part on or off, and previews rendered from the
+ * last status line input (colors off, statusLine.chain not run).
+ */
+async function hud([sub, ...names], cwd) {
   const c = readHome('config.json', {}) ?? {};
-  const cur = hudItems(c.statusLine?.items);
-  const save = (items) => { writeHome('config.json', { ...c, statusLine: { ...c.statusLine, items } }); return items; };
-  const known = (list) => { const bad = list.filter((n) => !(n in HUD_ITEMS)); if (bad.length) throw new Error(`unknown HUD item ${bad.join(', ')} (known: ${Object.keys(HUD_ITEMS).join(', ')})`); return list; };
-  let items = cur;
-  if (sub === 'set') items = save(known(names));
-  else if (sub === 'add') items = save([...cur.filter((n) => !known(names).includes(n) || n === 'br'), ...names]);
-  else if (sub === 'remove') items = save(cur.filter((n) => !known(names).includes(n)));
-  else if (sub === 'reset') { const { items: _, ...rest } = c.statusLine ?? {}; writeHome('config.json', { ...c, statusLine: rest }); items = DEFAULT_HUD_ITEMS; }
-  else if (sub !== undefined) throw new Error('usage: mis hud [set <item...> | add <item...> | remove <item...> | reset]');
-  return { items, available: Object.entries(HUD_ITEMS).map(([name, doc]) => ({ name, on: items.includes(name), doc })), next: 'shows on the next status line refresh; no restart needed' };
+  const sl = c.statusLine ?? {};
+  const { preset: _p, add: _a, remove: _r, items: _i, ...keep } = sl; // chain and anything else stay
+  const save = (next) => { writeHome('config.json', { ...c, statusLine: { ...keep, ...next } }); return { ...keep, ...next }; };
+  const known = (list, br) => {
+    const bad = list.filter((n) => !isItem(n));
+    if (bad.length) throw new Error(`unknown HUD item ${bad.join(', ')} (known: ${Object.keys(HUD_ITEMS).join(', ')})`);
+    if (!br && list.includes('br')) throw new Error('br goes only in a custom list: mis hud set <item...> with br where a new row starts');
+    return list;
+  };
+  const presets = Object.keys(PRESETS).join('|');
+  const { statusLine } = await import('../statusline.mjs');
+  const last = lastInput();
+  const input = last ?? { ...SAMPLE_INPUT, cwd };
+  const render = (items) => statusLine(input, { items, color: false, chain: false });
+  let next = sl;
+  if (sub === 'preset') {
+    if (names.length !== 1 || !isPreset(names[0])) throw new Error(`usage: mis hud preset <${presets}>`);
+    next = save({ preset: names[0] }); // add/remove were relative to the old preset
+  } else if (sub === 'set') {
+    if (!names.length) throw new Error('usage: mis hud set <item...> (br starts a new row)');
+    next = save({ preset: 'custom', items: known(names, true) });
+  } else if (sub === 'add' || sub === 'remove') {
+    if (!names.length) throw new Error(`usage: mis hud ${sub} <item...>`);
+    if (isCustom(sl)) {
+      const cur = resolveHudItems(sl);
+      known(names, true);
+      next = save({ preset: 'custom', items: sub === 'add' ? [...cur.filter((n) => !names.includes(n) || n === 'br'), ...names] : cur.filter((n) => !names.includes(n)) });
+    } else {
+      known(names, false);
+      const base = PRESETS[presetName(sl)];
+      let add = (sl.add ?? []).filter(isItem), remove = (sl.remove ?? []).filter(isItem);
+      for (const n of names) {
+        if (sub === 'add') { remove = remove.filter((x) => x !== n); if (!base.includes(n) && !add.includes(n)) add.push(n); }
+        else { add = add.filter((x) => x !== n); if (base.includes(n) && !remove.includes(n)) remove.push(n); }
+      }
+      next = save({ ...(sl.preset && { preset: sl.preset }), ...(add.length && { add }), ...(remove.length && { remove }) });
+    }
+  } else if (sub === 'reset') next = save({});
+  else if (sub === 'preview') {
+    const i = names.indexOf('--preset'), p = i >= 0 ? names[i + 1] : null;
+    if (i >= 0 && !isPreset(p)) throw new Error(`usage: mis hud preview [--preset <${presets}>]`);
+    return { preset: p ?? presetName(sl), preview: await render(p ? PRESETS[p] : resolveHudItems(sl)), previewSource: last ? 'last status line input' : 'sample input' };
+  } else if (sub !== undefined) throw new Error(`usage: mis hud [preset <${presets}> | add <item...> | remove <item...> | set <item...> | reset | preview [--preset <name>]]`);
+  const items = resolveHudItems(next), custom = isCustom(next);
+  const out = {
+    preset: presetName(next),
+    ...(!custom && { add: next.add ?? [], remove: next.remove ?? [] }),
+    items,
+    groups: Object.entries(HUD_GROUPS).map(([group, ks]) => ({ group, items: ks.map((name) => ({ name, on: items.includes(name), doc: HUD_ITEMS[name] })) })),
+    available: Object.entries(HUD_ITEMS).map(([name, doc]) => ({ name, on: items.includes(name), doc })),
+    preview: await render(items),
+  };
+  if (sub === undefined) {
+    out.presets = {};
+    for (const [p, list] of Object.entries(PRESETS)) out.presets[p] = { items: list, preview: await render(list) };
+  }
+  return { ...out, previewSource: last ? 'last status line input' : 'sample input', next: 'shows on the next status line refresh; no restart needed' };
 }
 
 /** Dry run of the UserPromptSubmit router: what a prompt would trigger. Changes nothing. */

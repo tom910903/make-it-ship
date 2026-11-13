@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 **From an idea to verified code, with a verdict you can trust.**
 
-![version 0.8.0](https://img.shields.io/badge/version-0.8.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship is a Claude Code plugin that takes an idea, a requirements `.md` or an issue in your git repository and runs it through planning, implementation, **real** verification and review. It ends with one of four verdicts: `VERIFIED`, `PARTIAL`, `BLOCKED` or `FAILED`. The model never picks the verdict. `mis check` runs your project's own test and build commands and records the exit code for the exact code state; `mis verdict` applies fixed rules to that evidence. A PreToolUse hook (the guard) asks you before risky actions.
 
@@ -143,7 +143,7 @@ Headless screenshots and console errors from your installed browser. In local-on
 |---|---|
 | Main flow | `/make-it-ship:run`, `/make-it-ship:status`, `/make-it-ship:resume`, `/make-it-ship:cancel` |
 | Single phases | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:brainstorm` (design options, optional slide deck), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
-| Always on | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:browse` |
+| Always on | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:hud`, `/make-it-ship:browse` |
 | Teams | `/make-it-ship:team`, `/make-it-ship:session` |
 | Skills | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
 | Setup and help | `/make-it-ship:setup`, `/make-it-ship:help`, `/make-it-ship:reference` |

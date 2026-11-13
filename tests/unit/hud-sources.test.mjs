@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gitCounts, repoName, transcriptStats } from '../../scripts/lib/hud-sources.mjs';
+import { gitCounts, lastInput, rememberInput, repoName, transcriptStats } from '../../scripts/lib/hud-sources.mjs';
 import { git, makeRepo, write } from '../helpers.mjs';
 
 test('gitCounts: staged, modified, untracked, ahead and behind from git status; null outside a repository', () => {
@@ -14,19 +14,37 @@ test('gitCounts: staged, modified, untracked, ahead and behind from git status; 
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'mis-clone-')));
   git(dir, 'clone', '-q', origin, '.');
   for (const [k, v] of [['user.name', 'T'], ['user.email', 't@e.x'], ['commit.gpgsign', 'false']]) git(dir, 'config', k, v);
-  assert.deepEqual(gitCounts(dir), { staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 });
+  let t = Date.now();
+  const counts = (d) => gitCounts(d, t += 61_000); // past the cache: every call runs git status
+  assert.deepEqual(counts(dir), { staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 });
   write(dir, { 'c.txt': 'new\n' });
   git(dir, 'add', 'c.txt');
   write(dir, { 'a.txt': '2\n', 'u1.txt': 'x', 'u2.txt': 'y' });
-  assert.deepEqual(gitCounts(dir), { staged: 1, modified: 1, untracked: 2, ahead: 0, behind: 0 });
+  assert.deepEqual(counts(dir), { staged: 1, modified: 1, untracked: 2, ahead: 0, behind: 0 });
   git(dir, 'commit', '-qam', 'local');
   write(src, { 'b.txt': '2\n' });
   git(src, 'commit', '-qam', 'remote');
   git(src, 'push', '-q', origin, 'main');
   git(dir, 'fetch', '-q');
-  assert.deepEqual(gitCounts(dir), { staged: 0, modified: 0, untracked: 2, ahead: 1, behind: 1 });
-  assert.equal(gitCounts(mkdtempSync(join(tmpdir(), 'mis-nogit-'))), null);
+  assert.deepEqual(counts(dir), { staged: 0, modified: 0, untracked: 2, ahead: 1, behind: 1 });
+  assert.equal(counts(mkdtempSync(join(tmpdir(), 'mis-nogit-'))), null);
 });
+test('gitCounts is cached per directory for 5 seconds, and for a minute after git timed out', () => {
+  const dir = makeRepo();
+  const t = Date.now();
+  assert.deepEqual(gitCounts(dir, t), { staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 });
+  write(dir, { 'n.txt': 'x' });
+  assert.equal(gitCounts(dir, t + 4000).untracked, 0, 'within 5 s: the cached counts');
+  assert.equal(gitCounts(dir, t + 6000).untracked, 1, 'after 5 s: git status again');
+  const bin = mkdtempSync(join(tmpdir(), 'mis-slowgit-')), path = process.env.PATH;
+  writeFileSync(join(bin, 'git'), '#!/bin/sh\nsleep 3\n'); chmodSync(join(bin, 'git'), 0o755);
+  const slow = makeRepo();
+  process.env.PATH = `${bin}:${path}`;
+  try { assert.equal(gitCounts(slow, t), null, 'git over 500 ms: nothing'); } finally { process.env.PATH = path; }
+  assert.equal(gitCounts(slow, t + 30_000), null, 'a slow repo is not asked again within a minute');
+  assert.deepEqual(gitCounts(slow, t + 61_000), { staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 });
+});
+
 
 test('repoName: Claude Code\'s workspace.repo first, else the origin remote\'s last path segment (never the credentials)', () => {
   const dir = makeRepo();
@@ -76,4 +94,43 @@ test('transcriptStats: tool / agent / skill calls, last skill (tool or slash-typ
   assert.equal(transcriptStats(old, 'S2').bg, 0, 'a background task without a notice for 6 hours no longer counts');
   assert.equal(transcriptStats(join(tmpdir(), 'missing.jsonl'), 'S3'), null);
   assert.equal(transcriptStats(undefined, 'S3'), null);
+});
+
+test('transcriptStats reads in chunks and at most a byte budget per call: a long transcript catches up over several calls, with lines and UTF-8 intact', () => {
+  const t = join(mkdtempSync(join(tmpdir(), 'mis-tr-')), 't.jsonl');
+  const lines = [];
+  for (let i = 0; i < 40; i++) lines.push(asst(`m${i}`, [{ type: 'text', text: '한글 é 🔧 '.repeat(i % 5) }, { type: 'tool_use', id: `t${i}`, name: i % 10 ? 'Read' : 'Skill', input: { skill: `make-it-ship:s${i}` } }]));
+  writeFileSync(t, lines.join(''));
+  const whole = transcriptStats(t, 'W');
+  assert.deepEqual({ ...whole }, { tools: 40, agents: 0, skills: 4, skill: 's30', bg: 0, think: false });
+  let s, calls = 0;
+  do { s = transcriptStats(t, 'C', Date.now(), { chunk: 97, budget: 1500 }); calls++; } while (s.tools < 40 && calls < 100);
+  assert.ok(calls > 3, `the budget stopped each call early (${calls} calls)`);
+  assert.deepEqual({ ...s }, { ...whole }, 'chunk edges inside lines and inside UTF-8 sequences change nothing');
+});
+
+test('rememberInput keeps the last status line input for mis hud previews, at most every 5 seconds', () => {
+  const now = Date.now();
+  rememberInput({ n: 1 }, now);
+  assert.deepEqual(lastInput(), { n: 1 });
+  rememberInput({ n: 2 }, now + 1000);
+  assert.deepEqual(lastInput(), { n: 1 }, 'within 5 s: not written again');
+  rememberInput({ n: 3 }, now + 6000);
+  assert.deepEqual(lastInput(), { n: 3 });
+});
+
+test('a completion notice that came in mid-turn (queue-operation or queued_command attachment, not a user message) ends the background task', () => {
+  const t = join(mkdtempSync(join(tmpdir(), 'mis-tr-')), 't.jsonl');
+  const notice = (id) => `<task-notification>\n<task-id>b-${id}</task-id>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n</task-notification>`;
+  const line = (o) => JSON.stringify({ timestamp: new Date().toISOString(), ...o }) + '\n';
+  writeFileSync(t, [
+    asst('m1', [{ type: 'tool_use', id: 'q1', name: 'Bash', input: { command: 'npm test', run_in_background: true } }]),
+    asst('m1', [{ type: 'tool_use', id: 'q2', name: 'Bash', input: { command: 'sleep 9', run_in_background: true } }]),
+    asst('m1', [{ type: 'tool_use', id: 'q3', name: 'Bash', input: { command: 'sleep 99', run_in_background: true } }]),
+  ].join(''));
+  assert.equal(transcriptStats(t, 'Q').bg, 3);
+  appendFileSync(t, line({ type: 'queue-operation', operation: 'enqueue', content: notice('q1') })
+    + line({ type: 'attachment', attachment: { type: 'queued_command', prompt: notice('q2'), commandMode: 'task-notification' } })
+    + line({ type: 'attachment', attachment: { type: 'hook_success', toolUseID: 'q3', content: '<task-notification>' } }));
+  assert.equal(transcriptStats(t, 'Q').bg, 1, 'q1 and q2 ended; a hook attachment that names q3 is not a notice');
 });

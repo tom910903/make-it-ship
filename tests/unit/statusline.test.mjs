@@ -5,9 +5,12 @@ import { join } from 'node:path';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { renderHud, renderExtras } from '../../scripts/statusline.mjs';
+import { ONE_ROW_ITEMS, PRESETS } from '../../scripts/lib/hud-items.mjs';
 import { fakeHome, makeRepo, mis, ROOT, write } from '../helpers.mjs';
 
 const T = 't', C = 'c';
+// Tests of what the parts look like on one row opt into that row: the default (focused) puts them on two (statusLine.preset)
+const ONE_ROW = { preset: 'custom', items: ONE_ROW_ITEMS };
 const state = {
   state: 'EXECUTING', mode: 'standard', riskFlags: [], interview: [], notes: [],
   plan: { tasks: [{ id: 'T1', status: 'DONE' }, { id: 'T2', status: 'IN_PROGRESS' }, { id: 'T3', status: 'TODO' }] },
@@ -23,6 +26,7 @@ test('HUD one-liner format', () => {
 test('statusline script: idle line without a run, run line plus extras with one', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } } });
   const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')), CLAUDE_CODE_SESSION_ID: 'S' };
+  writeFileSync(join(env.MIS_STATE_HOME, 'config.json'), JSON.stringify({ statusLine: ONE_ROW }));
   const sl = (cwd, extra = {}) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ workspace: { current_dir: cwd }, cwd, session_id: 'S', ...extra }), encoding: 'utf8', env: { ...env, NO_COLOR: '1' } });
   assert.equal(sl(dir).stdout, 'MIS ▸ idle · style full · main\n');
   mis(dir, ['start', '--input', 'x']);
@@ -72,11 +76,11 @@ test('M6 D11: freeze shows in the line; statusLine.chain appends another status 
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
   mis(dir, ['freeze', 'src'], { env });
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('OTHER '+JSON.parse(s).model.display_name))\"" } }));
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { ...ONE_ROW, chain: "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('OTHER '+JSON.parse(s).model.display_name))\"" } }));
   const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, model: { display_name: 'M' } }), encoding: 'utf8', env });
   assert.match(r.stdout, /· frozen src · /);
   assert.match(r.stdout, / \| OTHER M\n$/);
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: 'exit 3' } }));
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { ...ONE_ROW, chain: 'exit 3' } }));
   const bad = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env });
   assert.match(bad.stdout, /^MIS ▸ idle/, 'a failing chained command is ignored');
 });
@@ -85,7 +89,7 @@ test('M6 R2-4: a chain that points back at this status line does not recurse', (
   const dir = makeRepo();
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const self = `MIS_STATE_HOME=${home} node ${join(ROOT, 'scripts', 'statusline.mjs')}`;
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { chain: self } }));
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { ...ONE_ROW, chain: self } }));
   const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env, timeout: 10000 });
@@ -151,7 +155,7 @@ test('statusLine.items picks and orders the parts, br starts a new row; mis hud 
   const dir = makeRepo();
   const input = JSON.stringify({ cwd: dir, model: { display_name: 'Opus' }, effort: { level: 'max' }, context_window: { used_percentage: 42 }, cost: { total_cost_usd: 1 } });
   const sl = () => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input, encoding: 'utf8', env: { ...process.env, ...env, NO_COLOR: '1' } }).stdout;
-  assert.equal(sl(), 'MIS ▸ idle · style full · main · Opus · effort max · ctx ████░░░░░░ 42% · $1.00\n', 'default: every item; ctx from context_window');
+  assert.equal(sl(), 'MIS ▸ idle · Opus · effort max · ctx ████░░░░░░ 42%\nmain\n', 'default: the focused preset; ctx from context_window');
   assert.deepEqual(mis(dir, ['hud', 'set', 'effort', 'model', 'br', 'cost'], { env }).json.items, ['effort', 'model', 'br', 'cost']);
   assert.equal(sl(), 'MIS ▸ idle · effort max · Opus\n$1.00\n');
   assert.deepEqual(mis(dir, ['hud', 'remove', 'br', 'model'], { env }).json.items, ['effort', 'cost']);
@@ -161,7 +165,9 @@ test('statusLine.items picks and orders the parts, br starts a new row; mis hud 
   assert.equal(bad.code, 1);
   assert.match(bad.err, /unknown HUD item nope/);
   const all = mis(dir, ['hud', 'reset'], { env }).json;
-  assert.ok(all.available.find((i) => i.name === 'effort').on && !all.available.find((i) => i.name === 'br').on);
+  assert.ok(all.available.find((i) => i.name === 'effort').on);
+  assert.equal(all.preset, 'focused');
+  assert.deepEqual(all.items, PRESETS.focused, 'reset: back to the default preset, rows included');
   assert.equal(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).statusLine.items, undefined);
   assert.equal(mis(dir, ['config', 'set', 'statusLine.items', '["model","nope"]'], { env }).code, 1, 'config set validates the names too');
 });
@@ -171,6 +177,7 @@ test('a run head drops its own cost when the cost item is on, so the dollars sho
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
   mis(dir, ['start', '--input', 'x'], { env });
+  mis(dir, ['hud', 'set', 'cost', 'branch'], { env }); // the default (focused) leaves cost out
   const sl = () => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir, cost: { total_cost_usd: 2 } }), encoding: 'utf8', env }).stdout;
   assert.equal(sl().match(/\$2\.00/g).length, 1);
   mis(dir, ['hud', 'remove', 'cost'], { env });
@@ -210,10 +217,19 @@ test('think follows the transcript (the latest reply thought) and falls back to 
   assert.match(d(30, 90), /\x1b\[31m30m/);
 });
 
-test('the OMC parts are opt-in: the default item set is unchanged', async () => {
-  const { DEFAULT_HUD_ITEMS, HUD_ITEMS } = await import('../../scripts/lib/hud-items.mjs');
-  assert.deepEqual(DEFAULT_HUD_ITEMS, ['style', 'loop', 'frozen', 'agents', 'todo', 'branch', 'pr', 'model', 'effort', 'thinking', 'fast', 'ctx', '5h', '7d', 'spend', 'cost', 'lines', 'duration', 'cache', 'worktree', 'session', 'agent', 'vim', 'output-style']);
-  for (const k of ['repo', 'git', 'prompt', 'skill', 'calls', 'bg', 'apikey', 'agents-list']) assert.ok(HUD_ITEMS[k], k);
+test('presets: focused is the default (user decision 2026-11-13); full holds every part once; the groups split the parts in fours', async () => {
+  const { HUD_ITEMS, PRESETS, DEFAULT_PRESET, HUD_GROUPS } = await import('../../scripts/lib/hud-items.mjs');
+  assert.equal(DEFAULT_PRESET, 'focused');
+  assert.deepEqual(PRESETS.focused, ['model', 'effort', 'fast', 'thinking', 'ctx', '5h', '7d', 'spend', 'br',
+    'branch', 'git', 'pr', 'worktree', 'duration', 'prompt', 'skill', 'calls', 'loop', 'frozen', 'agents', 'bg', 'todo', 'agents-list']);
+  assert.deepEqual(PRESETS.minimal, ['model', 'effort', 'fast', 'ctx', '5h', '7d', 'spend', 'loop', 'frozen', 'agents', 'todo']);
+  const parts = Object.keys(HUD_ITEMS).filter((k) => k !== 'br').sort();
+  assert.deepEqual(PRESETS.full.filter((k) => k !== 'br').sort(), parts, 'full: every part exactly once (added parts are placed by it)');
+  for (const [p, list] of Object.entries(PRESETS)) for (const k of list) assert.ok(Object.hasOwn(HUD_ITEMS, k), `${p}: ${k}`);
+  for (const [p, list] of Object.entries(PRESETS)) assert.equal(list.at(-1) === 'agents-list' || !list.includes('agents-list'), true, `${p}: agents-list makes its own rows, so it comes last`);
+  assert.deepEqual(Object.values(HUD_GROUPS).flat().sort(), parts, 'every part in exactly one group');
+  for (const [g, ks] of Object.entries(HUD_GROUPS)) assert.ok(ks.length <= 4, `${g}: four at most (one question)`);
+  assert.equal(Object.keys(HUD_GROUPS).length, 8);
 });
 
 test('statusline script: apikey names the source and never prints the key', () => {

@@ -18,7 +18,7 @@ import { repoRoot } from './tree-hash.mjs';
 import { stateRoot, pidAlive, loadRun, reclaimLock, TERMINAL } from './state.mjs';
 import { readLoop, endLoop } from './loop.mjs';
 import { readTrace } from './trace.mjs';
-import { HUD_ITEMS } from './hud-items.mjs';
+import { DEFAULT_PRESET, PRESETS, isItem, isPreset } from './hud-items.mjs';
 
 const fail = (msg) => { throw new Error(msg); };
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
@@ -227,7 +227,10 @@ export const CONFIG_KEYS = {
   'style.default': { check: (v) => ['off', 'lite', 'full', 'ultra'].includes(v), doc: 'coding style level new sessions start with (off|lite|full|ultra; default full)' },
   'keywords.disabled': { check: (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'), doc: 'prompt keywords that never trigger (names from mis help keywords)' },
   subagentMatcher: { check: (v) => v === null || (typeof v === 'string' && validRegex(v)), doc: 'regex of subagent types that receive the style rules (null: all)' },
-  'statusLine.items': { check: (v) => v === null || (Array.isArray(v) && v.every((k) => k in HUD_ITEMS)), doc: 'status line items in order (mis hud lists them; null: all)' },
+  'statusLine.preset': { check: (v) => v === null || v === 'custom' || isPreset(v), doc: `status line preset (${Object.keys(PRESETS).join('|')}|custom; default ${DEFAULT_PRESET}; mis hud lists the parts)` },
+  'statusLine.add': { check: (v) => v === null || (Array.isArray(v) && v.every((k) => isItem(k) && k !== 'br')), doc: 'status line parts shown on top of the preset (mis hud add)' },
+  'statusLine.remove': { check: (v) => v === null || (Array.isArray(v) && v.every((k) => isItem(k) && k !== 'br')), doc: 'preset parts the status line leaves out (mis hud remove)' },
+  'statusLine.items': { check: (v) => v === null || (Array.isArray(v) && v.every(isItem)), doc: 'status line parts in order, br for a new row, used with preset custom (mis hud set)' },
   'statusLine.chain': { check: (v) => v === null || typeof v === 'string', sensitive: true, doc: 'shell command of your previous status line; the status line runs it on every refresh' },
   'update.check': { check: bool, doc: 'daily update check at session start (default true)' },
   'update.source': { check: (v) => v === null || typeof v === 'string', sensitive: true, doc: 'URL or file the update check reads the latest version from' },

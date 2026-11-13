@@ -75,6 +75,7 @@ Claude가 할 수 있는 개발 항목은 모두 끝났다. 남은 것은 사람
    - 0.4.0(2026-11-04): 시각화 기능(`mis chart`, `mis diagram` 확장, `mis doc`, `mis slides`), 아래 3번.
    - 0.5.0(2026-11-10): `/make-it-ship:brainstorm`(브레인스토밍 단독)과 설계 → 슬라이드 덱, 아래 5번. 작업 브랜치는 모두 master에 병합된 뒤 로컬·원격에서 지웠다(사용자 결정).
    - 0.6.0(2026-11-10): claude-mem 흡수(관찰 기록, `mis memory`/`memory_search`, 턴 끝 Haiku 요약, 세션 시작 주입), 아래 6번. 독립 검증 r1·r2 FAIL → 수정 → r3 PASS.
+   - 0.9.0(2026-11-13): HUD 프리셋(minimal/focused/full, 기본 focused 두 줄)과 프리셋 기준 저장(`statusLine.preset/add/remove`, 0.8.0 `items`는 custom으로 유지), `mis hud preset|add|remove|set|reset|preview`와 프리셋별 미리보기(마지막 상태줄 입력), `/make-it-ship:hud` 대화형 설정(프리셋 → 그룹별 체크). OMC HUD 항목(repo, git, prompt, skill, calls, bg, apikey, agents-list, duration 상태 색, think는 마지막 응답 기준). git status 5초 캐시(느린 저장소 1분), 대화 기록은 청크로 갱신당 32MB까지, 대기열로 온 완료 알림도 bg에서 뺌. 설계와 인터뷰 결정: `docs/make-it-ship/specs/hud-config-design.md`.
    - 0.8.0(2026-11-13): HUD 항목 구성. Claude Code 입력의 effort·thinking·fast·PR·지출 한도·비용·줄 수·세션 시간·프롬프트 캐시·워크트리·세션/에이전트 이름·vim·출력 스타일 추가, ctx는 `context_window` 우선. `mis hud`·`/make-it-ship:hud`로 항목과 순서(`statusLine.items`), `br`로 줄바꿈.
    - 0.7.0(2026-11-10): 기억 전역화(`~/.make-it-ship/memory`, 프로젝트 = git 원격 주소), 프로젝트 간 검색, claude-mem 기록 자동 가져오기, 아래 7번. 독립 검증 r1 조건부 PASS → 수정 → r2 PASS.
    - 0.3.3(2026-10-30): HUD를 OMC처럼 시각화. ctx·5h·7d를 10칸 막대로 표시하고 리셋까지 남은 시간을 붙임. 70%부터 노랑, 85%부터 빨강. 검사 표시·판정·브랜치·모델에 색. `NO_COLOR`면 색 없음.

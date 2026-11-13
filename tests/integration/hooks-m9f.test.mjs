@@ -10,6 +10,7 @@ import { stateRoot, loadRun } from '../../scripts/lib/state.mjs';
 import { tools } from '../../scripts/mcp/tools/knowledge.mjs';
 import { disciplineText } from '../../scripts/lib/discipline.mjs';
 import { directiveCandidates, missingDeliverables, mergeHotPaths } from '../../scripts/lib/tracking.mjs';
+import { ONE_ROW_ITEMS } from '../../scripts/lib/hud-items.mjs';
 import { sessionKind } from '../../scripts/lib/timeline.mjs';
 
 const HOOKS = join(ROOT, 'scripts', 'hooks.mjs');
@@ -28,6 +29,8 @@ const statusline = (cwd, sid, h) => {
 
 test('F1: SubagentStart/Stop count running agents, 5+ minutes is stale, the status line shows agents and todos', () => {
   const dir = makeRepo(), h = home(), E = { MIS_STATE_HOME: h };
+  const ONE_ROW = { preset: 'custom', items: ONE_ROW_ITEMS }; // the parts on one row, as before the focused default
+  writeFileSync(join(h, 'config.json'), JSON.stringify({ statusLine: ONE_ROW }));
   for (const id of ['a1', 'a2']) assert.equal(hook('SubagentStart', { session_id: 'S', agent_id: id, agent_type: 'explorer', cwd: dir }, E).code, 0);
   assert.match(statusline(dir, 'S', h), / · agents 2 · main\n$/);
   const old = (Date.now() - 6 * 60 * 1000) / 1000;
@@ -38,7 +41,7 @@ test('F1: SubagentStart/Stop count running agents, 5+ minutes is stale, the stat
   hook('PostToolUse', { session_id: 'S', cwd: dir, tool_name: 'TodoWrite', tool_input: { todos: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }, { content: 'c', status: 'pending' }] } }, E);
   assert.equal(statusline(dir, 'S', h), 'MIS ▸ idle · style full · agents 1 · todo 1/3 · main\n');
   assert.equal(statusline(dir, 'OTHER', h), 'MIS ▸ idle · style full · main\n', 'per session');
-  writeFileSync(join(h, 'config.json'), JSON.stringify({ style: { default: 'off' } }));
+  writeFileSync(join(h, 'config.json'), JSON.stringify({ style: { default: 'off' }, statusLine: ONE_ROW }));
   hook('SubagentStart', { session_id: 'S', agent_id: 'a3', cwd: dir }, E);
   assert.match(statusline(dir, 'S', h), /agents 2/, 'tracked even when the style is off');
   hook('SessionEnd', { session_id: 'S', cwd: dir }, E);

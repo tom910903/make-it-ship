@@ -4,7 +4,7 @@
 
 **아이디어에서 검증된 코드까지, 믿을 수 있는 판정과 함께.**
 
-![version 0.8.0](https://img.shields.io/badge/version-0.8.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue) ![tests node:test](https://img.shields.io/badge/tests-node%3Atest-green) ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-orange) ![no dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
 Make It Ship은 git 저장소의 아이디어, 요구사항 `.md`, 이슈를 받아 계획 → 구현 → **실제** 검증 → 리뷰까지 진행하는 Claude Code 플러그인입니다. 결과는 항상 `VERIFIED`, `PARTIAL`, `BLOCKED`, `FAILED` 네 가지 판정 중 하나입니다. 판정은 모델이 정하지 않습니다. `mis check`가 프로젝트의 테스트·빌드 명령을 직접 실행해 그 코드 상태의 종료 코드를 기록하고, `mis verdict`가 그 증거에 고정된 규칙을 적용합니다. 위험한 작업은 PreToolUse 훅(guard)이 먼저 묻습니다.
 
@@ -143,7 +143,7 @@ Quick 모드는 `required.quick`, Standard와 Full은 `required.standard`에 모
 |---|---|
 | 기본 흐름 | `/make-it-ship:run`, `/make-it-ship:status`, `/make-it-ship:resume`, `/make-it-ship:cancel` |
 | 단계 하나만 | `/make-it-ship:plan`, `/make-it-ship:interview`, `/make-it-ship:brainstorm`(설계 대안 탐색, 원하면 슬라이드까지), `/make-it-ship:plan-review`, `/make-it-ship:review`, `/make-it-ship:debug`, `/make-it-ship:qa`, `/make-it-ship:ship`, `/make-it-ship:retro` |
-| 상시 동작 | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:browse` |
+| 상시 동작 | `/make-it-ship:loop`, `/make-it-ship:style`, `/make-it-ship:hud`, `/make-it-ship:browse` |
 | 팀 | `/make-it-ship:team`, `/make-it-ship:session` |
 | 스킬 관리 | `/make-it-ship:skill`, `/make-it-ship:skillify`, `/make-it-ship:writing-skills` |
 | 설정과 도움말 | `/make-it-ship:setup`, `/make-it-ship:help`, `/make-it-ship:reference` |

@@ -6,7 +6,7 @@
 // shortcut: recomputes the tree hash on every refresh; fine for small/medium repos, cache by index mtime if it gets slow.
 import { pathToFileURL } from 'node:url';
 import { verdict, evidenceStatus } from './lib/verdict.mjs';
-import { DEFAULT_HUD_ITEMS, hudItems } from './lib/hud-items.mjs';
+import { ONE_ROW_ITEMS, resolveHudItems } from './lib/hud-items.mjs';
 import { STALE_MS } from './lib/tracking.mjs';
 
 const MARK = { PASS: '✓', FAIL: '✗', STALE: '~', BLOCKED: '⊘', MISSING: '·' };
@@ -79,7 +79,7 @@ function agentRows(c, list, now) {
  * `host` is the Claude Code statusLine input for the parts read straight from it (effort, cost, prompt cache, PR, ...);
  * the rest comes from hud-sources.mjs and tracking.mjs (`stats` is read from the transcript).
  */
-export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits, host = {}, repo, gitStatus, promptAt, stats, agentList, apiKey, items = DEFAULT_HUD_ITEMS, color = false, now = Date.now() }) {
+export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits, host = {}, repo, gitStatus, promptAt, stats, agentList, apiKey, items = ONE_ROW_ITEMS, color = false, now = Date.now() }) {
   const c = painter(color);
   const cost = host.cost ?? {}, cache = host.prompt_cache, spend = limits?.spend_limit, g = gitStatus;
   const part = {
@@ -129,70 +129,77 @@ export function renderExtras({ style, loop, frozen, agents, todo, branch, model,
   const rows = [[]];
   for (const k of items) {
     if (k === 'br') { rows.push([]); continue; }
-    const p = part[k]?.();
+    const p = Object.hasOwn(part, k) ? part[k]() : null;
     if (Array.isArray(p)) rows.push(...p.map((r) => [r]), []);
     else if (p) rows.at(-1).push(p);
   }
   return [rows[0].map((p) => ` · ${p}`).join(''), ...rows.slice(1).filter((r) => r.length).map((r) => r.join(' · '))].join('\n');
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * The status line for one Claude Code input: the head, the `items` parts and, unless `chain` is false, statusLine.chain's
+ * first line after the first row. `config` is the global config (its statusLine.chain). Never throws for a missing part.
+ */
+export async function statusLine(input, { items, config = null, color = false, chain = true } = {}) {
+  const cwd = input.workspace?.current_dir ?? input.cwd ?? process.cwd();
+  const part = async (f) => { try { return await f(); } catch { return null; } };
+  const { currentStyle } = await import('./lib/style.mjs');
+  const { readLoop } = await import('./lib/loop.mjs');
+  const { contextPercent } = await import('./lib/context.mjs');
+  const { execFileSync } = await import('node:child_process');
+  const want = (...ks) => ks.some((k) => items.includes(k));
+  const src = await part(() => import('./lib/hud-sources.mjs'));
+  const run = await part(async () => (await import('./lib/state.mjs')).loadRun(cwd));
+  const head = run && run.state.state !== 'CANCELLED'
+    ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), items.includes('cost') ? null : input.cost, color)
+    : `${painter(color)('bold+cyan', 'MIS ▸')} idle`;
+  const extras = renderExtras({
+    style: await part(() => currentStyle(input.session_id)),
+    loop: await part(() => { const l = readLoop(cwd); return !l.session || !input.session_id || l.session === input.session_id ? l : null; }),
+    branch: await part(() => execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()),
+    agents: await part(async () => (await import('./lib/tracking.mjs')).agentCounts(input.session_id)),
+    todo: await part(async () => (await import('./lib/tracking.mjs')).todoCounts((await import('./lib/home.mjs')).readSession(input.session_id).todos)),
+    model: input.model?.display_name,
+    ctxPct: input.context_window?.used_percentage ?? contextPercent(input.transcript_path),
+    limits: input.rate_limits,
+    host: input,
+    repo: want('repo') ? await part(() => src.repoName(input.workspace?.repo, cwd)) : null,
+    gitStatus: want('git') ? await part(() => src.gitCounts(cwd)) : null,
+    apiKey: want('apikey') ? await part(() => src.apiKeySource(input.workspace?.project_dir ?? cwd)) : null,
+    promptAt: want('prompt') ? await part(() => src.lastPrompt(input.session_id)) : null,
+    stats: want('skill', 'calls', 'bg', 'thinking') ? await part(() => src.transcriptStats(input.transcript_path, input.session_id)) : null,
+    agentList: want('agents-list') ? await part(async () => (await import('./lib/tracking.mjs')).agentList(input.session_id)) : null,
+    items,
+    color,
+    frozen: await part(async () => {
+      const f = (await import('./lib/home.mjs')).readHome('freeze.json');
+      const { realpathSync } = await import('node:fs');
+      let root = null; try { root = realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)); } catch { /* outside a repo */ }
+      if (!f?.dir || (f.root ?? null) !== root) return null;
+      const dir = f.dir;
+      const { relative } = await import('node:path');
+      const rel = root ? relative(root, dir) : dir;
+      return rel && !rel.startsWith('..') ? rel : dir;
+    }),
+  });
+  // statusLine.chain: keep another status line (e.g. the one you had before) after ours, fed the same input.
+  const cmd = chain ? config?.statusLine?.chain : null;
+  let tail = '';
+  if (cmd && !process.env.MIS_STATUSLINE_CHAINED) {
+    const r = await part(() => execFileSync('sh', ['-c', cmd], { input: JSON.stringify(input), encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, MIS_STATUSLINE_CHAINED: '1' } }));
+    if (r?.trim()) tail = ` | ${r.trim().split('\n')[0]}`;
+  }
+  const [first, ...more] = extras.split('\n');
+  return [head + first + tail, ...more].join('\n');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     let raw = '';
     for await (const c of process.stdin) raw += c;
     const input = raw ? JSON.parse(raw) : {};
-    const cwd = input.workspace?.current_dir ?? input.cwd ?? process.cwd();
-    const color = !process.env.NO_COLOR; // https://no-color.org
-    const part = async (f) => { try { return await f(); } catch { return null; } };
-    const { currentStyle } = await import('./lib/style.mjs');
-    const { readLoop } = await import('./lib/loop.mjs');
-    const { contextPercent } = await import('./lib/context.mjs');
-    const { execFileSync } = await import('node:child_process');
-    const config = await part(async () => (await import('./lib/home.mjs')).globalConfig());
-    const items = hudItems(config?.statusLine?.items);
-    const want = (...ks) => ks.some((k) => items.includes(k));
-    const src = await part(() => import('./lib/hud-sources.mjs'));
-    const run = await part(async () => (await import('./lib/state.mjs')).loadRun(cwd));
-    const head = run && run.state.state !== 'CANCELLED'
-      ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), items.includes('cost') ? null : input.cost, color)
-      : `${painter(color)('bold+cyan', 'MIS ▸')} idle`;
-    const extras = renderExtras({
-      style: await part(() => currentStyle(input.session_id)),
-      loop: await part(() => { const l = readLoop(cwd); return !l.session || !input.session_id || l.session === input.session_id ? l : null; }),
-      branch: await part(() => execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()),
-      agents: await part(async () => (await import('./lib/tracking.mjs')).agentCounts(input.session_id)),
-      todo: await part(async () => (await import('./lib/tracking.mjs')).todoCounts((await import('./lib/home.mjs')).readSession(input.session_id).todos)),
-      model: input.model?.display_name,
-      ctxPct: input.context_window?.used_percentage ?? contextPercent(input.transcript_path),
-      limits: input.rate_limits,
-      host: input,
-      repo: want('repo') ? await part(() => src.repoName(input.workspace?.repo, cwd)) : null,
-      gitStatus: want('git') ? await part(() => src.gitCounts(cwd)) : null,
-      apiKey: want('apikey') ? await part(() => src.apiKeySource(input.workspace?.project_dir ?? cwd)) : null,
-      promptAt: want('prompt') ? await part(() => src.lastPrompt(input.session_id)) : null,
-      stats: want('skill', 'calls', 'bg', 'thinking') ? await part(() => src.transcriptStats(input.transcript_path, input.session_id)) : null,
-      agentList: want('agents-list') ? await part(async () => (await import('./lib/tracking.mjs')).agentList(input.session_id)) : null,
-      items,
-      color,
-      frozen: await part(async () => {
-        const f = (await import('./lib/home.mjs')).readHome('freeze.json');
-        const { realpathSync } = await import('node:fs');
-        let root = null; try { root = realpathSync((await import('./lib/tree-hash.mjs')).repoRoot(cwd)); } catch { /* outside a repo */ }
-        if (!f?.dir || (f.root ?? null) !== root) return null;
-        const dir = f.dir;
-        const { relative } = await import('node:path');
-        const rel = root ? relative(root, dir) : dir;
-        return rel && !rel.startsWith('..') ? rel : dir;
-      }),
-    });
-    // statusLine.chain: keep another status line (e.g. the one you had before) after ours, fed the same input.
-    const chain = config?.statusLine?.chain;
-    let tail = '';
-    if (chain && !process.env.MIS_STATUSLINE_CHAINED) {
-      const r = await part(() => execFileSync('sh', ['-c', chain], { input: raw, encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, MIS_STATUSLINE_CHAINED: '1' } }));
-      if (r?.trim()) tail = ` | ${r.trim().split('\n')[0]}`;
-    }
-    const [first, ...more] = extras.split('\n');
-    console.log([head + first + tail, ...more].join('\n'));
+    let config = null; try { config = (await import('./lib/home.mjs')).globalConfig(); } catch { /* broken home: defaults */ }
+    if (raw) { try { (await import('./lib/hud-sources.mjs')).rememberInput(input); } catch { /* preview only */ } }
+    console.log(await statusLine(input, { items: resolveHudItems(config?.statusLine), config, color: !process.env.NO_COLOR })); // https://no-color.org
   } catch { /* a status line must never break the session; print nothing */ }
 }
