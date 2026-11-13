@@ -17,7 +17,7 @@
 ## Setup
 
 - Node.js 22+, git and Claude Code, logged in.
-- `MIS=/path/to/make-it-ship`: a clone of this repository at the version under test. `mis` below means `node "$MIS/scripts/mis.mjs"`.
+- `MIS=/path/to/make-it-ship`: a clone of this repository at the version under test. `mis` below means `node "$MIS/scripts/mis.mjs"`, except in the update part of check 4.
 - Start Claude Code with that version: `claude --plugin-dir "$MIS"`. If the plugin is also installed, disable it for the check (`claude plugin disable make-it-ship@make-it-ship`, and `claude plugin enable make-it-ship@make-it-ship` afterwards), or test the installed copy after updating it.
 - The demo repositories left the tree in 1.0.0; the `v0.9.0` tag still has them:
 
@@ -66,7 +66,7 @@ Install, on a machine or account without the plugin:
 Update, where an older version is installed:
 
 1. Update with the README's commands and restart Claude Code. Session start may mention the new version first.
-2. `mis version` shows the new version and `mis doctor` reports no errors. A status line that still points at the old version's folder is repaired by `mis doctor --fix`. `mis setup` shows the change to the CLAUDE.md block, and `mis setup --write` applies it.
+2. Use the installed copy here, not the clone: setup and the doctor write the path of the copy they run from into your settings. With `I=~/.claude/plugins/cache/make-it-ship/make-it-ship/<new version>`, `node "$I/scripts/mis.mjs" version` shows the new version and `node "$I/scripts/mis.mjs" doctor` reports no errors. A status line that still points at the old version's folder is repaired by `doctor --fix`; `setup` shows the change to the CLAUDE.md block, and `setup --write` applies it.
 3. After a restart the status line shows and a skill such as `/make-it-ship:status` works.
 
 Pass: every step behaves as described.
