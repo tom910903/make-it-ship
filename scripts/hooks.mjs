@@ -128,6 +128,7 @@ const handlers = {
     const { detectKeywords, styleSwitch, learnedSkills, promptContext } = await import('./lib/keywords.mjs');
     const { homeDir } = await import('./lib/home.mjs');
     const prompt = String(input.prompt ?? '');
+    try { (await import('./lib/hud-sources.mjs')).notePrompt(input.session_id); } catch { /* unwritable home: no prompt time */ }
     let style = styleSwitch(prompt);
     if (style) { try { (await import('./lib/style.mjs')).setStyle(style, input.session_id || 'default'); } catch { style = null; /* unwritable home: no notice, keep the rest */ } }
     let root = null;

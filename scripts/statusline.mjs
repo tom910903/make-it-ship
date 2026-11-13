@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // HUD (Spec §14.2 hud, M6 §6.2): the one status line — run progress when a run exists, plus style level, loop,
-// subagents (5 min = stale), todos, branch, model, context use and plan usage (5-hour / 7-day limits), and what Claude Code passes in (effort, cost, prompt cache, PR, ...); which parts and in what order is
+// subagents (5 min = stale), todos, branch, model, context use and plan usage (5-hour / 7-day limits), what Claude Code passes in (effort, cost, prompt cache, PR, ...) and the OMC parts (git changes, call counts, background tasks, ...;
+// hud-sources.mjs); which parts and in what order is
 // statusLine.items (mis hud). Absorbs the OMC HUD core and Ponytail's level badge. Registered by the user as statusLine.
 // shortcut: recomputes the tree hash on every refresh; fine for small/medium repos, cache by index mtime if it gets slow.
 import { pathToFileURL } from 'node:url';
 import { verdict, evidenceStatus } from './lib/verdict.mjs';
 import { DEFAULT_HUD_ITEMS, hudItems } from './lib/hud-items.mjs';
+import { STALE_MS } from './lib/tracking.mjs';
 
 const MARK = { PASS: '✓', FAIL: '✗', STALE: '~', BLOCKED: '⊘', MISSING: '·' };
 const MARK_COLOR = { PASS: 'green', FAIL: 'red', STALE: 'yellow', BLOCKED: 'red', MISSING: 'dim' };
@@ -53,24 +55,52 @@ function span(ms) {
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m` : `${m}m`;
 }
 
+/** OMC durations: `13s`, `1m23s`, `2h3m`. */
+function elapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60);
+  return s < 60 ? `${s}s` : m < 60 ? `${m}m${s % 60}s` : `${Math.floor(m / 60)}h${m % 60}m`;
+}
+
+// OMC session health: yellow after an hour or 70% context, red after two hours or 85%.
+const health = (ms, ctxPct = 0) => (ms > 120 * 60000 || ctxPct > 85 ? 'red' : ms > 60 * 60000 || ctxPct > 70 ? 'yellow' : 'green');
+
+const AGENT_ROWS = 3;
+/** OMC multiline agents: `├─ explorer 2m5s` per running agent, the last `└─`; over 3, `└─ +N more`. */
+function agentRows(c, list, now) {
+  if (!list?.length) return null;
+  const shown = list.slice(0, list.length > AGENT_ROWS ? AGENT_ROWS : list.length);
+  const rows = shown.map((a) => `${(String(a.type).split(':').pop() || 'agent')} ${c(now - a.startedAt > STALE_MS ? 'yellow' : 'dim', elapsed(now - a.startedAt))}`);
+  if (list.length > AGENT_ROWS) rows.push(c('dim', `+${list.length - AGENT_ROWS} more`));
+  return rows.map((r, i) => `${c('dim', i === rows.length - 1 ? '└─' : '├─')} ${r}`);
+}
+
 /**
- * The parts after the head, in `items` order (hud-items.mjs; `br` starts a new row). `host` is the Claude Code
- * statusLine input for the parts read straight from it (effort, cost, prompt cache, PR, ...).
+ * The parts after the head, in `items` order (hud-items.mjs; `br` starts a new row, agents-list adds its own rows).
+ * `host` is the Claude Code statusLine input for the parts read straight from it (effort, cost, prompt cache, PR, ...);
+ * the rest comes from hud-sources.mjs and tracking.mjs (`stats` is read from the transcript).
  */
-export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits, host = {}, items = DEFAULT_HUD_ITEMS, color = false, now = Date.now() }) {
+export function renderExtras({ style, loop, frozen, agents, todo, branch, model, ctxPct, limits, host = {}, repo, gitStatus, promptAt, stats, agentList, apiKey, items = DEFAULT_HUD_ITEMS, color = false, now = Date.now() }) {
   const c = painter(color);
-  const cost = host.cost ?? {}, cache = host.prompt_cache, spend = limits?.spend_limit;
+  const cost = host.cost ?? {}, cache = host.prompt_cache, spend = limits?.spend_limit, g = gitStatus;
   const part = {
     style: () => (style && style !== 'off' ? `style ${c('magenta', style === 'ultra' ? 'ULTRA' : style)}` : null),
     loop: () => (loop?.active ? `loop ${c(level((loop.iteration / loop.max) * 100), `${loop.iteration}/${loop.max}`)}` : null),
     frozen: () => (frozen ? `frozen ${c('yellow', frozen)}` : null),
     agents: () => (agents?.running ? `agents ${c('cyan', agents.running)}${agents.stale ? ` ${c('yellow', `(${agents.stale} stale)`)}` : ''}` : null),
+    'agents-list': () => agentRows(c, agentList, now),
+    bg: () => (stats?.bg ? `bg ${c('cyan', stats.bg)}` : null),
     todo: () => (todo?.total ? `todo ${c(todo.done === todo.total ? 'green' : 'cyan', `${todo.done}/${todo.total}`)}` : null),
+    skill: () => (stats?.skill ? `skill ${c('cyan', stats.skill)}` : null),
+    calls: () => [['🔧', stats?.tools], ['🤖', stats?.agents], ['⚡', stats?.skills]].filter(([, n]) => n > 0).map(([i, n]) => `${i}${n}`).join(' ') || null,
+    repo: () => (repo ? `repo ${c('cyan', repo)}` : null),
     branch: () => (branch ? c('cyan', branch) : null),
+    git: () => (g ? [['green', '+', g.staged], ['red', '!', g.modified], ['cyan', '?', g.untracked], ['green', '⇡', g.ahead], ['red', '⇣', g.behind]]
+      .filter(([, , n]) => n > 0).map(([k, sym, n]) => `${c(k, sym)}${n}`).join(' ') || null : null),
     pr: () => (host.pr?.number ? `PR #${host.pr.number}${host.pr.review_state ? ` ${c(/approved/i.test(host.pr.review_state) ? 'green' : /changes/i.test(host.pr.review_state) ? 'red' : 'yellow', host.pr.review_state.toLowerCase().replace(/_/g, ' '))}` : ''}` : null),
     model: () => (model ? c('magenta', model) : null),
     effort: () => (host.effort?.level ? `effort ${c('cyan', host.effort.level)}` : null),
-    thinking: () => (host.thinking?.enabled ? c('cyan', 'think') : null),
+    // the latest reply's thinking block (OMC); before the first reply, whether thinking is on
+    thinking: () => ((stats?.think ?? host.thinking?.enabled) ? c('cyan', 'think') : null),
     fast: () => (host.fast_mode ? c('yellow', 'fast') : null),
     ctx: () => (ctxPct ? gauge(c, 'ctx', ctxPct) : null),
     '5h': () => limit(c, '5h', limits?.five_hour, now),
@@ -78,9 +108,11 @@ export function renderExtras({ style, loop, frozen, agents, todo, branch, model,
     spend: () => (typeof spend?.used_percentage === 'number'
       ? gauge(c, 'spend', spend.used_percentage, `${typeof spend.used_usd === 'number' && typeof spend.limit_usd === 'number' ? ` $${spend.used_usd.toFixed(2)}/$${spend.limit_usd.toFixed(2)}` : ''}${untilReset(spend.resets_at, now)}`)
       : null),
+    apikey: () => (apiKey ? `key ${c('cyan', apiKey)}` : null),
     cost: () => (typeof cost.total_cost_usd === 'number' ? `$${cost.total_cost_usd.toFixed(2)}` : null),
     lines: () => (cost.total_lines_added || cost.total_lines_removed ? `${c('green', `+${cost.total_lines_added ?? 0}`)} ${c('red', `-${cost.total_lines_removed ?? 0}`)}` : null),
-    duration: () => (typeof cost.total_duration_ms === 'number' ? span(cost.total_duration_ms) : null),
+    duration: () => (typeof cost.total_duration_ms === 'number' ? c(health(cost.total_duration_ms, ctxPct), span(cost.total_duration_ms)) : null),
+    prompt: () => (typeof promptAt === 'number' ? `prompt ${elapsed(now - promptAt)}` : null),
     // expires_at is Unix seconds; hit_ratio is cache-read tokens over input tokens (0..1)
     cache: () => {
       if (!cache) return null;
@@ -96,8 +128,10 @@ export function renderExtras({ style, loop, frozen, agents, todo, branch, model,
   };
   const rows = [[]];
   for (const k of items) {
-    if (k === 'br') rows.push([]);
-    else { const p = part[k]?.(); if (p) rows.at(-1).push(p); }
+    if (k === 'br') { rows.push([]); continue; }
+    const p = part[k]?.();
+    if (Array.isArray(p)) rows.push(...p.map((r) => [r]), []);
+    else if (p) rows.at(-1).push(p);
   }
   return [rows[0].map((p) => ` · ${p}`).join(''), ...rows.slice(1).filter((r) => r.length).map((r) => r.join(' · '))].join('\n');
 }
@@ -116,6 +150,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const { execFileSync } = await import('node:child_process');
     const config = await part(async () => (await import('./lib/home.mjs')).globalConfig());
     const items = hudItems(config?.statusLine?.items);
+    const want = (...ks) => ks.some((k) => items.includes(k));
+    const src = await part(() => import('./lib/hud-sources.mjs'));
     const run = await part(async () => (await import('./lib/state.mjs')).loadRun(cwd));
     const head = run && run.state.state !== 'CANCELLED'
       ? renderHud(run.state, (await import('./lib/commands.mjs')).verdictContext(run, cwd), items.includes('cost') ? null : input.cost, color)
@@ -130,6 +166,12 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       ctxPct: input.context_window?.used_percentage ?? contextPercent(input.transcript_path),
       limits: input.rate_limits,
       host: input,
+      repo: want('repo') ? await part(() => src.repoName(input.workspace?.repo, cwd)) : null,
+      gitStatus: want('git') ? await part(() => src.gitCounts(cwd)) : null,
+      apiKey: want('apikey') ? await part(() => src.apiKeySource(input.workspace?.project_dir ?? cwd)) : null,
+      promptAt: want('prompt') ? await part(() => src.lastPrompt(input.session_id)) : null,
+      stats: want('skill', 'calls', 'bg', 'thinking') ? await part(() => src.transcriptStats(input.transcript_path, input.session_id)) : null,
+      agentList: want('agents-list') ? await part(async () => (await import('./lib/tracking.mjs')).agentList(input.session_id)) : null,
       items,
       color,
       frozen: await part(async () => {

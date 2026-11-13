@@ -1,7 +1,7 @@
 // Session tracking for the always-on hooks (M9-F; absorbs OMC subagent-tracker, verify-deliverables, workflow-drift-guard,
 // code-simplifier, session-end summary, pre-compact TODOs, project-memory-posttool; see THIRD_PARTY_NOTICES.md).
 // Everything here is small and local: no network, no repo scans. Callers fail open.
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { homeDir } from './home.mjs';
@@ -34,6 +34,15 @@ export function agentCounts(sid, now = Date.now()) {
     if (age > STALE_MS) stale++;
   }
   return { running, stale };
+}
+
+/** Running agents of a session for the HUD rows, oldest first: [{type, startedAt}]; orphans and files gone mid-read are skipped. */
+export function agentList(sid, now = Date.now()) {
+  const d = agentsDir(sid);
+  if (!existsSync(d)) return [];
+  return readdirSync(d).flatMap((f) => {
+    try { return [{ type: readFileSync(join(d, f), 'utf8'), startedAt: statSync(join(d, f)).mtimeMs }]; } catch { return []; }
+  }).filter((a) => now - a.startedAt <= ORPHAN_MS).sort((a, b) => a.startedAt - b.startedAt);
 }
 
 export const clearAgents = (sid) => rmSync(agentsDir(sid), { recursive: true, force: true });

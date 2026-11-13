@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { renderHud, renderExtras } from '../../scripts/statusline.mjs';
-import { fakeHome, makeRepo, mis, ROOT } from '../helpers.mjs';
+import { fakeHome, makeRepo, mis, ROOT, write } from '../helpers.mjs';
 
 const T = 't', C = 'c';
 const state = {
@@ -175,4 +175,61 @@ test('a run head drops its own cost when the cost item is on, so the dollars sho
   assert.equal(sl().match(/\$2\.00/g).length, 1);
   mis(dir, ['hud', 'remove', 'cost'], { env });
   assert.match(sl(), /PARTIAL · \$2\.00 · /, 'without the cost item the run head shows it, as before');
+});
+
+test('OMC parts: repo, git changes, time since the prompt, last skill, call counts, background tasks, API key source; each hidden without a value', () => {
+  const now = 1_000_000_000_000;
+  const items = ['repo', 'git', 'prompt', 'skill', 'calls', 'bg', 'apikey'];
+  assert.equal(renderExtras({ items, now, repo: 'make-it-ship', gitStatus: { staged: 2, modified: 3, untracked: 1, ahead: 1, behind: 2 }, promptAt: now - 83_000,
+    stats: { tools: 42, agents: 7, skills: 3, skill: 'review', bg: 2 }, apiKey: 'env' }),
+  ' · repo make-it-ship · +2 !3 ?1 ⇡1 ⇣2 · prompt 1m23s · skill review · 🔧42 🤖7 ⚡3 · bg 2 · key env');
+  assert.equal(renderExtras({ items, now, gitStatus: { staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 }, stats: { tools: 5, agents: 0, skills: 0, bg: 0 } }),
+    ' · 🔧5', 'a clean tree, zero counters and no prompt yet show nothing');
+  assert.equal(renderExtras({ items: ['prompt'], now, promptAt: now - 13_000 }), ' · prompt 13s');
+  assert.equal(renderExtras({ items: ['prompt'], now, promptAt: now - (2 * 3600 + 3 * 60) * 1000 }), ' · prompt 2h3m');
+});
+
+test('agents-list: a row per running subagent (type without the plugin prefix, running time), 3 at most then +N more; its rows end the current row', () => {
+  const now = 1_000_000_000_000;
+  const a = (type, s) => ({ type, startedAt: now - s * 1000 });
+  assert.equal(renderExtras({ items: ['branch', 'agents-list', 'model'], branch: 'main', model: 'Opus', agentList: [a('make-it-ship:explorer', 125), a('', 13)], now }),
+    ' · main\n├─ explorer 2m5s\n└─ agent 13s\nOpus');
+  assert.equal(renderExtras({ items: ['agents-list'], agentList: [a('a', 4), a('b', 3), a('c', 2), a('d', 1), a('e', 0)], now }), '\n├─ a 4s\n├─ b 3s\n├─ c 2s\n└─ +2 more');
+  assert.equal(renderExtras({ items: ['agents-list', 'model'], model: 'Opus', agentList: [], now }), ' · Opus');
+});
+
+test('think follows the transcript (the latest reply thought) and falls back to the thinking setting; duration is colored by session health', () => {
+  assert.equal(renderExtras({ items: ['thinking'], stats: { think: true }, host: { thinking: { enabled: false } } }), ' · think');
+  assert.equal(renderExtras({ items: ['thinking'], stats: { think: false }, host: { thinking: { enabled: true } } }), '', 'the latest reply did not think');
+  assert.equal(renderExtras({ items: ['thinking'], stats: {}, host: { thinking: { enabled: true } } }), ' · think', 'no reply yet: the setting');
+  const d = (min, ctxPct) => renderExtras({ items: ['duration'], host: { cost: { total_duration_ms: min * 60000 } }, ctxPct, color: true });
+  assert.match(d(30, 10), /\x1b\[32m30m/);
+  assert.match(d(61, 10), /\x1b\[33m1h01m/);
+  assert.match(d(30, 75), /\x1b\[33m30m/);
+  assert.match(d(121, 10), /\x1b\[31m2h01m/);
+  assert.match(d(30, 90), /\x1b\[31m30m/);
+});
+
+test('the OMC parts are opt-in: the default item set is unchanged', async () => {
+  const { DEFAULT_HUD_ITEMS, HUD_ITEMS } = await import('../../scripts/lib/hud-items.mjs');
+  assert.deepEqual(DEFAULT_HUD_ITEMS, ['style', 'loop', 'frozen', 'agents', 'todo', 'branch', 'pr', 'model', 'effort', 'thinking', 'fast', 'ctx', '5h', '7d', 'spend', 'cost', 'lines', 'duration', 'cache', 'worktree', 'session', 'agent', 'vim', 'output-style']);
+  for (const k of ['repo', 'git', 'prompt', 'skill', 'calls', 'bg', 'apikey', 'agents-list']) assert.ok(HUD_ITEMS[k], k);
+});
+
+test('statusline script: apikey names the source and never prints the key', () => {
+  const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ statusLine: { items: ['apikey'] } }));
+  const dir = makeRepo();
+  const cc = mkdtempSync(join(tmpdir(), 'mis-cc-'));
+  const secret = 'sk-ant-api03-SECRET-do-not-print';
+  const run = (env, cwd = dir) => spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd, session_id: 'S' }), encoding: 'utf8', env: { ...process.env, MIS_STATE_HOME: home, CLAUDE_CONFIG_DIR: cc, NO_COLOR: '1', ...env } }).stdout;
+  const env = { ...process.env }; delete env.ANTHROPIC_API_KEY;
+  assert.equal(spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env: { ...env, MIS_STATE_HOME: home, CLAUDE_CONFIG_DIR: cc, NO_COLOR: '1' } }).stdout, 'MIS ▸ idle\n', 'no key: nothing');
+  assert.equal(run({ ANTHROPIC_API_KEY: secret }), 'MIS ▸ idle · key env\n');
+  writeFileSync(join(cc, 'settings.json'), JSON.stringify({ env: { ANTHROPIC_API_KEY: secret } }));
+  assert.equal(run({ ANTHROPIC_API_KEY: secret }), 'MIS ▸ idle · key global\n');
+  write(dir, { '.claude/settings.local.json': { env: { ANTHROPIC_API_KEY: secret } } });
+  const out = run({ ANTHROPIC_API_KEY: secret });
+  assert.equal(out, 'MIS ▸ idle · key project\n');
+  assert.ok(!out.includes('SECRET'));
 });
