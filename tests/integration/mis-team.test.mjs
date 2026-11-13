@@ -1,4 +1,4 @@
-// M8-B team runtime: real tmux (private socket) with a fake worker command; never launches claude/codex/gemini.
+// Team runtime: real tmux (private socket) with a fake worker command; never launches claude/codex/gemini.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -120,7 +120,7 @@ if (!HAS_TMUX) {
     const dir = makeRepo();
     const s = ok(mis(dir, ['team', 'start', '2', 'split work', '--tasks', '-'], { env, input: tasksJson(['a', 'b', 'c', 'd']) }));
     assert.equal(s.workers.length, 2);
-    assert.equal(s.worker, 'custom', 'M8 D9: a worker command override is not reported as claude');
+    assert.equal(s.worker, 'custom', 'a worker command override is not reported as claude');
     assert.match(s.attach, new RegExp(`tmux -L ${SOCKET} attach -t ${s.session}`));
     const panes = tmux('list-panes', '-s', '-t', s.session, '-F', '#{pane_id}');
     // Workers may already have finished and closed their panes; when the session is alive it has <= 2 panes.
@@ -170,7 +170,7 @@ if (!HAS_TMUX) {
     assert.ok(existsSync(join(s.workers[0].worktree, 'scratch.txt')));
     const after = ok(mis(dir, ['team', 'status'], { env }));
     assert.ok(after.ended, 'status shows the team ended');
-    assert.equal(after.workers[0].state, 'stopped', 'M8 D7: a worker killed by shutdown is not "running"');
+    assert.equal(after.workers[0].state, 'stopped', 'a worker killed by shutdown is not "running"');
     assert.equal(after.counts.in_progress, 0); assert.equal(after.counts.stopped, 1);
     assert.equal(after.tasks[0].status, 'stopped');
   });

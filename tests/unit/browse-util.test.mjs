@@ -7,7 +7,7 @@ import { isLocalOrigin, lineDiff, toInches, toUrl } from '../../scripts/lib/brow
 import { findChrome, chromeArgs } from '../../scripts/lib/browse/chrome.mjs';
 import { markdownToHtml } from '../../scripts/lib/markdown.mjs';
 
-test('M8 D0: local origins are file and loopback only; opaque/unknown origins (about:, data:, blob:, "://", "null") and real sites are not local', () => {
+test('local origins are file and loopback only; opaque/unknown origins (about:, data:, blob:, "://", "null") and real sites are not local', () => {
   for (const u of ['file://', 'file:///tmp/a.html', 'http://localhost:3000', 'http://127.0.0.1:8080',
     'http://[::1]:5000', 'http://app.localhost', 'https://127.1.2.3']) assert.equal(isLocalOrigin(u), true, u);
   for (const u of ['://', 'null', 'about:blank', 'data:text/html,x', 'blob:http://shop.test/1', 'blob:http://127.0.0.1:5/1',
@@ -54,7 +54,7 @@ test('markdown → print HTML: title from first H1, smart quotes outside code, r
   assert.match(net, /<img src="https:\/\/x\.test\/a\.png"/);
 });
 
-test('M8 R2-3: extra Chrome flags cannot reopen a DevTools port, drop web security, swap the profile or load extensions', () => {
+test('extra Chrome flags cannot reopen a DevTools port, drop web security, swap the profile or load extensions', () => {
   assert.deepEqual(chromeArgs('--host-resolver-rules=MAP *.test 127.0.0.1 --lang=ko'), ['--host-resolver-rules=MAP *.test 127.0.0.1', '--lang=ko']);
   assert.deepEqual(chromeArgs(''), []);
   for (const bad of ['--remote-debugging-port=0', '-remote-debugging-port=9222', '--remote-debugging-address=0.0.0.0', '--remote-allow-origins=*',
@@ -65,7 +65,7 @@ test('M8 R2-3: extra Chrome flags cannot reopen a DevTools port, drop web securi
   assert.throws(() => chromeArgs('http://evil.test/'), /MIS_BROWSE_CHROME_ARGS[\s\S]*flag/, 'a bare URL would open at startup, before any gate');
 });
 
-test('M8 R3-3: extra Chrome flags are an allow list (fail closed); host-resolver-rules may only point names at loopback or map non-local names', () => {
+test('extra Chrome flags are an allow list (fail closed); host-resolver-rules may only point names at loopback or map non-local names', () => {
   assert.deepEqual(chromeArgs('--lang=ko --window-size=800,600 --force-device-scale-factor=2 --disable-gpu'), ['--lang=ko', '--window-size=800,600', '--force-device-scale-factor=2', '--disable-gpu']);
   assert.deepEqual(chromeArgs('--host-resolver-rules=MAP *.test 127.0.0.1, MAP lan.test 10.0.0.5, MAP a.test [::1]:8080, MAP b.test ~NOTFOUND'),
     ['--host-resolver-rules=MAP *.test 127.0.0.1, MAP lan.test 10.0.0.5, MAP a.test [::1]:8080, MAP b.test ~NOTFOUND']);

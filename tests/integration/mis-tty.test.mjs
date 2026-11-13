@@ -1,4 +1,4 @@
-// M9-C C2: mis tty drives an interactive program in tmux (private socket, fixture REPL) and saves a replay check script.
+// mis tty drives an interactive program in tmux (private socket, fixture REPL) and saves a replay check script.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

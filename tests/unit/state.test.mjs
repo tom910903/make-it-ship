@@ -72,7 +72,7 @@ test('lock: exclusive while holder alive, stale lock reclaimed', () => {
   assert.ok(ran, 'stale lock reclaimed');
 });
 
-test('lock reclaim removes only the stale lock it judged, never a lock someone created since (N6)', () => {
+test('lock reclaim removes only the stale lock it judged, never a lock someone created since', () => {
   const d = _mk(_join(_tmp(), 'mis-lock-'));
   const lock = _join(d, 'lock');
   _wf(lock, JSON.stringify({ pid: 999999, at: 'new-owner' }));
@@ -83,7 +83,7 @@ test('lock reclaim removes only the stale lock it judged, never a lock someone c
   assert.equal(_ex(`${lock}.reclaim`), false);
 });
 
-test('M7 N7: an empty lock left by a crash between create and write is reclaimed once it is old', () => {
+test('an empty lock left by a crash between create and write is reclaimed once it is old', () => {
   const dir = makeRepo();
   const run = createRun(dir, { input: { kind: 'text', text: 'x' } });
   const lock = join(run.dir, 'lock');
@@ -95,7 +95,7 @@ test('M7 N7: an empty lock left by a crash between create and write is reclaimed
   assert.ok(ran);
 });
 
-test('M7 N8: a waiter does not spin while another process holds the reclaim marker', () => {
+test('a waiter does not spin while another process holds the reclaim marker', () => {
   const d = _mk(_join(_tmp(), 'mis-lock-'));
   const lock = _join(d, 'lock');
   _wf(lock, JSON.stringify({ pid: 999999, at: 'x' }));
@@ -106,7 +106,7 @@ test('M7 N8: a waiter does not spin while another process holds the reclaim mark
 
 const require_fs = await import('node:fs');
 
-test('M7 N9: reclaim never removes a lock that was replaced by a new file with the same (empty) content', () => {
+test('reclaim never removes a lock that was replaced by a new file with the same (empty) content', () => {
   const d = _mk(_join(_tmp(), 'mis-lock-'));
   const lock = _join(d, 'lock');
   _wf(lock, '');
@@ -118,7 +118,7 @@ test('M7 N9: reclaim never removes a lock that was replaced by a new file with t
   assert.ok(_ex(lock), 'the new owner\'s lock is kept');
 });
 
-test('M7 N9-fs: a fresh empty lock is kept even when the filesystem reuses the old inode number', () => {
+test('a fresh empty lock is kept even when the filesystem reuses the old inode number', () => {
   const d = _mk(_join(_tmp(), 'mis-lock-'));
   const lock = _join(d, 'lock');
   _wf(lock, ''); // brand-new owner mid-create; the reclaimer judged an older empty lock with this same inode number

@@ -1,4 +1,4 @@
-// M8-B visual companion (absorbs Superpowers brainstorming visual companion): localhost mockup server.
+// Visual companion (absorbs Superpowers brainstorming visual companion): localhost mockup server.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, appendFileSync, symlinkSync } from 'node:fs';
@@ -30,7 +30,7 @@ test('serves an index and pages with the key, auto-reloads on change, records ch
   assert.equal(raw, 404, 'encoded ../ cannot escape the served dir (README.md exists one level up)');
   writeFileSync(join(dir, 'secret.txt'), 'TOP SECRET');
   symlinkSync(join(dir, 'secret.txt'), join(dir, 'design', 'link.html'));
-  assert.equal((await get('/link.html')).status, 404, 'M8 D8: a symlink to a file outside the directory is not served');
+  assert.equal((await get('/link.html')).status, 404, 'a symlink to a file outside the directory is not served');
   assert.doesNotMatch(await (await get('/')).text(), /link\.html/, 'nor listed');
   symlinkSync(join(dir, 'design', 'layout-a.html'), join(dir, 'design', 'alias.html'));
   assert.equal((await get('/alias.html')).status, 200, 'a symlink inside the directory still works');

@@ -1,4 +1,4 @@
-// M9-D D8: pair-agent — the endpoint needs a token, the tunnel (a stub command here, never ngrok) opens only on start
+// pair-agent — the endpoint needs a token, the tunnel (a stub command here, never ngrok) opens only on start
 // and closes on stop, and stop frees the port.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,7 +50,7 @@ test('pair-agent with a tunnel: public URL from the tunnel output; a tunnel that
   assert.equal(ok(mis(dir, ['pair-agent', 'status'], { env })).running, false, 'endpoint closed when the tunnel failed');
 });
 
-test('M9 fix1 D3: a paired agent reads only pages it opened itself: back/forward/tab onto local or earlier pages are refused and blanked, tabs and url hide them, old console/network entries are gone', async () => {
+test('a paired agent reads only pages it opened itself: back/forward/tab onto local or earlier pages are refused and blanked, tabs and url hide them, old console/network entries are gone', async () => {
   const h = fakeHome(), dir = makeRepo({ 'secret.html': '<title>Local Secret</title><script>console.log("LOCAL-SECRET-LOG")</script><p>LOCAL-SECRET-CONTENT-42</p>' });
   const env = { ...h.env, MIS_BROWSE_HEADLESS_ONLY: '1', MIS_BROWSE_IDLE_MS: '300000' };
   const secretUrl = `file://${join(dir, 'secret.html')}`;

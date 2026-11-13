@@ -21,7 +21,7 @@ test('guard: no active run → push passes silently, forgery denied', () => {
   assert.equal(r.out.hookEventName, 'PreToolUse');
 });
 
-test('guard: a team worker process (MIS_TEAM_ID) gets run-level rules without a run: push and installs ask (M8-B)', () => {
+test('guard: a team worker process (MIS_TEAM_ID) gets run-level rules without a run: push and installs ask', () => {
   const dir = makeRepo();
   const worker = (command) => {
     const r = spawnSync(process.execPath, [GUARD], { input: JSON.stringify(bash(dir, command)), encoding: 'utf8', env: { ...process.env, MIS_TEAM_ID: 't1' } });
@@ -156,7 +156,7 @@ test('guard: mis freeze limits edits to one directory without a run; mis unfreez
   assert.equal(w(`${dir}/README.md`), 'allow');
 });
 
-test('M6 D10: freeze follows symlinks (no escape through a link inside the frozen dir; links to inside are fine)', () => {
+test('freeze follows symlinks (no escape through a link inside the frozen dir; links to inside are fine)', () => {
   const dir = makeRepo({ 'src/a.js': '', 'outside/b.js': '' });
   symlinkSync(join(dir, 'outside'), join(dir, 'src', 'escape'));
   const alias = join(mkdtempSync(join(tmpdir(), 'mis-alias-')), 'repo');
@@ -172,7 +172,7 @@ test('M6 D10: freeze follows symlinks (no escape through a link inside the froze
   assert.equal(w(join(alias, 'src', 'new.js')), 'allow', 'symlinked path to a frozen file is inside');
 });
 
-test('M6 R2-7: freeze applies only to the repo it was set in; broken links do not escape it', () => {
+test('freeze applies only to the repo it was set in; broken links do not escape it', () => {
   const dir = makeRepo({ 'src/a.js': '' }), other = makeRepo({ 'b.js': '' });
   symlinkSync(join(mkdtempSync(join(tmpdir(), 'mis-out-')), 'nowhere.js'), join(dir, 'src', 'dangling.js'));
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
@@ -187,7 +187,7 @@ test('M6 R2-7: freeze applies only to the repo it was set in; broken links do no
   assert.equal(w(dir, join(dir, 'src', 'dangling.js')), 'deny', 'dangling link pointing outside');
 });
 
-test('M6 R3-4: in a session inside the frozen repo, writes anywhere outside the frozen dir are denied (other repos, outside paths, links)', () => {
+test('in a session inside the frozen repo, writes anywhere outside the frozen dir are denied (other repos, outside paths, links)', () => {
   const dir = makeRepo({ 'src/a.js': '' }), other = makeRepo({ 'b.js': '' });
   const outside = mkdtempSync(join(tmpdir(), 'mis-out-'));
   symlinkSync(outside, join(dir, 'src', 'escape'));
@@ -203,7 +203,7 @@ test('M6 R3-4: in a session inside the frozen repo, writes anywhere outside the 
   assert.equal(w(other, join(other, 'b.js')), 'allow', 'a session in another repo is not frozen');
 });
 
-test('M9 fix1 D1 (end to end): without a run, editing evaluator.json or deploy.json asks, and autoresearch eval asks when its stored evaluator is external', async () => {
+test('end to end: without a run, editing evaluator.json or deploy.json asks, and autoresearch eval asks when its stored evaluator is external', async () => {
   const { write } = await import('../helpers.mjs');
   const dir = makeRepo({ '.make-it-ship/autoresearch/m1/mission.md': '# m\n', '.make-it-ship/autoresearch/m1/evaluator.json': JSON.stringify({ command: 'echo {}', timeoutSec: 5, output: 'json' }) });
   const ev = join(dir, '.make-it-ship', 'autoresearch', 'm1', 'evaluator.json');

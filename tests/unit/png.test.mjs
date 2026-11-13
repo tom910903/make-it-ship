@@ -98,7 +98,7 @@ const page = (rows, w = 400, h = 300) => {
   return img;
 };
 
-test('M8 D3: clearly different pages on a shared white background fail; the background does not count as matching content', () => {
+test('clearly different pages on a shared white background fail; the background does not count as matching content', () => {
   const r = compareImages(page([10, 30, 50]), page([150, 170, 190, 210]));
   assert.equal(r.score, 0);
   assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).score, 100);
@@ -106,7 +106,7 @@ test('M8 D3: clearly different pages on a shared white background fail; the back
   assert.equal(small.score, 90, 'one added line of ten');
 });
 
-test('M8 R2-2: the score is proportional: one pixel on a white page is 99, a 2px shift of the same page stays high, a blank page is 0', () => {
+test('the score is proportional: one pixel on a white page is 99, a 2px shift of the same page stays high, a blank page is 0', () => {
   const w = solid(100, 100, [255, 255, 255, 255]), one = solid(100, 100, [255, 255, 255, 255]);
   one.data.set([0, 0, 0, 255], (50 * 100 + 50) * 4);
   assert.equal(compareImages(one, w).score, 99);
@@ -118,19 +118,19 @@ test('M8 R2-2: the score is proportional: one pixel on a white page is 99, a 2px
   assert.equal(compareImages(page([10, 30, 50]), page([10, 30, 50])).shift, undefined);
 });
 
-test('M8 R2-2: a full-page screenshot 2px taller because the content moved down 2px is aligned too', () => {
+test('a full-page screenshot 2px taller because the content moved down 2px is aligned too', () => {
   const r = compareImages(page([12, 32, 52], 400, 302), page([10, 30, 50]));
   assert.equal(r.score, 98);
   assert.deepEqual(r.shift, { dx: 0, dy: -2 });
 });
 
-test('M8 R2-2: a margin change that moves content 2px and makes the page 4px taller is aligned; a size-only difference is never perfect', () => {
+test('a margin change that moves content 2px and makes the page 4px taller is aligned; a size-only difference is never perfect', () => {
   assert.equal(compareImages(page([12, 32, 52], 400, 304), page([10, 30, 50])).score, 98);
   const taller = compareImages(page([10, 30, 50], 400, 304), page([10, 30, 50]));
   assert.equal(taller.score, 99); assert.equal(taller.sizeMatch, false);
 });
 
-test('M8 R3-4: alignment reaches 8px: a 5px or 8px move and a long page 12px taller (content 6px down) score high, each px costing a point; 9px is past the reach and drops to revise', () => {
+test('alignment reaches 8px: a 5px or 8px move and a long page 12px taller (content 6px down) score high, each px costing a point; 9px is past the reach and drops to revise', () => {
   const five = compareImages(page([10, 30, 50]), page([15, 35, 55]));
   assert.equal(five.score, 95); assert.deepEqual(five.shift, { dx: 0, dy: 5 });
   const eight = compareImages(page([10, 30, 50]), page([18, 38, 58]));

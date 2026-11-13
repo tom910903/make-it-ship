@@ -86,7 +86,7 @@ test('BSP QA profile was removed by user decision: Yocto / Buildroot / kernel tr
   }
 });
 
-test('iOS scheme discovery reads project or workspace listings (SwiftPM has no .xcodeproj) (M4 D4)', async () => {
+test('iOS scheme discovery reads project or workspace listings (SwiftPM has no .xcodeproj)', async () => {
   const { schemesFromList } = await import('../../scripts/lib/qa.mjs');
   assert.deepEqual(schemesFromList({ project: { schemes: ['App'] } }), ['App']);
   assert.deepEqual(schemesFromList({ workspace: { schemes: ['Pkg', 'Pkg-Package'] } }), ['Pkg', 'Pkg-Package']);

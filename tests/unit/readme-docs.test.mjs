@@ -29,7 +29,7 @@ test('README.md and README.ko.md link to each other', () => {
   assert.match(readFileSync(join(ROOT, 'README.ko.md'), 'utf8'), /\]\(README\.md\)/);
 });
 
-test('LAYOUT D7/D6: both READMEs give every PARTIAL reason, say rejecting approval stops the run, and match each other', () => {
+test('both READMEs give every PARTIAL reason, say rejecting approval stops the run, and match each other', () => {
   const en = readFileSync(join(ROOT, 'README.md'), 'utf8'), ko = readFileSync(join(ROOT, 'README.ko.md'), 'utf8');
   const row = (t) => t.split('\n').find((l) => l.startsWith('| `PARTIAL`'));
   assert.match(row(en), /unmerged task worktrees/); assert.match(row(en), /no required checks defined/);

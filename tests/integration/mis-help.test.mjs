@@ -1,4 +1,4 @@
-// M9-A4: help, info, capabilities, gain. Every list must come from the live registries, and none of these may
+// mis help, info, capabilities, gain. Every list must come from the live registries, and none of these may
 // write anything except the capabilities lockfile inside the repository.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -140,7 +140,7 @@ test('mis gain shows only measured local data', () => {
   const empty = mis(repo, ['gain']);
   assert.equal(empty.code, 0, empty.err);
   assert.match(empty.out, /Runs: 0/);
-  assert.doesNotMatch(empty.out, /original plugins|benchmark results/, 'no comparison with the original plugins (the M10 harness was removed)');
+  assert.doesNotMatch(empty.out, /original plugins|benchmark results/, 'no comparison with the original plugins (the benchmark harness was removed)');
   assert.match(empty.out, /Shortcut debt: 2 markers \(1 without an upgrade trigger\)/);
   assert.doesNotMatch(empty.out, /sav(ed|ing)/i);
 
@@ -161,7 +161,7 @@ test('mis gain shows only measured local data', () => {
   assert.equal(json.checks.failToPass, 1);
   assert.deepEqual(json.bench, [{ run: '20261020-1200-abcd', check: 'test', medianMs: 120, baselineMs: 100, deltaPct: 20, status: 'OK' }]);
   assert.deepEqual(json.debt, { markers: 2, noTrigger: 1 });
-  assert.equal(json.benchmarks, undefined, 'no comparison with the original plugins (the M10 harness was removed)');
+  assert.equal(json.benchmarks, undefined, 'no comparison with the original plugins (the benchmark harness was removed)');
   const text = mis(repo, ['gain']).out;
   assert.match(text, /Checks: 4 recorded, 2 PASS \(50%\), 1 FAIL, 1 BLOCKED/);
   assert.match(text, /test: median 120 ms, baseline 100 ms \(\+20%, OK\)/);

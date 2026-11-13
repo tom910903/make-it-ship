@@ -79,20 +79,20 @@ test('every non-allow decision carries a reason', () => {
   assert.match(r.reason, /make-it-ship/);
 });
 
-// M1 verification defects H-1, M-1..M-3, L-5: habitual (non-adversarial) variants
+// habitual (non-adversarial) variants
 const MORE = {
   ask: [
-    'MIS=/p/scripts/mis.mjs; node $MIS approve plan',                       // H-1 variable
-    'mis(){ node "/p/scripts/mis.mjs" "$@"; }; mis approve plan',            // H-1 shell function
+    'MIS=/p/scripts/mis.mjs; node $MIS approve plan',                       // variable
+    'mis(){ node "/p/scripts/mis.mjs" "$@"; }; mis approve plan',            // shell function
     '(cd sub && git push)', 'GIT_TRACE=1 git push', 'time git push', 'nohup git push &', 'sudo git push',
     'env FOO=1 npm install x', 'command git push', '/usr/bin/git push origin x', 'bash -c "git push origin x"',
     'git -c core.x=y push',
   ],
   deny: [
-    'node /p/scripts/mis.mjs status; echo x > .git/make-it-ship/runs/r/state.json', // M-1
-    'git push --force origin refs/heads/main', 'git push -f origin HEAD:refs/heads/master', // M-2
-    'git status; (git push --force origin main)',                                       // M-3
-    'cd .git/make-it-ship && echo x > runs/r/state.json',                              // L-5
+    'node /p/scripts/mis.mjs status; echo x > .git/make-it-ship/runs/r/state.json', // run state write after a mis command
+    'git push --force origin refs/heads/main', 'git push -f origin HEAD:refs/heads/master', // force push by refspec
+    'git status; (git push --force origin main)',                                       // force push in a subshell
+    'cd .git/make-it-ship && echo x > runs/r/state.json',                              // run state write after cd
   ],
   allow: ['grep -rn approval src', 'node /p/scripts/mis.mjs status', 'echo approved > /dev/null'],
 };
@@ -100,8 +100,8 @@ for (const [want, cmds] of Object.entries(MORE)) {
   for (const c of cmds) test(`bash variant ${want}: ${c}`, () => assert.equal(d(bash(c)), want));
 }
 
-// M1 round-2 defects: N-1 (approve false positives) and N-2 (more habitual shell shapes)
-const ROUND2 = {
+// "approve" as an ordinary word is no approval, and more habitual shell shapes
+const SHAPES = {
   allow: [
     `node /p/scripts/mis.mjs plan set - <<'MIS'\n{"goal":"let admins approve refunds","tasks":[{"id":"T1","title":"approve endpoint","acceptance":["approve works"]}]}\nMIS`,
     `node /p/scripts/mis.mjs review add quality - <<'MIS'\nBLOCKING: 0\nMAJOR: 0\nThe approve flow looks right.\nMIS`,
@@ -115,8 +115,8 @@ const ROUND2 = {
   ],
   deny: ['for b in x; do git push --force origin main; done'],
 };
-for (const [want, cmds] of Object.entries(ROUND2)) {
-  for (const c of cmds) test(`bash round2 ${want}: ${c.split('\n')[0]}`, () => assert.equal(d(bash(c)), want));
+for (const [want, cmds] of Object.entries(SHAPES)) {
+  for (const c of cmds) test(`bash shape ${want}: ${c.split('\n')[0]}`, () => assert.equal(d(bash(c)), want));
 }
 test('edits outside the plan\'s planned files ask (scope change)', () => {
   const c = { ...ctx, plannedFiles: ['src/**', 'test/*.test.ts', 'README.md'] };
@@ -146,7 +146,7 @@ test('glob matcher', async () => {
   assert.ok(!m('a.md', 'aXmd'));
 });
 
-test('careful rules apply with or without a run (M6-07): destructive commands ask, force push to main is denied', () => {
+test('careful rules apply with or without a run: destructive commands ask, force push to main is denied', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {
     assert.equal(d(bash('git push --force origin main'), c), 'deny');
@@ -169,7 +169,7 @@ test('careful rules apply with or without a run (M6-07): destructive commands as
   assert.equal(d(bash('git push origin feature')), 'ask', 'inside a run a normal push still asks');
 });
 
-test('freeze boundary (M6-07): edits outside the frozen directory are denied, with or without a run', () => {
+test('freeze boundary: edits outside the frozen directory are denied, with or without a run', () => {
   const frozen = { ...ctx, activeRun: false, freezeDir: `${REPO}/src` };
   const w = (p, c = frozen) => d({ tool_name: 'Write', tool_input: { file_path: p }, cwd: REPO }, c);
   assert.equal(w(`${REPO}/src/a.js`), 'allow');
@@ -181,7 +181,7 @@ test('freeze boundary (M6-07): edits outside the frozen directory are denied, wi
   assert.match(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/x.js` }, cwd: REPO }, frozen).reason, /mis unfreeze/);
 });
 
-test('own MCP tools (M7): memory-style writes are not treated as external writes; file-writing tools ask in a run and respect freeze', () => {
+test('own MCP tools: memory-style writes are not treated as external writes; file-writing tools ask in a run and respect freeze', () => {
   const t = (name, input = {}, c = ctx) => d({ tool_name: `mcp__plugin_make-it-ship_mis__${name}`, tool_input: input, cwd: REPO }, c);
   for (const n of ['notepad_write_priority', 'state_write', 'wiki_delete', 'shared_memory_delete', 'project_memory_write']) assert.equal(t(n), 'allow', n);
   assert.equal(d({ tool_name: 'mcp__other__wiki_delete', tool_input: {}, cwd: REPO }), 'ask', 'other servers keep the external-write rule');
@@ -197,13 +197,13 @@ test('own MCP tools (M7): memory-style writes are not treated as external writes
   assert.equal(t('lsp_rename', { apply: true, file: `${REPO}/src/a.js` }, frozen), 'deny', 'rename may touch any file → frozen means no');
 });
 
-test('M6 D8: unstaging is not a discard', () => {
+test('unstaging is not a discard', () => {
   assert.equal(d(bash('git restore --staged .')), 'allow');
   assert.equal(d(bash('git restore --staged --worktree .')), 'ask');
   assert.equal(d(bash('git restore -S .')), 'allow');
 });
 
-test('M8 browse: raw CDP and --remote storage/JS on real sites ask, with or without a run; other browse commands pass', () => {
+test('browse: raw CDP and --remote storage/JS on real sites ask, with or without a run; other browse commands pass', () => {
   const idle = { ...ctx, activeRun: false };
   const MIS = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
   for (const c of [`${MIS} browse cdp Network.getAllCookies`, 'node "$MIS" browse cdp Page.getLayoutMetrics', 'node /p/scripts/mis.mjs browse cdp X.y',
@@ -218,7 +218,7 @@ test('M8 browse: raw CDP and --remote storage/JS on real sites ask, with or with
   }
 });
 
-test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser executable) on a mis browse command ask', () => {
+test('browser launch overrides (extra Chrome flags, another browser executable) on a mis browse command ask', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {
     for (const cmd of ["MIS_BROWSE_CHROME_ARGS='--remote-debugging-port=0' node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/",
@@ -228,13 +228,13 @@ test('M8 R2-3: browser launch overrides (extra Chrome flags, another browser exe
     }
     assert.equal(d(bash('node /p/scripts/mis.mjs browse goto http://127.0.0.1:5/'), c), 'allow');
   }
-  // M8 r4 N1: pdf, doc/slides --pdf, canary and pair-agent start the same browser daemon
+  // pdf, doc/slides --pdf, canary and pair-agent start the same browser daemon
   for (const cmd of ['MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs pdf doc.md', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs doc doc.md --pdf', 'MIS_BROWSER=/tmp/w node /p/scripts/mis.mjs slides deck.md --pdf', "MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs canary http://127.0.0.1:5/",
     'export MIS_BROWSER_EXE=/tmp/c; node /p/scripts/mis.mjs pair-agent start --local']) assert.equal(d(bash(cmd), idle), 'ask', cmd);
   assert.match(classify(bash("MIS_BROWSE_CHROME_ARGS='--x' node /p/scripts/mis.mjs browse goto x"), ctx).reason, /browser launch/);
 });
 
-test('M8 R3-3: launch overrides are judged on the parsed environment, not the raw text: split, quoted, escaped and exported names ask', () => {
+test('launch overrides are judged on the parsed environment, not the raw text: split, quoted, escaped and exported names ask', () => {
   const idle = { ...ctx, activeRun: false }, M = 'node /p/scripts/mis.mjs browse goto x';
   for (const cmd of [`env MIS_BROWSE_CHROME_""ARGS='--x' ${M}`, `export MIS_BROWSE_CHROME_ARG\\S='--x'; ${M}`, `export 'MIS_BROWSER'=/tmp/w; ${M}`,
     `env MIS_BROWSER$'_EXE'=/tmp/w ${M}`, `MIS_BROWSER=/x; export MIS_BROWSER; ${M}`, `set -a; MIS_BROWSER=/x; ${M}`, `declare -x MIS_BROWSER=/x; ${M}`,
@@ -244,7 +244,7 @@ test('M8 R3-3: launch overrides are judged on the parsed environment, not the ra
   for (const cmd of [`echo MIS_BROWSER=/x; ${M}`, `FOO=1 ${M}`, "MIS_BROWSER=/x node -e 1"]) assert.equal(d(bash(cmd), idle), 'allow', cmd);
 });
 
-test('M8: team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
+test('team workers on other models ask (code leaves the company), with or without a run; claude workers pass', () => {
   const idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {
     assert.equal(d(bash('node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs" team start 2 "x" --worker codex'), c), 'ask');
@@ -258,7 +258,7 @@ test('M8: team workers on other models ask (code leaves the company), with or wi
   assert.match(classify(bash('node /p/scripts/mis.mjs team start 2 "x" --worker codex'), ctx).reason, /external model/);
 });
 
-test('M9 D0: registered external mis subcommands ask with or without a run; telemetry is off by default', async () => {
+test('registered external mis subcommands ask with or without a run; telemetry is off by default', async () => {
   const { EXTERNAL_MIS } = await import('../../scripts/lib/policy.mjs');
   EXTERNAL_MIS.push([['example-sync', 'push'], 'example sync uploads data']);
   try {
@@ -269,7 +269,7 @@ test('M9 D0: registered external mis subcommands ask with or without a run; tele
   } finally { EXTERNAL_MIS.pop(); }
 });
 
-test('M9-C: what mis tty runs or types is classified like the same Bash command; a custom skill-test agent asks', () => {
+test('what mis tty runs or types is classified like the same Bash command; a custom skill-test agent asks', () => {
   const mis = 'node /p/scripts/mis.mjs';
   for (const c of [`${mis} tty start x -- git push origin main`, `${mis} tty send sh 'npm install foo'`, `${mis} tty start r -- sh -c 'rm -rf /'`,
     `MIS_SKILL_TEST_CMD="codex exec" ${mis} skill test a s.json`]) assert.equal(d(bash(c)), 'ask', c);
@@ -278,7 +278,7 @@ test('M9-C: what mis tty runs or types is classified like the same Bash command;
   for (const c of [`${mis} tty start calc -- node repl.mjs`, `${mis} tty send calc '2+3'`, `${mis} tty expect calc '^5$'`, `${mis} skill test a s.json`]) assert.equal(d(bash(c)), 'allow', c);
 });
 
-test('M9-A: mis commands that change files outside the repo (settings, CLAUDE.md, MCP config, the plugin) ask with or without a run; their dry runs pass', () => {
+test('mis commands that change files outside the repo (settings, CLAUDE.md, MCP config, the plugin) ask with or without a run; their dry runs pass', () => {
   const idle = { ...ctx, activeRun: false };
   const M = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
   for (const c of [ctx, idle]) {
@@ -296,7 +296,7 @@ test('M9-A: mis commands that change files outside the repo (settings, CLAUDE.md
   assert.equal(d(bash(`${M} setup team --write`), idle), 'allow');
 });
 
-test('M8 D5: mis wrappers (functions with ${…} in the body, function keyword, subshell body, alias, wrapper of a wrapper, prefixed args) are seen through', () => {
+test('mis wrappers (functions with ${…} in the body, function keyword, subshell body, alias, wrapper of a wrapper, prefixed args) are seen through', () => {
   const idle = { ...ctx, activeRun: false };
   const P = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
   const asks = [
@@ -330,7 +330,7 @@ test('remote upload: mis browse upload --remote asks (a local file leaves the ma
   assert.equal(d(bash(`${MIS} browse goto https://example.com`), idle), 'allow');
 });
 
-test('M8 R3-1: an upload without --remote asks unless this workspace runs the local-only browser (read from the daemon state)', async () => {
+test('an upload without --remote asks unless this workspace runs the local-only browser (read from the daemon state)', async () => {
   const { makeRepo } = await import('../helpers.mjs');
   const { browseDir } = await import('../../scripts/lib/browse/client.mjs');
   const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
@@ -360,7 +360,7 @@ test('M8 R3-1: an upload without --remote asks unless this workspace runs the lo
   rmSync(repo, { recursive: true, force: true });
 });
 
-test('M9-F8: debug scope asks (not denies) for edits outside it, with or without a run; files and dirs both count', () => {
+test('debug scope asks (not denies) for edits outside it, with or without a run; files and dirs both count', () => {
   const sc = { ...ctx, activeRun: false, debugScope: [`${REPO}/src/parser`, `${REPO}/lib/x.js`] };
   const w = (p) => classify({ tool_name: 'Edit', tool_input: { file_path: p }, cwd: REPO }, sc);
   assert.equal(w(`${REPO}/src/parser/a.js`).decision, 'allow');
@@ -374,13 +374,13 @@ test('M9-F8: debug scope asks (not denies) for edits outside it, with or without
   assert.equal(classify({ tool_name: 'Edit', tool_input: { file_path: `${REPO}/src/other.js` }, cwd: REPO }, { ...ctx, activeRun: false }).decision, 'allow', 'no scope → no ask');
 });
 
-test('M9-F10: mis setup --write asks even without a run; the dry run does not', () => {
+test('mis setup --write asks even without a run; the dry run does not', () => {
   const noRun = { ...ctx, activeRun: false };
   assert.equal(d(bash('node /p/scripts/mis.mjs setup routing --write'), noRun), 'ask');
   assert.equal(d(bash('node /p/scripts/mis.mjs setup routing'), noRun), 'allow');
 });
 
-test('M9-E: browser credentials, real-Chrome connect, browser state and downloads ask every time (with or without a run), through every wrapper form', async () => {
+test('browser credentials, real-Chrome connect, browser state and downloads ask every time (with or without a run), through every wrapper form', async () => {
   const { BROWSE_ALWAYS_ASK } = await import('../../scripts/lib/browse/util.mjs');
   const idle = { ...ctx, activeRun: false };
   const P = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
@@ -411,12 +411,12 @@ test('M9-E: browser credentials, real-Chrome connect, browser state and download
   assert.equal(d(bash(`${P} open-url http://localhost:3000`), idle), 'allow');
 });
 
-test('M9-E: browser downloads are registered as external transfers', async () => {
+test('browser downloads are registered as external transfers', async () => {
   const { EXTERNAL_MIS } = await import('../../scripts/lib/policy.mjs');
   for (const sub of ['download', 'scrape']) assert.ok(EXTERNAL_MIS.some(([p]) => p.join(' ') === `browse ${sub}`), sub);
 });
 
-test('M9-D: every external or approval-gated mis subcommand asks with and without a run; read-only siblings pass', async () => {
+test('every external or approval-gated mis subcommand asks with and without a run; read-only siblings pass', async () => {
   const { EXTERNAL_MIS, APPROVAL_MIS } = await import('../../scripts/lib/policy.mjs');
   const M = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/mis.mjs"';
   const external = ['ask codex "q"', 'ask gemini "q" --file a.md', 'ccg "q"', 'benchmark-models "p" --models codex,gemini', 'interop',
@@ -446,7 +446,7 @@ test('M9-D: every external or approval-gated mis subcommand asks with and withou
   assert.match(classify(bash(`${M} deploy run --auto-revert`), ctx).reason, /rolls back/, 'the question names the revert');
 });
 
-test('M9-D: commands that mis runs later (wait/detach after --, tournament --bench, autoresearch --eval) are classified like the same Bash command', () => {
+test('commands that mis runs later (wait/detach after --, tournament --bench, autoresearch --eval) are classified like the same Bash command', () => {
   const mis = 'node /p/scripts/mis.mjs', idle = { ...ctx, activeRun: false };
   for (const c of [ctx, idle]) {
     for (const cmd of [`${mis} detach -- rm -rf ~`, `${mis} wait --seconds 1 -- git push --force origin main`, `${mis} self-improve tournament --bench 'git push --force origin x' a.patch`,
@@ -463,20 +463,20 @@ test('M9-D: commands that mis runs later (wait/detach after --, tournament --ben
   }
 });
 
-// ---- M9 fix1 (round-1 D/E verifier): stored commands, stored-command files, ask texts with destination and contents
+// ---- stored commands, stored-command files, ask texts with destination and contents
 const { mkdtempSync: mkd, mkdirSync: mkdir, writeFileSync: wf, realpathSync: rp, rmSync: rmf } = await import('node:fs');
 const { tmpdir: tmp } = await import('node:os');
 const { spawnSync: spawnSyncP } = await import('node:child_process');
 const { join: pj } = await import('node:path');
 function storedRepo(files) {
-  // a real repository: guard and mis both find the root with git rev-parse (M9 r2 N1); an empty .git dir is not one
+  // a real repository: guard and mis both find the root with git rev-parse; an empty .git dir is not one
   const r = rp(mkd(pj(tmp(), 'mis-policy-'))); spawnSyncP('git', ['init', '-q'], { cwd: r });
   for (const [p, c] of Object.entries(files)) { mkdir(pj(r, p, '..'), { recursive: true }); wf(pj(r, p), typeof c === 'string' ? c : JSON.stringify(c)); }
   return r;
 }
 const M9F = 'node /p/scripts/mis.mjs';
 
-test('M9 fix1 D1: writes to evaluator.json, deploy.json and self-improve proposals ask with or without a run, through Write/Edit/MultiEdit, any MCP writer and Bash', () => {
+test('writes to evaluator.json, deploy.json and self-improve proposals ask with or without a run, through Write/Edit/MultiEdit, any MCP writer and Bash', () => {
   const r = storedRepo({});
   const ev = pj(r, '.make-it-ship', 'autoresearch', 'm1', 'evaluator.json'), dep = pj(r, '.make-it-ship', 'deploy.json');
   const patch = pj(r, '.make-it-ship', 'self-improve', 'proposals', 'p1', 'change.patch');
@@ -504,7 +504,7 @@ test('M9 fix1 D1: writes to evaluator.json, deploy.json and self-improve proposa
   rmf(r, { recursive: true, force: true });
 });
 
-test('M9 fix1 D1: autoresearch eval, check, bench, health and deploy run classify the command they will run from its stored file', () => {
+test('autoresearch eval, check, bench, health and deploy run classify the command they will run from its stored file', () => {
   const r = storedRepo({
     '.make-it-ship/autoresearch/leak/evaluator.json': { command: `${M9F} ask codex leak-repo >/dev/null; echo '{"pass":true}'`, timeoutSec: 5, output: 'json' },
     '.make-it-ship/autoresearch/direct/evaluator.json': { command: 'codex exec review; echo {}', timeoutSec: 5, output: 'json' },
@@ -536,7 +536,7 @@ test('M9 fix1 D1: autoresearch eval, check, bench, health and deploy run classif
   rmf(r, { recursive: true, force: true });
 });
 
-test('M9 fix1 D6: external-transfer asks name the destination and what goes there', () => {
+test('external-transfer asks name the destination and what goes there', () => {
   const r = storedRepo({ '.make-it-ship/self-improve/proposals/p1/proposal.json': { id: 'p1', paths: ['.make-it-ship/deploy.json', 'skills/x/SKILL.md'] }, '.make-it-ship/wiki/w.md': '# w' });
   const home = rp(mkd(pj(tmp(), 'mis-policy-home-')));
   wf(pj(home, 'config.json'), JSON.stringify({ telemetry: { enabled: true, endpoint: 'https://telemetry.example/v1' } }));
@@ -562,7 +562,7 @@ test('M9 fix1 D6: external-transfer asks name the destination and what goes ther
   }
 });
 
-test('LAYOUT D1: the mis layout write question names the files it may write, from the configured AI docs folder', () => {
+test('the mis layout write question names the files it may write, from the configured AI docs folder', () => {
   const r = storedRepo({ '.make-it-ship.json': { version: 1, checks: {}, layout: { paths: ['**'], docs: { ai: '../escaped-ai' } } } });
   const a = classify({ tool_name: 'Bash', tool_input: { command: `${M9F} layout write` }, cwd: r }, { ...ctx, repoRoot: r, activeRun: false });
   assert.equal(a.decision, 'ask');

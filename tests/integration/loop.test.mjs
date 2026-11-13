@@ -114,7 +114,7 @@ test('SessionStart announces an active loop', () => {
   assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /active Make It Ship loop.*port the parser.*0\/9.*mis loop cancel/s);
 });
 
-test('M6 D1: the loop belongs to the session that started it', () => {
+test('the loop belongs to the session that started it', () => {
   const dir = makeRepo();
   const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT;
   ok(mis(dir, ['loop', 'start', '--max', '5', 'port parser'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } }));
@@ -123,7 +123,7 @@ test('M6 D1: the loop belongs to the session that started it', () => {
   assert.equal(stop(dir, { session_id: 'A' }).decision, 'block');
 });
 
-test('M6 D1: an unbound loop is claimed by the first session that stops; outside a repo too', () => {
+test('an unbound loop is claimed by the first session that stops; outside a repo too', () => {
   const nr1 = mkdtempSync(join(tmpdir(), 'mis-nr-')), nr2 = mkdtempSync(join(tmpdir(), 'mis-nr-'));
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const env = { MIS_STATE_HOME: home };
@@ -137,7 +137,7 @@ test('M6 D1: an unbound loop is claimed by the first session that stops; outside
   assert.equal(s(nr2, 'B'), null);
 });
 
-test('M6 D5: a run reported before the loop started does not finish the loop', () => {
+test('a run reported before the loop started does not finish the loop', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   ok(mis(dir, ['start', '--input', 'x']));
   ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
@@ -152,7 +152,7 @@ test('M6 D5: a run reported before the loop started does not finish the loop', (
   assert.match(r.reason, /reported before this loop started|new run/i);
 });
 
-test('M6 D6: mis cancel also ends the loop', () => {
+test('mis cancel also ends the loop', () => {
   const dir = makeRepo();
   ok(mis(dir, ['loop', 'start', 'x']));
   ok(mis(dir, ['start', '--input', 'x']));
@@ -162,7 +162,7 @@ test('M6 D6: mis cancel also ends the loop', () => {
   assert.equal(stop(dir), null);
 });
 
-test('M6 R2-1: another session is not told to continue the loop and cannot cancel it', () => {
+test('another session is not told to continue the loop and cannot cancel it', () => {
   const dir = makeRepo();
   ok(mis(dir, ['loop', 'start', 'A task'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } }));
   const env = { ...process.env, MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) }; delete env.NODE_TEST_CONTEXT; delete env.CLAUDE_CODE_SESSION_ID;
@@ -174,7 +174,7 @@ test('M6 R2-1: another session is not told to continue the loop and cannot cance
   assert.equal(ok(mis(dir, ['loop', 'cancel'], { env: { CLAUDE_CODE_SESSION_ID: 'A' } })).active, false);
 });
 
-test('M6 R2-3: re-reporting an old run is not evidence; a new run with checks after the loop started is required', () => {
+test('re-reporting an old run is not evidence; a new run with checks after the loop started is required', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   ok(mis(dir, ['start', '--input', 'x']));
   ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
@@ -196,7 +196,7 @@ test('M6 R2-3: re-reporting an old run is not evidence; a new run with checks af
   assert.match(stop(dir).systemMessage, /VERIFIED/, 'a new run with fresh checks ends it');
 });
 
-test('M6 R2-6: outside a repo a loop needs a session', () => {
+test('outside a repo a loop needs a session', () => {
   const nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
   assert.equal(mis(nr, ['loop', 'start', 'x'], { env: { MIS_STATE_HOME: mkdtempSync(join(tmpdir(), 'mis-home-')) } }).code, 1);
 });

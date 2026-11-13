@@ -1,4 +1,4 @@
-// M8 R3-1/R3-2: the local-only browser (`mis browse start --local-only`). Every exfiltration path the round-3 verifier found
+// The local-only browser (`mis browse start --local-only`). Every exfiltration path a security review found
 // is retried against "remote" listeners on this machine's non-loopback address (by IP and by a name mapped to it), and the
 // bytes they receive are counted. The same harness in a normal browser shows the leak, so a 0 means the path is closed.
 // Where no Chrome exists, every case asserts BLOCKED instead.
@@ -59,7 +59,7 @@ const until = (fn, what, ms = 120000) => {
   for (;;) { const v = fn(); if (v) return v; if (Date.now() > end) assert.fail(`timed out waiting for ${what}`); pause(200); }
 };
 const closeHolder = () => { const holder = ok(b('tabs')).find((t) => t.active).id; ok(b('newtab', `${base}/next`)); ok(b('closetab', String(holder))); };
-/** The R3-1/R3-2 paths: [name, attack page kind, loopback marker it sends right before its remote send, how it is triggered] */
+/** The exfiltration paths: [name, attack page kind, loopback marker it sends right before its remote send, how it is triggered] */
 const PATHS = [
   ['Service Worker', 'sw', 'worker'], ['SharedWorker', 'shared', 'worker'],
   ['another local document (sessionStorage)', 'nav-storage', 'moved'], ['another local document (?query)', 'nav-query', 'moved'],
@@ -96,7 +96,7 @@ test('local-only: start --local-only records the mode, launches Chrome with the 
   assert.equal(ok(b('start', '--local-only')).pid, s.pid, 'same mode: the running daemon is kept');
 });
 
-test('local-only: every R3-1/R3-2 path runs (its loopback marker arrives) and delivers 0 bytes to the remote listeners (IP and mapped name)', (t) => {
+test('local-only: every exfiltration path runs (its loopback marker arrives) and delivers 0 bytes to the remote listeners (IP and mapped name)', (t) => {
   if (!chrome) return blocked(b('start', '--local-only'));
   assert.equal(ok(b('status')).localOnly, true);
   for (const p of PATHS) {

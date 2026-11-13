@@ -1,4 +1,4 @@
-// M9-D D1: other-model executors with stub CLIs only (PATH is the stub dir + /usr/bin:/bin; no real codex/gemini/claude).
+// Other-model executors with stub CLIs only (PATH is the stub dir + /usr/bin:/bin; no real codex/gemini/claude).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, chmodSync, readFileSync, existsSync, mkdirSync } from 'node:fs';

@@ -1,4 +1,4 @@
-// M9-D D4: iOS device family — no device is BLOCKED, ios sync shows the diff and applies only with --apply,
+// iOS device family — no device is BLOCKED, ios sync shows the diff and applies only with --apply,
 // the QA relay binds loopback by default and needs a minted token on the tailnet listener (stub tailscale, stub bridge).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,4 +1,4 @@
-// M9-A: mis setup (global settings, instruction migration, team bootstrap), mcp-setup, config, version.
+// mis setup (global settings, instruction migration, team bootstrap), mcp-setup, config, version.
 // Every test runs against a temp HOME / CLAUDE_CONFIG_DIR / MIS_STATE_HOME; the real ~/.claude is never touched.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,7 +16,7 @@ const STATUSLINE = join(ROOT, 'scripts', 'statusline.mjs');
 const OWN = '---\n\n# CLAUDE.md\nBehavioral guidelines.\n\n## CodeGraph\nUse codegraph_search.\n';
 const CLAUDE_MD = `<!-- OMC:START -->\n<!-- OMC:VERSION:4.15.6 -->\n\n# oh-my-claudecode - Intelligent Multi-Agent Orchestration\nUse /oh-my-claudecode:autopilot.\n## Setup\nSay "setup omc" or run \`/oh-my-claudecode:omc-setup\`.\n\n<!-- OMC:END -->\n\n\n<\\!-- OMC:START -->\n# oh-my-claudecode - Intelligent Multi-Agent Orchestration\nstate_read, notepad_write\n<\\!-- OMC:END -->\n\n${OWN}`;
 
-test('A1 setup: dry run prints the diff and writes nothing', () => {
+test('setup: dry run prints the diff and writes nothing', () => {
   const h = fakeHome();
   writeFileSync(join(h.claude, 'settings.json'), JSON.stringify({ model: 'opus', enabledPlugins: { 'x@y': true } }, null, 2));
   writeFileSync(join(h.claude, 'CLAUDE.md'), CLAUDE_MD);
@@ -39,7 +39,7 @@ test('A1 setup: dry run prints the diff and writes nothing', () => {
   assert.equal(existsSync(h.state), false, 'no state written either');
 });
 
-test('A1 setup --write: applies with backups, keeps other keys and the user\'s own text, and is idempotent', () => {
+test('setup --write: applies with backups, keeps other keys and the user\'s own text, and is idempotent', () => {
   const h = fakeHome();
   writeFileSync(join(h.claude, 'settings.json'), JSON.stringify({ model: 'opus', statusLine: { type: 'command', command: 'bash ~/my-line.sh' } }, null, 2));
   writeFileSync(join(h.claude, 'CLAUDE.md'), CLAUDE_MD);
@@ -61,7 +61,7 @@ test('A1 setup --write: applies with backups, keeps other keys and the user\'s o
   assert.equal(readFileSync(join(h.claude, 'CLAUDE.md'), 'utf8').match(/MIS:START/g).length, 1);
 });
 
-test('A1 setup: missing files are created; an unreadable settings.json is refused, not overwritten', () => {
+test('setup: missing files are created; an unreadable settings.json is refused, not overwritten', () => {
   const h = fakeHome();
   ok(mis(h.home, ['setup', '--write'], { env: h.env }));
   assert.match(readFileSync(join(h.claude, 'CLAUDE.md'), 'utf8'), /^<!-- MIS:START -->/);
@@ -73,7 +73,7 @@ test('A1 setup: missing files are created; an unreadable settings.json is refuse
   assert.equal(readFileSync(join(h.claude, 'settings.json'), 'utf8'), '{ broken');
 });
 
-test('A1 SessionStart: one status-line hint per day when no statusLine is set', () => {
+test('SessionStart: one status-line hint per day when no statusLine is set', () => {
   const h = fakeHome();
   const dir = makeRepo();
   const run = () => {
@@ -88,7 +88,7 @@ test('A1 SessionStart: one status-line hint per day when no statusLine is set', 
   assert.doesNotMatch(run(), /status line is not set/i, 'set: no hint');
 });
 
-test('A1 setup team: drafts .make-it-ship.json and .gitignore; init reports the first task type', () => {
+test('setup team: drafts .make-it-ship.json and .gitignore; init reports the first task type', () => {
   const dir = makeRepo({ 'package.json': { name: 'x', bin: { x: 'cli.js' }, scripts: { test: 'node --test' } } });
   const h = fakeHome();
   const p = ok(mis(dir, ['setup', 'team'], { env: h.env }));
@@ -110,7 +110,7 @@ test('A1 setup team: drafts .make-it-ship.json and .gitignore; init reports the 
   assert.match(l.firstTask, /test/i);
 });
 
-test('A3 mcp-setup: list shows known servers and where each is registered; add prints the command and runs it only with --write', () => {
+test('mcp-setup: list shows known servers and where each is registered; add prints the command and runs it only with --write', () => {
   const h = fakeHome();
   const dir = makeRepo({ '.mcp.json': { mcpServers: { github: { command: 'npx' } } } });
   writeFileSync(join(h.claude, '.claude.json'), JSON.stringify({ mcpServers: { context7: { command: 'npx' } } }));
@@ -136,7 +136,7 @@ test('A3 mcp-setup: list shows known servers and where each is registered; add p
   assert.notEqual(mis(dir, ['mcp-setup', 'add', 'nope'], { env: h.env }).code, 0);
 });
 
-test('A5 config get|set validates keys and values; version shows plugin, node and commit', () => {
+test('config get|set validates keys and values; version shows plugin, node and commit', () => {
   const h = fakeHome();
   assert.equal(ok(mis(h.home, ['config', 'get', 'style.default'], { env: h.env })).value, 'full');
   ok(mis(h.home, ['config', 'set', 'style.default', 'lite'], { env: h.env }));

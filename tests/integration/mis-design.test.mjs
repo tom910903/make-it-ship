@@ -1,4 +1,4 @@
-// M9-D D7: design image generation against a local stand-in for the OpenAI API (MIS_OPENAI_BASE_URL); no key → BLOCKED.
+// Design image generation against a local stand-in for the OpenAI API (MIS_OPENAI_BASE_URL); no key → BLOCKED.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';

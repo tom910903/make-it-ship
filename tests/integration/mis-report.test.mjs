@@ -89,7 +89,7 @@ test('plan and review can be piped on stdin (no temp files in the repo)', () => 
   assert.notEqual(mis(dir, ['review', 'add', 'quality', '-'], { input: 'looks good' }).code, 0);
 });
 
-test('report labels plan reviews by plan, not by code (M3 R2-3)', () => {
+test('report labels plan reviews by plan, not by code', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   ok(mis(dir, ['start', '--input', 'x']));
   ok(mis(dir, ['plan', 'set', '-'], { input: JSON.stringify({ goal: 'g', tasks: [{ id: 'T1', title: 't', acceptance: ['a'] }] }) }));
@@ -101,7 +101,7 @@ test('report labels plan reviews by plan, not by code (M3 R2-3)', () => {
   assert.match(md, /plan-critic: blocking 0, major 0 — 현재 계획 기준/);
 });
 
-test('report section 6 keeps non-check-specific reasons such as "no required checks defined" (M4 D2)', () => {
+test('report section 6 keeps non-check-specific reasons such as "no required checks defined"', () => {
   const dir = makeRepo();
   ok(mis(dir, ['start', '--input', 'x']));
   const md = readFileSync(join(dir, ok(mis(dir, ['report'])).path), 'utf8');
@@ -109,7 +109,7 @@ test('report section 6 keeps non-check-specific reasons such as "no required che
   assert.match(s6, /no required checks defined/);
 });
 
-test('quick mode: a detected user-facing surface without real-use QA is listed as not verified, verdict unchanged (M4 D3)', () => {
+test('quick mode: a detected user-facing surface without real-use QA is listed as not verified, verdict unchanged', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG, 'index.html': '<html></html>', 'lib.mjs': 'export const x = 1;\n',
     'test.mjs': "import {test} from 'node:test'; test('x', () => {});\n" });
   ok(mis(dir, ['start', '--input', 'x']));

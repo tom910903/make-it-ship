@@ -37,7 +37,7 @@ after(() => {
   try {
     if (chrome) b('stop');
     server.kill();
-    for (const d of [HOME, out]) rmSync(d, { recursive: true, force: true }); // M8 D11: no temp dirs left behind
+    for (const d of [HOME, out]) rmSync(d, { recursive: true, force: true }); // no temp dirs left behind
   } finally { unlock(); }
 });
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -113,7 +113,7 @@ test('interaction: select, check, hover, type, press Enter submits, scroll, view
   assert.equal(ok(b('js', 'innerWidth')).trim(), '375');
   ok(b('viewport', '1280x720'));
   const f = join(out, 'up.txt'); writeFileSync(f, 'hello');
-  failed(b('upload', '#file', f), /local-only[\s\S]*--remote/); // M8 R3-1: a normal browser attaches files only with --remote
+  failed(b('upload', '#file', f), /local-only[\s\S]*--remote/); // a normal browser attaches files only with --remote
   ok(b('upload', '#file', f, '--remote'));
   assert.equal(ok(b('js', 'document.querySelector("#file").files[0].name')).trim(), 'up.txt');
   ok(b('dialog-dismiss'));
@@ -212,7 +212,7 @@ test('chain runs commands in order and stops at the first error', () => {
   assert.match(ok(b('chain', f))[0].result, /127\.0\.0\.1/);
 });
 
-test('M8 D0: a blob: page and an about:blank popup made by a real site count as that site; opaque origins are not local; file pages are', () => {
+test('a blob: page and an about:blank popup made by a real site count as that site; opaque origins are not local; file pages are', () => {
   if (!chrome) return blocked(b('js', '1'));
   const site = base.replace('127.0.0.1', 'shop.test');
   ok(b('goto', `${site}/blob.html`));
@@ -228,7 +228,7 @@ test('M8 D0: a blob: page and an about:blank popup made by a real site count as 
   failed(b('chain', JSON.stringify([['storage']])), /--remote/);
   ok(b('closetab', String(popup.id)));
   ok(b('goto', `${base}/xframe`));
-  // a remote frame in a local page is judged by the frame, not by the page around it (M8 R2-5: always selectable)
+  // a remote frame in a local page is judged by the frame, not by the page around it (always selectable)
   assert.match(ok(b('frame', '#x')), /Switched to frame http:\/\/shop\.test:\d+\/next/);
   failed(b('js', '1'), /non-local page \(http:\/\/shop\.test:\d+\)/);
   ok(b('frame', 'main'));
@@ -258,13 +258,13 @@ test('remote upload: sending a file to a non-local page needs --remote (the guar
 const hits = () => JSON.parse(spawnSync(process.execPath, ['-e', `fetch('${base}/hits').then((r) => r.text()).then((t) => process.stdout.write(t))`], { encoding: 'utf8' }).stdout);
 const remoteHits = () => hits().filter((h) => h.host.startsWith('shop.test'));
 
-test('M8 R2-1: a file attached without --remote never leaves the machine, whatever page holds it and however the page sends it', () => {
+test('a file attached without --remote never leaves the machine, whatever page holds it and however the page sends it', () => {
   if (!chrome) return blocked(b('upload', '#f', 'x'));
-  // M8 R3-1: unconfirmed upload runs only in the local-only browser; the destination check and the hold stay as a second line
+  // unconfirmed upload runs only in the local-only browser; the destination check and the hold stay as a second line
   assert.equal(ok(b('start', '--local-only')).localOnly, true);
   const site = base.replace('127.0.0.1', 'shop.test');
   const f = join(out, 'secret.txt'); writeFileSync(f, 'internal data');
-  // the verifier's repro: a local file page whose form posts to a real site
+  // the original repro: a local file page whose form posts to a real site
   writeFileSync(join(dir, 'localform.html'), `<form method="post" action="${site}/up" enctype="multipart/form-data"><input type="file" id="f" name="f"><button id="send">Send</button></form>`);
   ok(b('goto', 'localform.html'));
   failed(b('upload', '#f', f), /upload[\s\S]*http:\/\/shop\.test:\d+[\s\S]*--remote/);
@@ -317,7 +317,7 @@ test('M8 R2-1: a file attached without --remote never leaves the machine, whatev
   ok(b('goto', `${site}/next`));
 });
 
-test('M8 D1: in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {
+test('in a chain each goto waits for its own page, so js right after a goto to a real site is refused without --remote', () => {
   if (!chrome) return blocked(b('chain', '[]'));
   const site = base.replace('127.0.0.1', 'shop.test');
   for (let i = 0; i < 3; i++) {
@@ -328,7 +328,7 @@ test('M8 D1: in a chain each goto waits for its own page, so js right after a go
   assert.equal(r[2].result, `${base}/slow`);
 });
 
-test('M8 D6: back/forward/reload report the page after the navigation; a 204 goto returns instead of hanging', () => {
+test('back/forward/reload report the page after the navigation; a 204 goto returns instead of hanging', () => {
   if (!chrome) return blocked(b('back'));
   ok(b('goto', base)); ok(b('goto', `${base}/next`));
   assert.equal(ok(b('back')).trim(), `Back to ${base}/`);
@@ -340,7 +340,7 @@ test('M8 D6: back/forward/reload report the page after the navigation; a 204 got
   assert.equal(ok(b('url')).trim(), `${base}/next`, 'a 204 keeps the current page');
 });
 
-test('M8 D2: the DevTools endpoint is a pipe: no DevToolsActivePort file and no TCP port listening in the browser', () => {
+test('the DevTools endpoint is a pipe: no DevToolsActivePort file and no TCP port listening in the browser', () => {
   if (!chrome) return blocked(b('status'));
   ok(b('goto', base));
   const s = ok(b('status'));
@@ -403,7 +403,7 @@ test('load-html, scoped/limited snapshot, clip screenshot, frame by url', () => 
   ok(b('frame', 'main'));
 });
 
-test('M9-D canary: N checks of each page record HTTP status and console errors; new errors and failed pages are alerts', () => {
+test('canary: N checks of each page record HTTP status and console errors; new errors and failed pages are alerts', () => {
   if (!chrome) return blocked(mis(dir, ['canary', base, '--checks', '1'], { env: ENV }));
   const r = mis(dir, ['canary', base, '--pages', '/,/next,/missing', '--checks', '2', '--interval', '0s'], { env: ENV });
   assert.equal(r.code, 1, r.err);
@@ -418,7 +418,7 @@ test('M9-D canary: N checks of each page record HTTP status and console errors; 
   assert.deepEqual(healthy.alerts.filter((a) => a.level !== 'MEDIUM'), [], 'the error the baseline already had is not an alert');
 });
 
-test('M9 canary: every check saves a screenshot and a load time; --discover adds same-origin pages from sitemap.xml and links', () => {
+test('canary: every check saves a screenshot and a load time; --discover adds same-origin pages from sitemap.xml and links', () => {
   if (!chrome) return blocked(mis(dir, ['canary', base, '--discover', '--checks', '1'], { env: ENV }));
   const bl = ok(mis(dir, ['canary', base, '--pages', '/next', '--baseline'], { env: ENV }));
   assert.equal(decodePng(readFileSync(bl.pages[0].screenshot)).width > 0, true);
@@ -442,7 +442,7 @@ test('stop shuts the daemon and the browser down; restart brings it back', async
   assert.equal(ok(b('status')).running, false);
   assert.ok(!existsSync(join(s.stateDir, 'state.json')));
   assert.throws(() => process.kill(s.chromePid, 0));
-  assert.ok(!existsSync(profile), 'M8 D10: the browser profile temp dir is removed');
+  assert.ok(!existsSync(profile), 'the browser profile temp dir is removed');
 });
 
 test('idle shutdown', async () => {
@@ -456,7 +456,7 @@ test('idle shutdown', async () => {
   assert.equal(ok(mis(d2, ['browse', 'status'], { env })).running, false);
 });
 
-test('M8 R2-2: real screenshots: the same page moved 2px scores high (pass), a different page in the same layout fails', () => {
+test('real screenshots: the same page moved 2px scores high (pass), a different page in the same layout fails', () => {
   if (!chrome) return blocked(b('goto', 'about:blank'));
   const body = (margin, h, p, btn) => `<body style="margin:${margin}"><style>body{font:16px sans-serif}</style><h1>${h}</h1><p>${p}</p><button>${btn}</button>`;
   writeFileSync(join(dir, 'vv-a.html'), body('20px', 'Demo', 'Welcome to the demo page. It has a short paragraph.', 'Start'));

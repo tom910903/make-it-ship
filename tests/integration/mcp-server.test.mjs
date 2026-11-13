@@ -31,7 +31,7 @@ test('skills tools: plugin, local and global learned skills', async () => {
     assert.ok(all.some((x) => x.name === 'run' && x.scope === 'plugin'));
     assert.ok(all.some((x) => x.name === 'csv-export' && x.scope === 'local'));
     assert.ok(all.some((x) => x.name === 'deploy' && x.scope === 'global'));
-    // M9 r2 D5: an untrusted repository's skill bodies are not returned; name and description come framed as repository content
+    // an untrusted repository's skill bodies are not returned; name and description come framed as repository content
     const untrusted = (await s.call('load_skills_local', { names: ['csv-export'] })).json[0];
     assert.equal(untrusted.body, undefined);
     assert.equal(untrusted.trusted, false);

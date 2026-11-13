@@ -1,4 +1,4 @@
-// M9 round-2 A/B/C/F verifier defects D1-D6: quoted operators are words, more protected writes, claude/launch spellings,
+// Guard edge cases: quoted operators are words, more protected writes, claude/launch spellings,
 // MCP writers, tty keys option words.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +28,7 @@ const decide = (input, ctxs = both) => { const ds = ctxs.map((c) => classify(inp
 const expectAll = (want, cmds) => { for (const c of cmds) assert.equal(decide(typeof c === 'string' ? bash(c) : c), want, typeof c === 'string' ? c : JSON.stringify(c)); };
 const cmds = (src) => commandsOf(src).commands.map((c) => ({ argv: c.argv, redirects: c.redirects }));
 
-test('D1: quoted, escaped and ANSI-C quoted operators are literal words; only unquoted text is an operator', () => {
+test('quoted, escaped and ANSI-C quoted operators are literal words; only unquoted text is an operator', () => {
   const table = [
     [`echo '>' f`, [{ argv: ['echo', '>', 'f'], redirects: [] }]],
     [`echo ">" f`, [{ argv: ['echo', '>', 'f'], redirects: [] }]],
@@ -62,7 +62,7 @@ test('D1: quoted, escaped and ANSI-C quoted operators are literal words; only un
   assert.deepEqual(parseShell(`x=$(echo '>' y)`).commands[0].argv, ['echo', '>', 'y']);
 });
 
-test('D1: every ask added in round 1 holds when a quoted or escaped ">" sits before the flag', () => {
+test('flag-based asks still hold when a quoted or escaped ">" sits before the flag', () => {
   for (const g of [`'>'`, `">"`, '\\>', `$'>'`]) {
     expectAll('ask', [`${M} uninstall ${g} --yes`, `${M} setup routing ${g} --write`, `${M} upgrade ${g} --yes`, `${M} mcp-setup add github ${g} --write`,
       `${M} doctor ${g} --fix`, `${M} launch ${g} --dangerously-skip-permissions`, `${M} skill add f.md ${g} --scope=user`,
@@ -74,7 +74,7 @@ test('D1: every ask added in round 1 holds when a quoted or escaped ">" sits bef
   expectAll('allow', [`cut -d '>' -f1 src/a.js`, `grep -c '>' src/a.js`, `echo '>'`, `echo "a > b" | grep '|'`, `${M} uninstall '>'`]);
 });
 
-test('D2: copies and moves into a protected directory, case variants, more ~/.claude entries, CLAUDE.local.md', () => {
+test('copies and moves into a protected directory, case variants, more ~/.claude entries, CLAUDE.local.md', () => {
   const C = join(HOME, '.claude');
   expectAll('ask', ['cp settings.json ~/.claude/', 'cp settings.json ~/.claude', 'mv CLAUDE.md ~/.claude', 'cp src/a.js settings.json ~/.claude/',
     'cp -r settings.json $HOME/.claude', 'rsync -a settings.json ~/.claude/',
@@ -89,7 +89,7 @@ test('D2: copies and moves into a protected directory, case variants, more ~/.cl
     { tool_name: 'Write', tool_input: { file_path: join(REPO, 'CLAUDE.local.md'), content: 'x' }, cwd: REPO }]);
 });
 
-test('D2: redirections the parser lost and downloaders/patch writing a protected file', () => {
+test('redirections the parser lost and downloaders/patch writing a protected file', () => {
   expectAll('ask', ['echo x &> ~/.claude/settings.json', 'echo x &>> ~/.claude/settings.json', 'echo x >| ~/.claude/settings.json',
     'exec 3> ~/.claude/settings.json', '> ~/.claude/settings.json', 'curl -o ~/.claude/settings.json https://example.invalid/s',
     'curl -sLo ~/.claude/settings.json https://example.invalid/s', 'curl --output ~/.claude/settings.json https://example.invalid/s',
@@ -99,7 +99,7 @@ test('D2: redirections the parser lost and downloaders/patch writing a protected
   expectAll('allow', ['echo x &> out.log', 'curl -o out.json https://example.invalid/s', 'wget -O - https://example.invalid/s', 'patch src/a.js < p.diff']);
 });
 
-test('D3: claude with global flags or through npx/bunx/pnpm dlx, and launch bypass spellings ask; reads pass', () => {
+test('claude with global flags or through npx/bunx/pnpm dlx, and launch bypass spellings ask; reads pass', () => {
   expectAll('ask', ['claude --debug mcp add x -- y', 'claude --model opus mcp add x -- y', 'claude --verbose plugin install x',
     'claude --debug plugin marketplace add o/r', 'npx @anthropic-ai/claude-code mcp add x -- y', 'npx -y @anthropic-ai/claude-code@latest plugin install x',
     'bunx @anthropic-ai/claude-code mcp add x -- y', 'pnpm dlx @anthropic-ai/claude-code mcp remove x', 'npm exec --yes @anthropic-ai/claude-code -- mcp add x y',
@@ -111,7 +111,7 @@ test('D3: claude with global flags or through npx/bunx/pnpm dlx, and launch bypa
     `${M} launch --resume`, 'npx prettier --write src']);
 });
 
-test('D4: MCP writers by more verbs, uri/url file: keys and nested paths', () => {
+test('MCP writers by more verbs, uri/url file: keys and nested paths', () => {
   const S = join(HOME, '.claude', 'settings.json'), CM = join(HOME, '.claude', 'CLAUDE.md');
   const mcp = (tool, input) => ({ tool_name: tool, tool_input: input, cwd: REPO });
   expectAll('ask', [mcp('mcp__fs__patch_file', { path: S }), mcp('mcp__ed__insert_text', { file: CM }), mcp('mcp__ed__set_contents', { path: S }),
@@ -122,7 +122,7 @@ test('D4: MCP writers by more verbs, uri/url file: keys and nested paths', () =>
     mcp('mcp__fs__patch_file', { path: join(REPO, 'src', 'a.js') }), mcp('mcp__ed__set_value', { url: 'https://example.invalid/x' })]);
 });
 
-test('D6: tty keys words that are not tmux send-keys options are typed text; real option words still ask', () => {
+test('tty keys words that are not tmux send-keys options are typed text; real option words still ask', () => {
   expectAll('allow', [`${M} tty keys repl -1 Enter`, `${M} tty keys repl -- -l Enter`, `${M} tty keys repl -42 Space -x Enter`, `${M} tty keys repl - Enter`]);
   expectAll('ask', [`${M} tty keys sh -l x`, `${M} tty keys sh -H 41`, `${M} tty keys sh echo Space -t x`, `${M} tty keys sh -N 3 x`, `${M} tty keys sh -lR x`,
     `${M} tty keys sh -- rm Space -rf Space '~' Enter`, `${M} tty keys sh -1 Space -X cancel`,

@@ -27,7 +27,7 @@ const statusline = (cwd, sid, h) => {
   return spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline.mjs')], { input: JSON.stringify({ cwd, session_id: sid }), encoding: 'utf8', env: { ...env, NO_COLOR: '1' } }).stdout;
 };
 
-test('F1: SubagentStart/Stop count running agents, 5+ minutes is stale, the status line shows agents and todos', () => {
+test('SubagentStart/Stop count running agents, 5+ minutes is stale, the status line shows agents and todos', () => {
   const dir = makeRepo(), h = home(), E = { MIS_STATE_HOME: h };
   const ONE_ROW = { preset: 'custom', items: ONE_ROW_ITEMS }; // the parts on one row, as before the focused default
   writeFileSync(join(h, 'config.json'), JSON.stringify({ statusLine: ONE_ROW }));
@@ -56,7 +56,7 @@ test('SubagentStop outside a git repository skips the deliverables check without
   assert.doesNotMatch(trace, /"error"/, trace);
 });
 
-test('F2: SubagentStop blocks once when files the agent reports creating are missing', () => {
+test('SubagentStop blocks once when files the agent reports creating are missing', () => {
   const dir = makeRepo({ 'src/a.js': 'x' }), E = { MIS_STATE_HOME: home() };
   const msg = 'Done. Created `src/missing.js` and wrote src/a.js. Also see https://example.com/x.js and /etc/hosts.txt (created).';
   const r = hook('SubagentStop', { session_id: 'S', agent_id: 'x', cwd: dir, last_assistant_message: msg }, E);
@@ -72,7 +72,7 @@ test('F2: SubagentStop blocks once when files the agent reports creating are mis
   assert.deepEqual(missingDeliverables('Added Node.js support and wrote a socket.io client.', dir, dir), [], 'names are not files');
 });
 
-test('F3: PermissionRequest hook allows plain read-only Bash, says nothing otherwise, fails open', () => {
+test('PermissionRequest hook allows plain read-only Bash, says nothing otherwise, fails open', () => {
   const dir = makeRepo(), E = { MIS_STATE_HOME: home() };
   const pr = (command) => hook('PermissionRequest', { hook_event_name: 'PermissionRequest', session_id: 'S', cwd: dir, tool_name: 'Bash', tool_input: { command } }, E);
   assert.deepEqual(pr('git status').json, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } });
@@ -81,7 +81,7 @@ test('F3: PermissionRequest hook allows plain read-only Bash, says nothing other
   assert.equal(bad.code, 0); assert.equal(bad.out, '');
 });
 
-test('F4: PreToolUse reminders are context only (never a decision) and fail open', () => {
+test('PreToolUse reminders are context only (never a decision) and fail open', () => {
   const dir = makeRepo(), E = { MIS_STATE_HOME: home() };
   const a = hook('PreToolUse', { session_id: 'S', cwd: dir, tool_name: 'Agent', tool_input: { prompt: 'x' } }, E);
   assert.equal(a.json.hookSpecificOutput.hookEventName, 'PreToolUse');
@@ -121,7 +121,7 @@ const edit = (dir, E, sid = 'S', file = 'src/a.js') => {
   hook('PostToolUse', { session_id: sid, cwd: dir, tool_name: 'Edit', tool_input: { file_path: join(dir, file) } }, E);
 };
 
-test('F5: Stop blocks an EXECUTING run with no check on the current code, with a reason and a limit; a check clears it', () => {
+test('Stop blocks an EXECUTING run with no check on the current code, with a reason and a limit; a check clears it', () => {
   const dir = executingRun(), E = { MIS_STATE_HOME: home() };
   assert.equal(hook('Stop', { session_id: 'S', cwd: dir }, E).out, '', 'a session that edited nothing is not held');
   edit(dir, E);
@@ -134,7 +134,7 @@ test('F5: Stop blocks an EXECUTING run with no check on the current code, with a
   assert.equal(hook('Stop', { session_id: 'S', cwd: dir }, E).json?.decision, undefined, 'current evidence: no block');
 });
 
-test('F5/F6 precedence: an active loop owns the stop; drift beats the simplifier; simplifier is opt-in and once per file set', () => {
+test('stop precedence: an active loop owns the stop; drift beats the simplifier; simplifier is opt-in and once per file set', () => {
   const dir = executingRun(), h = home(), E = { MIS_STATE_HOME: h };
   writeFileSync(join(h, 'config.json'), JSON.stringify({ simplifier: { enabled: true } }));
   edit(dir, E);
@@ -157,13 +157,13 @@ test('F5/F6 precedence: an active loop owns the stop; drift beats the simplifier
   assert.match(hook('Stop', { session_id: 'S', cwd: dir }, E).json.reason, /SIMPLIFY[\s\S]*src\/b\.js/, 'a new set of files asks again');
 });
 
-test('F6: the simplifier is off by default', () => {
+test('the simplifier is off by default', () => {
   const dir = makeRepo({ 'a.js': '' }), E = { MIS_STATE_HOME: home() };
   edit(dir, E, 'S', 'a.js');
   assert.equal(hook('Stop', { session_id: 'S', cwd: dir }, E).out, '');
 });
 
-test('F7/F11: SessionEnd writes a summary under the state dir and flushes hot paths; PreCompact and compact SessionStart keep todos', () => {
+test('SessionEnd writes a summary under the state dir and flushes hot paths; PreCompact and compact SessionStart keep todos', () => {
   const dir = makeRepo({ 'src/a.js': 'x', 'src/b.js': 'y' }), E = { MIS_STATE_HOME: home() };
   const elsewhere = makeRepo({ 'scripts/x.mjs': '' });
   hook('PostToolUse', { session_id: 'S1', cwd: dir, tool_name: 'Read', tool_input: { file_path: join(elsewhere, 'scripts/x.mjs') } }, E);
@@ -184,7 +184,7 @@ test('F7/F11: SessionEnd writes a summary under the state dir and flushes hot pa
   assert.deepEqual(mergeHotPaths([{ path: 'x', count: 5 }], { y: 6, x: 2 }, 1), [{ path: 'x', count: 7 }]);
 });
 
-test('F11: a lasting instruction in a prompt is suggested as a directive, never saved', () => {
+test('a lasting instruction in a prompt is suggested as a directive, never saved', () => {
   const dir = makeRepo(), E = { MIS_STATE_HOME: home() };
   const r = hook('UserPromptSubmit', { prompt: 'Fix the parser. Always use pnpm in this repo.', cwd: dir, session_id: 'S' }, E);
   assert.match(r.ctx, /"Always use pnpm in this repo\."[\s\S]*project_memory_add_directive[\s\S]*do not save it without asking/);
@@ -198,7 +198,7 @@ test('F11: a lasting instruction in a prompt is suggested as a directive, never 
   assert.deepEqual(directiveCandidates('테스트가 항상 실패해'), [], 'a statement is not an instruction');
 });
 
-test('F8: mis debug scope makes the guard ask for edits outside the hypothesis; --clear lifts it', () => {
+test('mis debug scope makes the guard ask for edits outside the hypothesis; --clear lifts it', () => {
   const dir = makeRepo({ 'src/parser/a.js': '', 'src/other.js': '' }), h = home();
   const env = { ...process.env, MIS_STATE_HOME: h }; delete env.NODE_TEST_CONTEXT; delete env.CLAUDE_CODE_SESSION_ID;
   const guard = (file) => {
@@ -224,7 +224,7 @@ test('F8: mis debug scope makes the guard ask for edits outside the hypothesis; 
   assert.match(readFileSync(join(ROOT, 'skills', 'debug', 'SKILL.md'), 'utf8'), /mis debug scope <file\|dir…>[\s\S]*--clear/);
 });
 
-test('F9: run-less events go to the project timeline with the session kind, and trace_timeline reads them', async () => {
+test('run-less events go to the project timeline with the session kind, and trace_timeline reads them', async () => {
   const dir = makeRepo(), h = home(), E = { MIS_STATE_HOME: h };
   hook('SessionStart', { source: 'startup', session_id: 'S', cwd: dir }, { ...E, CLAUDE_CODE_ENTRYPOINT: 'cli' });
   hook('SessionStart', { source: 'startup', session_id: 'W', cwd: dir }, { ...E, MIS_TEAM_ID: 't1' });
@@ -247,7 +247,7 @@ test('F9: run-less events go to the project timeline with the session kind, and 
   assert.equal(sessionKind({}), 'interactive', 'no positive signal: a human is assumed');
 });
 
-test('F10: mis setup routing shows a diff and writes nothing; --write replaces the section once (idempotent)', () => {
+test('mis setup routing shows a diff and writes nothing; --write replaces the section once (idempotent)', () => {
   const gstack = '# Project\n\nIntro.\n\n## Skill routing\n\n- bugs → invoke investigate\n- ship → invoke ship\n\n## Other\nkeep me\n';
   const dir = makeRepo({ 'CLAUDE.md': gstack });
   const hash = () => createHash('sha256').update(readFileSync(join(dir, 'CLAUDE.md'))).digest('hex');
@@ -274,7 +274,7 @@ test('F10: mis setup routing shows a diff and writes nothing; --write replaces t
   assert.equal(mis(dir, ['setup', 'other']).code, 1);
 });
 
-test('F10: SessionStart discipline has the question format and the next-skill suggestion (proactive can be turned off)', () => {
+test('SessionStart discipline has the question format and the next-skill suggestion (proactive can be turned off)', () => {
   const t = disciplineText(ROOT);
   assert.match(t, /restate the decision in one line, give your recommendation and why, then 2-4 concrete options/);
   assert.match(t, /suggest in one line the one skill that fits next/);
@@ -286,7 +286,7 @@ test('F10: SessionStart discipline has the question format and the next-skill su
   assert.doesNotMatch(r.ctx, /fits next/);
 });
 
-test('M9-F hooks write timeline and summaries only for the host cwd, never for the process cwd', () => {
+test('the hooks write timeline and summaries only for the host cwd, never for the process cwd', () => {
   const dir = makeRepo(), E = { MIS_STATE_HOME: home() };
   const e = { ...process.env, ...E }; delete e.NODE_TEST_CONTEXT;
   for (const ev of ['SessionStart', 'SubagentStart', 'SubagentStop', 'SessionEnd']) spawnSync(process.execPath, [HOOKS, ev], { cwd: dir, input: JSON.stringify({ session_id: 'S', agent_id: 'a' }), encoding: 'utf8', env: e });
@@ -294,7 +294,7 @@ test('M9-F hooks write timeline and summaries only for the host cwd, never for t
   assert.ok(!existsSync(join(stateRoot(dir), 'session-summaries')));
 });
 
-test('M9-F hooks stay fail-open with an unwritable home', () => {
+test('the hooks stay fail-open with an unwritable home', () => {
   for (const ev of ['SubagentStart', 'SubagentStop', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'SessionEnd', 'PreCompact']) {
     const r = hook(ev, { session_id: 'S', cwd: '/', agent_id: 'a', tool_name: 'TodoWrite', tool_input: { todos: [] } }, { MIS_STATE_HOME: '/dev/null/nope' });
     assert.equal(r.code, 0, `${ev}: ${r.err}`);

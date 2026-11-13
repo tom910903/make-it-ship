@@ -1,4 +1,4 @@
-// M9-B pure helpers: secret scan, release, plan documents, plan-tune, diagrams, JSONL merge, decisions, keyword gates.
+// Pure helpers of the flow commands: secret scan, release, plan documents, plan-tune, diagrams, JSONL merge, decisions, keyword gates.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scanText, scanPatch, describeFindings } from '../../scripts/lib/redact.mjs';

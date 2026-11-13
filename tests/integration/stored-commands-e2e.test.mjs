@@ -1,5 +1,5 @@
-// M9 round-2 D/E verifier defects end to end: N2 stored-command executors refuse nested external mis commands (MIS_CLI),
-// N3 approve proposal shows and applies exactly change.patch, N5 trace.jsonl is masked, N8 connect refuses copied or
+// End to end: stored-command executors refuse nested external mis commands (MIS_CLI), approve proposal shows and
+// applies exactly change.patch, trace.jsonl is masked, connect refuses copied or
 // hardlinked browser data. Every process gets a temp HOME / MIS_STATE_HOME (fakeHome); codex is a stub on PATH.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +14,7 @@ const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json ?? r.o
 const envOf = (h) => { const e = { ...process.env, ...h.env }; for (const k of ['CLAUDE_CODE_SESSION_ID', 'MIS_TEAM_ID', 'NODE_TEST_CONTEXT', 'MIS_CLI']) delete e[k]; return e; };
 const stubCodex = (h) => { const log = join(h.home, 'codex.log'); writeFileSync(join(h.bin, 'codex'), `#!/bin/sh\necho "CODEX CALLED: $*" >> "${log}"\necho answer\n`); chmodSync(join(h.bin, 'codex'), 0o755); return log; };
 
-test('N2: the autoresearch evaluator, the tournament bench, deploy steps, mis health and the session create baseline run with MIS_CLI: a nested `mis ask codex` in their scripts is refused', () => {
+test('the autoresearch evaluator, the tournament bench, deploy steps, mis health and the session create baseline run with MIS_CLI: a nested `mis ask codex` in their scripts is refused', () => {
   const h = fakeHome(), log = stubCodex(h);
   const nested = `"${process.execPath}" "${MIS}" ask codex leak-from-script`;
   const dir = makeRepo({ 'ev.sh': `${nested} >/dev/null 2>err.txt; echo '{"pass":true}'\n`, 'dep.sh': `${nested}\n`, '.make-it-ship/score': '1\n',
@@ -31,7 +31,7 @@ test('N2: the autoresearch evaluator, the tournament bench, deploy steps, mis he
   writeFileSync(join(dir, 'a.diff'), '--- a/.make-it-ship/score\n+++ b/.make-it-ship/score\n@@ -1 +1 @@\n-1\n+4\n');
   const t = ok(run(['self-improve', 'tournament', '--bench', `${nested} && echo '{"score":9}'`, 'a.diff']));
   assert.equal(t.winner, null, JSON.stringify(t));
-  // R3-DE-1: mis health and the session create baseline run the stored check (`sh chk.sh`) the same way
+  // mis health and the session create baseline run the stored check (`sh chk.sh`) the same way
   assert.equal(ok(run(['health', '--no-record'])).checks.test.status, 'FAIL');
   assert.equal(ok(run(['session', 'create', 'feature', 'x'])).baseline.checks[0].status, 'FAIL');
   assert.equal(existsSync(log), false, 'codex was never called');
@@ -45,7 +45,7 @@ function proposalRepo() {
   return dir;
 }
 
-test('N3: approve proposal asks with the files change.patch really touches (and a preview); a patch changed after propose is refused; --sha pins it', () => {
+test('approve proposal asks with the files change.patch really touches (and a preview); a patch changed after propose is refused; --sha pins it', () => {
   const h = fakeHome(), dir = proposalRepo();
   const p = ok(mis(dir, ['self-improve', 'propose', 't1', '--patch', 'p1.diff'], { env: h.env }));
   assert.match(p.patchSha, /^[0-9a-f]{64}$/); assert.match(p.next, new RegExp(`--sha ${p.patchSha.slice(0, 12)}`));
@@ -71,14 +71,14 @@ test('N3: approve proposal asks with the files change.patch really touches (and 
   assert.match(mis(dir, ['self-improve', 'propose', 'mv', '--patch', 'mv.diff'], { env: h.env }).err, /only process and skill files[\s\S]*src\/z\.json/);
 });
 
-test('N3 end to end: mis detach --log onto change.patch asks through guard.mjs', () => {
+test('end to end: mis detach --log onto change.patch asks through guard.mjs', () => {
   const h = fakeHome(), dir = makeRepo();
   const r = spawnSync(process.execPath, [GUARD], { cwd: dir, encoding: 'utf8', env: envOf(h),
     input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: `node "${MIS}" detach --log .make-it-ship/self-improve/proposals/p1/change.patch -- cat evil.patch` }, cwd: dir }) });
   assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'ask');
 });
 
-test('N5: a URL password in an ask never reaches trace.jsonl', () => {
+test('a URL password in an ask never reaches trace.jsonl', () => {
   const h = fakeHome(), dir = makeRepo();
   mkdirSync(h.state, { recursive: true });
   writeFileSync(join(h.state, 'config.json'), JSON.stringify({ telemetry: { enabled: true, endpoint: 'https://alice:hunter2pass@tele.example/ingest' } }));
@@ -89,7 +89,7 @@ test('N5: a URL password in an ask never reaches trace.jsonl', () => {
   assert.ok(!readFileSync(join(h.state, 'trace.jsonl'), 'utf8').includes('hunter2pass'));
 });
 
-test('N8: connect refuses a dir with browser profile data files (no Local State), and hardlinks of the real Cookies even in its own profile', () => {
+test('connect refuses a dir with browser profile data files (no Local State), and hardlinks of the real Cookies even in its own profile', () => {
   const h = fakeHome(), dir = makeRepo();
   const env = { ...h.env, MIS_BROWSE_HEADLESS_ONLY: '1', MIS_BROWSE_IDLE_MS: '300000' };
   const b = (...a) => mis(dir, ['browse', ...a], { env });

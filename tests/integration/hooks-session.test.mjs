@@ -84,7 +84,7 @@ test('UserPromptSubmit: keyword context injected, style phrase persists the leve
   assert.equal(hook('UserPromptSubmit', { prompt: 'rename the variable', cwd: dir }, { MIS_STATE_HOME: h }).out, '');
 });
 
-test('M6 D3: the style level is per session; the default applies to new sessions', () => {
+test('the style level is per session; the default applies to new sessions', () => {
   const dir = makeRepo(), h = home(), env = { MIS_STATE_HOME: h };
   hook('UserPromptSubmit', { prompt: 'normal mode', cwd: dir, session_id: 'A' }, env);
   assert.doesNotMatch(hook('SessionStart', { cwd: dir, session_id: 'A' }, env).ctx, /MAKE IT SHIP STYLE/, 'session A is off');
@@ -97,14 +97,14 @@ test('M6 D3: the style level is per session; the default applies to new sessions
   assert.match(hook('SubagentStart', { cwd: dir, session_id: 'E', agent_type: 'x' }, env).ctx, /level: ultra/);
 });
 
-test('M6 D12: an unwritable home does not drop the keyword context', () => {
+test('an unwritable home does not drop the keyword context', () => {
   const dir = makeRepo(), f = join(home(), 'file');
   writeFileSync(f, 'x');
   const r = hook('UserPromptSubmit', { prompt: 'tdd this', cwd: dir, session_id: 'A' }, { MIS_STATE_HOME: f });
   assert.match(r.ctx, /TDD mode/);
 });
 
-test('M6 R2-8: the style notice is only given when the level was really saved', () => {
+test('the style notice is only given when the level was really saved', () => {
   const dir = makeRepo(), f = join(home(), 'file');
   writeFileSync(f, 'x');
   const r = hook('UserPromptSubmit', { prompt: 'style lite', cwd: dir, session_id: 'A' }, { MIS_STATE_HOME: f });

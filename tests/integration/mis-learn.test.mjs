@@ -31,7 +31,7 @@ test('learn: validated, append-only, latest wins per key, stale when referenced 
   assert.match(md, /## Preference/);
 });
 
-test('learn list refreshes learnings.md so STALE shows without a new add (M5 L-4)', () => {
+test('learn list refreshes learnings.md so STALE shows without a new add', () => {
   const dir = makeRepo({ 'src/b.js': 'x' });
   ok(mis(dir, ['learn', 'add', '-'], { input: L({ key: 'b-file', files: ['src/b.js'] }) }));
   rmSync(join(dir, 'src/b.js'));

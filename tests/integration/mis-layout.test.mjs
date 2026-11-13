@@ -120,7 +120,7 @@ test('end to end: init --write, layout write, then the working tree has no layou
   assert.match(git(dir, 'status', '--porcelain', '-uall'), /\?\? \.ai\/index\.md/);
 });
 
-test('D3: an invalid config during a run makes plan set and plan check refuse (fail closed, like start)', () => {
+test('an invalid config during a run makes plan set and plan check refuse (fail closed, like start)', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   write(dir, { 'zzz.json': { ...PLAN, plannedFiles: ['zzz/x.ts'] }, 'docs/make-it-ship/plans/p.md': DOC('src/greet.js') });
   ok(mis(dir, ['start', '--input', 'greet']));
@@ -134,7 +134,7 @@ test('D3: an invalid config during a run makes plan set and plan check refuse (f
   assert.match(c.json.errors.join('\n'), /\.make-it-ship\.json invalid/);
 });
 
-test('D1: mis layout write refuses a target outside the repo (a symlinked .ai) before writing anything', () => {
+test('mis layout write refuses a target outside the repo (a symlinked .ai) before writing anything', () => {
   const outside = makeRepo();
   const dir = makeRepo({ '.make-it-ship.json': CFG });
   symlinkSync(outside, join(dir, '.ai'));
@@ -149,7 +149,7 @@ test('D1: mis layout write refuses a target outside the repo (a symlinked .ai) b
   assert.equal(existsSync(join(outside, 'missing')), false);
 });
 
-test('D2: the report lists human docs changed in the run that miss a translation (section 6, not the verdict)', () => {
+test('the report lists human docs changed in the run that miss a translation (section 6, not the verdict)', () => {
   const dir = makeRepo({ '.make-it-ship.json': CFG, 'docs/guide/old.md': '# old\n' });
   write(dir, { 'p.json': { ...PLAN, tasks: [{ ...PLAN.tasks[0], files: ['src/greet.js', 'docs/guide/g.md', 'docs/guide/g.ko.md'] }] } });
   ok(mis(dir, ['start', '--input', 'greet']));
@@ -163,7 +163,7 @@ test('D2: the report lists human docs changed in the run that miss a translation
   assert.ok(!r.reasons.some((x) => /translation/.test(x)), 'verdict reasons unchanged');
 });
 
-test('D6: init --layout --write adds only "layout" to an existing config; the init hint names it', () => {
+test('init --layout --write adds only "layout" to an existing config; the init hint names it', () => {
   const dir = makeRepo({ 'package.json': { scripts: { test: 'node --test' } }, 'src/a.js': '', '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['make', 'x'] } } } });
   const p = ok(mis(dir, ['init']));
   assert.match(p.message, /mis init --layout --write/);

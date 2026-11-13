@@ -1,4 +1,4 @@
-// M9-D D6: gbrain family with a stub gbrain CLI and a local bare git repo as the artifacts remote (nothing leaves the machine).
+// gbrain family with a stub gbrain CLI and a local bare git repo as the artifacts remote (nothing leaves the machine).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, chmodSync, readFileSync, existsSync, mkdtempSync, mkdirSync } from 'node:fs';
@@ -50,7 +50,7 @@ test('ingest --probe writes nothing; enqueue + sync commit to the brain repo, pu
   assert.equal(existsSync(join(h.state, 'gbrain.json')), false); assert.equal(existsSync(join(h.state, 'brain')), false);
 });
 
-test('M9 fix1 D5: trust tiers hold at enqueue, sync and import (artifacts-only pushes docs and artifacts only, full pushes source, deny nothing); D8: detect runs no gbrain doctor', () => {
+test('trust tiers hold at enqueue, sync and import (artifacts-only pushes docs and artifacts only, full pushes source, deny nothing); detect runs no gbrain doctor', () => {
   const h = env(), dir = makeRepo({ 'src/core.c': 'int secret_source;\n', 'docs/a.md': '# a\n', '.make-it-ship/wiki/w.md': '# w\n' });
   const remote = mkdtempSync(join(tmpdir(), 'mis-brain-remote-'));
   execFileSync('git', ['init', '-q', '--bare', remote]);

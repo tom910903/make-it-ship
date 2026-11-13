@@ -12,7 +12,7 @@ const REPO = '/work/repo';
 const req = (command, cwd = REPO) => permissionDecision({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command }, cwd });
 const allowed = (c) => req(c)?.hookSpecificOutput?.decision?.behavior === 'allow';
 
-test('F3: plain read-only commands are auto-allowed', () => {
+test('plain read-only commands are auto-allowed', () => {
   for (const c of ['ls', 'ls -la src', 'git status', 'git status --short', 'git log --oneline -5', 'git diff HEAD~1', 'git show HEAD:README.md',
     'git branch', 'git branch -a', 'git branch --show-current', 'cat README.md', 'head -n 5 a.txt', 'grep -rn foo src', 'rg foo', 'find . -name "*.js"', 'pwd', 'wc -l a b']) {
     assert.ok(allowed(c), c);
@@ -20,7 +20,7 @@ test('F3: plain read-only commands are auto-allowed', () => {
   }
 });
 
-test('F3: metacharacters, heredocs, redirects, wrappers, assignments and writers get no decision', () => {
+test('metacharacters, heredocs, redirects, wrappers, assignments and writers get no decision', () => {
   for (const c of ['ls; rm -rf x', 'ls && rm x', 'git log | head', 'cat a > b', 'cat < a', 'cat <<EOF\nx\nEOF', 'echo $(rm x)', 'echo `rm x`', 'echo $HOME',
     'ls\nrm x', 'ls &', '(ls)', '{ ls; }', 'cat a\\ b',
     'GIT_PAGER=sh git log', 'env git status', 'sudo ls', 'xargs rm', 'timeout 5 ls', 'nice ls', 'sh -c ls', 'bash -c "ls"', 'eval ls',
@@ -34,7 +34,7 @@ test('F3: metacharacters, heredocs, redirects, wrappers, assignments and writers
   assert.equal(permissionDecision({}), null);
 });
 
-test('F3: no command the guard asks about or denies is ever auto-allowed (every literal in the guard tests)', () => {
+test('no command the guard asks about or denies is ever auto-allowed (every literal in the guard tests)', () => {
   const lits = new Set();
   for (const f of ['tests/unit/policy.test.mjs', 'tests/integration/guard.test.mjs']) {
     for (const m of readFileSync(join(ROOT, f), 'utf8').matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"/g)) lits.add((m[1] ?? m[2]).replace(/\\(.)/g, '$1'));
@@ -49,7 +49,7 @@ test('F3: no command the guard asks about or denies is ever auto-allowed (every 
   assert.ok(guarded > 50, `corpus covers the guard tables (${guarded})`);
 });
 
-test('F3: a user permissions.ask rule keeps the prompt', () => {
+test('a user permissions.ask rule keeps the prompt', () => {
   const proj = mkdtempSync(join(tmpdir(), 'mis-proj-'));
   assert.ok(allowed('git log -1'));
   mkdirSync(join(proj, '.claude'));
@@ -62,7 +62,7 @@ test('F3: a user permissions.ask rule keeps the prompt', () => {
   writeFileSync(join(process.env.CLAUDE_CONFIG_DIR, 'settings.json'), '{}');
 });
 
-test('F3: readOnlyCommand is the parser-based check (exported for reuse)', () => {
+test('readOnlyCommand is the parser-based check (exported for reuse)', () => {
   assert.equal(readOnlyCommand('git status'), true);
   assert.equal(readOnlyCommand('git status # note'), true, 'a comment is not a command');
   assert.equal(readOnlyCommand('ls x; rm y'), false);

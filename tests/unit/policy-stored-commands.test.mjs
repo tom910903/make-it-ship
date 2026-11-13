@@ -1,4 +1,4 @@
-// M9 round-2 D/E verifier (N1, N3-N7): guard and mis read the same stored files, asks show what really happens.
+// Guard and mis read the same stored files, and asks show what really happens.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -17,13 +17,13 @@ function repo(files = {}, base = tmpdir()) {
 }
 const v = (r, command, cwd = r, extra = {}) => classify({ tool_name: 'Bash', tool_input: { command }, cwd }, { repoRoot: r, activeRun: false, currentBranch: 'main', ...extra });
 
-test('N5: maskSecrets hides the password of scheme://user:password@ URLs and keeps the host', () => {
+test('maskSecrets hides the password of scheme://user:password@ URLs and keeps the host', () => {
   const m = maskSecrets('to https://alice:hunter2pass@tele.example/ingest and postgres://u:p4ssw0rd@db:5432/x', {});
   assert.ok(!m.includes('hunter2pass') && !m.includes('p4ssw0rd'), m);
   assert.match(m, /tele\.example\/ingest/); assert.match(m, /db:5432/);
 });
 
-test('N6: ask file lists show paths relative to the repository, cut from the left so the file name stays visible', () => {
+test('ask file lists show paths relative to the repository, cut from the left so the file name stays visible', () => {
   let base = realpathSync(mkdtempSync(join(tmpdir(), 'mis-de-long-')));
   base = join(base, 'a'.repeat(60), 'b'.repeat(60), 'c'.repeat(60)); mkdirSync(base, { recursive: true });
   const r = repo({ '.make-it-ship/wiki/deep/deeper/w.md': '# w' }, base);
@@ -36,7 +36,7 @@ test('N6: ask file lists show paths relative to the repository, cut from the lef
   } finally { if (saved === undefined) delete process.env.MIS_STATE_HOME; else process.env.MIS_STATE_HOME = saved; }
 });
 
-test('N7: asks for external/approval mis commands show the env assignments in front of the command', () => {
+test('asks for external/approval mis commands show the env assignments in front of the command', () => {
   const r = repo();
   const p = v(r, `MIS_PAIR_TUNNEL_CMD='evil-tunnel --to x' ${M} pair-agent start`);
   assert.equal(p.decision, 'ask'); assert.match(p.reason, /tunnel command: evil-tunnel --to x/); assert.doesNotMatch(p.reason, /ngrok http/);
@@ -46,7 +46,7 @@ test('N7: asks for external/approval mis commands show the env assignments in fr
   assert.match(v(r, `MIS_STATE_HOME=/elsewhere ${M} telemetry sync`).reason, /MIS_STATE_HOME=\/elsewhere/);
 });
 
-test('N1: guard reads the stored command from the same repository root mis uses (git rev-parse), even under a bogus .git dir', () => {
+test('guard reads the stored command from the same repository root mis uses (git rev-parse), even under a bogus .git dir', () => {
   const r = repo({
     '.make-it-ship/autoresearch/m1/evaluator.json': { command: `${M} ask codex leak1; echo '{"pass":true}'`, timeoutSec: 5, output: 'json' },
     '.make-it-ship/deploy.json': { deployCmd: 'fly deploy --app shop' },
@@ -68,8 +68,8 @@ test('N1: guard reads the stored command from the same repository root mis uses 
   for (const d of [r, fine]) rmSync(d, { recursive: true, force: true });
 });
 
-test('M9 r3: env -C / --chdir (and sudo -D) move where a stored-command mis runs, like cd: the guard cannot follow it and asks', () => {
-  // repro from the r3 D/E report: the root evaluator is harmless, the nested repository's evaluator calls codex
+test('env -C / --chdir (and sudo -D) move where a stored-command mis runs, like cd: the guard cannot follow it and asks', () => {
+  // repro: the root evaluator is harmless, the nested repository's evaluator calls codex
   const ev = (command) => ({ command, timeoutSec: 5, output: 'json' });
   const r = repo({ '.make-it-ship/autoresearch/m1/evaluator.json': ev(`echo '{"pass":true}'`) });
   const other = join(r, 'other'); mkdirSync(other); spawnSync('git', ['init', '-q'], { cwd: other });
@@ -80,7 +80,7 @@ test('M9 r3: env -C / --chdir (and sudo -D) move where a stored-command mis runs
   for (const cmd of [`env -C other ${M} autoresearch eval m1`, `env --chdir other ${M} autoresearch eval m1`, `env --chdir=other ${M} autoresearch eval m1`,
     `env -Cother ${M} autoresearch eval m1`, `env -u X -C other FOO=1 ${M} autoresearch eval m1`, `sudo -D other ${M} autoresearch eval m1`,
     `env -C other sh -c '${M} autoresearch eval m1'`,
-    // M9 r4: spaced sudo --chdir, clustered short options, -C then -S
+    // spaced sudo --chdir, clustered short options, -C then -S
     `sudo --chdir other ${M} autoresearch eval m1`, `env -vC other ${M} autoresearch eval m1`, `env -iC other ${M} autoresearch eval m1`,
     `env -0C other ${M} autoresearch eval m1`, `env -C other -S '${M} autoresearch eval m1'`]) {
     const x = v(r, cmd); assert.equal(x.decision, 'ask', cmd); assert.match(x.reason, /cannot tell which repository/, cmd);
@@ -89,7 +89,7 @@ test('M9 r3: env -C / --chdir (and sudo -D) move where a stored-command mis runs
   rmSync(r, { recursive: true, force: true });
 });
 
-test('N3/N4: mis options that write to a chosen path, letter-case variants and symlinked redirects reach the stored-file check', () => {
+test('mis options that write to a chosen path, letter-case variants and symlinked redirects reach the stored-file check', () => {
   const r = repo({ '.make-it-ship/self-improve/proposals/p1/change.patch': '', '.make-it-ship/deploy.json': '{}' });
   const patch = '.make-it-ship/self-improve/proposals/p1/change.patch';
   for (const cmd of [`${M} detach --log ${patch} -- cat evil.patch`, `${M} detach --log=${patch} -- cat evil.patch`, `${M} wait auto --log ${patch} -- true`,

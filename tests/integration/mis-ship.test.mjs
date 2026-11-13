@@ -54,7 +54,7 @@ test('ship refuses readiness when not VERIFIED and warns on the default branch',
   assert.match(readFileSync(join(m, ok(mis(m, ['ship'])).path), 'utf8'), /- \[ \] 기본 브랜치가 아님 \(main\)/);
 });
 
-test('ship.md "Not verified" does not print "없음" next to real items (M4 D7)', async () => {
+test('ship.md "Not verified" does not print "없음" next to real items', async () => {
   const { renderShip } = await import('../../scripts/lib/ship.mjs');
   const out = renderShip({ root: '/nonexistent', state: { runId: 'r', plan: { goal: 'g', tasks: [] }, evidence: [], baseCommit: null },
     verdict: { verdict: 'VERIFIED', reasons: [] }, ctx: { required: [], treeHash: 'abcdef123456' }, changes: [], debt: [{ file: 'a.js', line: 1, text: 'x', trigger: false }] }).markdown;
@@ -63,7 +63,7 @@ test('ship.md "Not verified" does not print "없음" next to real items (M4 D7)'
   assert.match(nv, /shortcut/);
 });
 
-test('ship: changelog category ignores incidental "error" in a feature goal; checklist does not ask for a post-report re-check (M4 R2-1, R2-3)', async () => {
+test('ship: changelog category ignores incidental "error" in a feature goal; checklist does not ask for a post-report re-check', async () => {
   const { renderShip } = await import('../../scripts/lib/ship.mjs');
   const base = { root: '/nonexistent', verdict: { verdict: 'VERIFIED', reasons: [] }, ctx: { required: [], treeHash: 'abcdef123456' }, changes: [], debt: [] };
   const feat = renderShip({ ...base, state: { runId: 'r', plan: { goal: 'Add a settings panel that shows an inline error for invalid input', tasks: [{ title: 'panel' }] }, evidence: [] } }).markdown;
@@ -73,7 +73,7 @@ test('ship: changelog category ignores incidental "error" in a feature goal; che
   assert.doesNotMatch(feat, /재실행/);
 });
 
-test('config changed after the report: the reason points to a follow-up run, not to a refused approve (M4 R2-1)', () => {
+test('config changed after the report: the reason points to a follow-up run, not to a refused approve', () => {
   const C1 = { version: 1, checks: { unit: { argv: ['node', '-e', '0'] } } };
   const dir = makeRepo({ '.make-it-ship.json': C1 });
   ok(mis(dir, ['start', '--input', 'x']));

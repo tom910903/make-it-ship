@@ -67,33 +67,33 @@ test('renderStructure: rules, purposes and doc rules, deterministic (the generat
   assert.equal(renderStructure(LAYOUT), md);
 });
 
-test('config: layout doc folders must be repo-relative and stay inside the repo (D1)', () => {
+test('config: layout doc folders must be repo-relative and stay inside the repo', () => {
   for (const p of ['../up', 'docs/../..', './docs', 'docs/./x', '/abs', '~/docs', '~', 'docs\\guide', '', 'a//b']) {
     for (const k of ['human', 'ai']) assert.match(validateConfig({ ...BASE, layout: { paths: ['src/**'], docs: { [k]: p } } }).join('\n'), new RegExp(`layout.docs.${k}`), `${k}: ${p}`);
   }
   for (const p of ['docs', '.ai', 'documentation/human', 'a.b/c']) assert.deepEqual(validateConfig({ ...BASE, layout: { paths: ['src/**'], docs: { ai: p } } }), [], p);
 });
 
-test('planLayoutErrors: a glob covering human docs is refused (list each doc and its translations); report and .ai/ globs pass (D2)', () => {
+test('planLayoutErrors: a glob covering human docs is refused (list each doc and its translations); report and .ai/ globs pass', () => {
   const errs = (f) => planLayoutErrors({ plannedFiles: [f], tasks: [] }, LAYOUT);
   for (const f of ['docs/**', 'docs/guide/*.md', 'docs/guide/**', 'docs/*']) assert.match(errs(f).join('\n'), /plannedFiles: .* is a glob that covers human docs under docs\/; list each doc and its translations explicitly/, f);
-  // r2 N1: `?` hiding part of a doc name
+  // `?` hiding part of a doc name
   for (const f of ['docs/guide/x.m?', 'docs/guide/x?md', 'docs/guide/x.??']) assert.match(errs(f).join('\n'), /is a glob that covers human docs/, f);
-  // r2 N2: an entry listed in plannedFiles and in a task reports each problem once per place, never twice in one line
+  // an entry listed in plannedFiles and in a task reports each problem once per place, never twice in one line
   const dup = planLayoutErrors({ plannedFiles: ['docs/guide/x.md'], tasks: [{ files: ['docs/guide/x.md'] }] }, LAYOUT);
   assert.equal(new Set(dup).size, dup.length);
   for (const f of ['docs/make-it-ship/**', 'docs/make-it-ship/plans/*.md', '.ai/**', '.ai/modules/*.md', 'src/**', 'docs/img/*.png']) assert.deepEqual(errs(f), [], f);
   assert.deepEqual(planLayoutErrors({ plannedFiles: ['docs/**'], tasks: [] }, { paths: ['docs/**'] }), [], 'no doc rules: globs are fine');
 });
 
-test('a doc with a language suffix not in languages gets an "unknown language suffix" message, not x.ja.ko.md (D5)', () => {
+test('a doc with a language suffix not in languages gets an "unknown language suffix" message, not x.ja.ko.md', () => {
   const v = layoutViolations(['docs/guide/x.ja.md', 'docs/guide/x.md', 'docs/guide/x.ko.md'], LAYOUT);
   assert.deepEqual(v.missingTranslation, [{ file: 'docs/guide/x.ja.md', missing: 'docs/guide/x.ja.ko.md', unknownLanguage: 'ja' }]);
   const [e] = planLayoutErrors({ plannedFiles: ['docs/guide/x.ja.md'], tasks: [] }, LAYOUT);
   assert.match(e, /plannedFiles: docs\/guide\/x\.ja\.md has an unknown language suffix "ja" \(languages: en, ko\); add "ja" to layout\.docs\.languages, or if "\.ja" is part of the name add docs\/guide\/x\.ja\.ko\.md/);
 });
 
-test('deepinit never overwrites the .ai/index.md map: the root doc goes to .ai/modules/_root.md, index.md gets a link line; the keyword hint names .ai/ (D4)', async () => {
+test('deepinit never overwrites the .ai/index.md map: the root doc goes to .ai/modules/_root.md, index.md gets a link line; the keyword hint names .ai/', async () => {
   const { readFileSync } = await import('node:fs');
   const discover = readFileSync(new URL('../../skills/run/phases/discover.md', import.meta.url), 'utf8');
   const step = discover.split('\n').find((l) => l.startsWith('- **deepinit**'));
@@ -104,7 +104,7 @@ test('deepinit never overwrites the .ai/index.md map: the root doc goes to .ai/m
   assert.match(keywordTable().find((k) => k.name === 'deepinit').action, /`\.ai\/modules\/<dir path>\.md`/);
 });
 
-test('plan phase: list the .ai/ docs the run updates in plannedFiles, and human docs file by file (dogfood + D2)', async () => {
+test('plan phase: list the .ai/ docs the run updates in plannedFiles, and human docs file by file', async () => {
   const { readFileSync } = await import('node:fs');
   const plan = readFileSync(new URL('../../skills/run/phases/plan.md', import.meta.url), 'utf8');
   const layout = plan.split('\n').find((l) => l.includes('**Layout**'));

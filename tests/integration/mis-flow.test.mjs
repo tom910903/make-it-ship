@@ -1,4 +1,4 @@
-// M9-B machinery end to end through the CLI, in throwaway repos (state lives in each repo's .git; no real home).
+// The flow commands (plan documents, plan-tune, secrets, health, release, context, design, decisions, retro) end to end through the CLI, in throwaway repos (state lives in each repo's .git; no real home).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -34,7 +34,7 @@ Depends on: T1
 - \`npm test\`
 `;
 
-test('B1 plan document: check exits 1 on missing sections; start --plan moves its tasks into the run plan', () => {
+test('plan document: check exits 1 on missing sections; start --plan moves its tasks into the run plan', () => {
   const dir = makeRepo();
   write(dir, { 'docs/make-it-ship/plans/greet.md': PLAN_MD, 'docs/make-it-ship/plans/bad.md': '# x\n## Goal\ng\n' });
   const good = ok(mis(dir, ['plan', 'check', 'docs/make-it-ship/plans/greet.md']));
@@ -55,7 +55,7 @@ test('B1 plan document: check exits 1 on missing sections; start --plan moves it
   assert.ok(!ok(mis(dir, ['test-prompt', 'just', 'do', 'it'], { env: { MIS_STATE_HOME: home } })).matches.includes('clarify'));
 });
 
-test('B3 plan-tune: question log, preferences, profile; interview skips a skip-preference item unless HIGH', () => {
+test('plan-tune: question log, preferences, profile; interview skips a skip-preference item unless HIGH', () => {
   const dir = makeRepo();
   ok(mis(dir, ['question', 'log', '-'], { input: JSON.stringify({ qid: 'test-runner', question: 'Runner?', impact: 'LOW', recommended: 'node --test', chosen: 'node --test' }) }));
   assert.notEqual(mis(dir, ['question', 'log', '{"qid":"x"}']).code, 0);
@@ -73,7 +73,7 @@ test('B3 plan-tune: question log, preferences, profile; interview skips a skip-p
   assert.equal(high.answer, null, 'HIGH is always asked');
 });
 
-test('B5 secrets: redact scan finds keys planted in the tree and in history; debt ledger stands alone', () => {
+test('secrets: redact scan finds keys planted in the tree and in history; debt ledger stands alone', () => {
   const dir = makeRepo({ 'src/a.js': `// shortcut: in-memory only, move to sqlite past 10k rows\nconst k = "${FAKE.aws}";\n` });
   write(dir, { 'src/a.js': '// shortcut: in-memory only, move to sqlite past 10k rows\nconst k = process.env.K;\n' });
   commit(dir, 'remove key');
@@ -88,7 +88,7 @@ test('B5 secrets: redact scan finds keys planted in the tree and in history; deb
   assert.equal(ok(mis(dir, ['debt', '--json'])).total, 1);
 });
 
-test('M9 redact: personal data and legal markers (opt-in for scan), file --apply replaces values without printing them', () => {
+test('redact: personal data and legal markers (opt-in for scan), file --apply replaces values without printing them', () => {
   const V = { email: 'kim.minsu@corp-mail.io', phone: '010-2345-6789', rrn: '900101-1234567', card: '4111 1111 1111 1111', ssn: '123-45-6789' };
   const text = `Contact ${V.email} or ${V.phone}\nRRN ${V.rrn}\nCard ${V.card} (not a card: 4111 1111 1111 1112)\nSSN ${V.ssn}\nCONFIDENTIAL - 대외비\nbuild 2026-10-20, v1.2.3.4, ts 1717000000, test@example.com\n`;
   const dir = makeRepo({ 'notes.md': text });
@@ -108,7 +108,7 @@ test('M9 redact: personal data and legal markers (opt-in for scan), file --apply
   assert.match(mis(dir, ['redact', 'file']).err, /usage/);
 });
 
-test('B5 guard: a push whose unpushed commits contain a secret asks, naming file:line (no run needed)', () => {
+test('guard: a push whose unpushed commits contain a secret asks, naming file:line (no run needed)', () => {
   const dir = makeRepo();
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'mis-home-'))); // the guard traces to its state home
   const guard = (command) => {
@@ -124,7 +124,7 @@ test('B5 guard: a push whose unpushed commits contain a secret asks, naming file
   assert.ok(!r.permissionDecisionReason.includes(FAKE.gh));
 });
 
-test('B5 health: weighted score from the checks, appended to the history with a trend', () => {
+test('health: weighted score from the checks, appended to the history with a trend', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { test: PASS, lint: FAILC } } });
   const a = ok(mis(dir, ['health']));
   assert.equal(a.score, 60); // test 30 PASS, lint 20 FAIL
@@ -137,7 +137,7 @@ test('B5 health: weighted score from the checks, appended to the history with a 
   assert.equal(readFileSync(join(dir, 'docs/make-it-ship/health.jsonl'), 'utf8').trim().split('\n').length, 2);
 });
 
-test('B6 release: version-bump updates VERSION/package.json/CHANGELOG deterministically; next-version; PR title v<ver>; diff-scope; repo-mode', () => {
+test('release: version-bump updates VERSION/package.json/CHANGELOG deterministically; next-version; PR title v<ver>; diff-scope; repo-mode', () => {
   const dir = makeRepo({ VERSION: '1.2.3\n', 'package.json': '{\n  "name": "x",\n  "version": "1.2.3"\n}\n', 'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n- added export\n',
     '.make-it-ship.json': { version: 1, checks: { test: PASS } } });
   ok(mis(dir, ['start', '--input', 'x']));
@@ -164,7 +164,7 @@ test('B6 release: version-bump updates VERSION/package.json/CHANGELOG determinis
   assert.equal(mode.authors, 4);
 });
 
-test('B7 context save/restore warns on branch mismatch; goals ledger with /goal handoff; sessions of every project', () => {
+test('context save/restore warns on branch mismatch; goals ledger with /goal handoff; sessions of every project', () => {
   const dir = makeRepo();
   ok(mis(dir, ['context', 'save', 'parser-work', '--note', 'next: handle quoted commas']));
   assert.deepEqual(ok(mis(dir, ['context', 'restore', 'parser-work'])).warnings, []);
@@ -193,7 +193,7 @@ test('B7 context save/restore warns on branch mismatch; goals ledger with /goal 
   assert.deepEqual(s.projects.map((p) => p.project).sort(), ['/work/a', '/work/b']);
 });
 
-test('B4 design: comparison board with data-choice per variant, mermaid → excalidraw/svg/html, taste profile', () => {
+test('design: comparison board with data-choice per variant, mermaid → excalidraw/svg/html, taste profile', () => {
   const dir = makeRepo();
   write(dir, { 'design/a.html': '<p>A</p>', 'design/b.html': '<p>B</p>', 'design/arch.mmd': 'flowchart TD\n  U[User] --> W[Web]\n  W --> D[DB]\n' });
   const b = ok(mis(dir, ['design-board', 'design']));
@@ -233,7 +233,7 @@ test('B4 design: comparison board with data-choice per variant, mermaid → exca
   assert.deepEqual([t.prefer, t.avoid], [['serif'], ['gradient']]);
 });
 
-test('B8 decisions, learn search/distill (proposals unless --yes), JSONL merge driver unions two branches', () => {
+test('decisions, learn search/distill (proposals unless --yes), JSONL merge driver unions two branches', () => {
   const dir = makeRepo();
   const d1 = ok(mis(dir, ['decision', 'add', JSON.stringify({ decision: 'Use SQLite for local state', rationale: 'single user, no server' })])).recorded;
   assert.notEqual(mis(dir, ['decision', 'add', JSON.stringify({ decision: `key ${FAKE.aws}`, rationale: 'x' })]).code, 0, 'secrets refused');
@@ -266,7 +266,7 @@ test('B8 decisions, learn search/distill (proposals unless --yes), JSONL merge d
   assert.equal(readFileSync(join(dir, f), 'utf8'), base + '{"main":1}\n{"side":1}\n');
 });
 
-test('B8 retro --git: commits, hotspots and per-author metrics plus reviewer hit rate', () => {
+test('retro --git: commits, hotspots and per-author metrics plus reviewer hit rate', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { test: PASS } } });
   write(dir, { 'src/a.js': '1' }); commit(dir, 'a1');
   write(dir, { 'src/a.js': '2' }); commit(dir, 'a2', { GIT_AUTHOR_NAME: 'Kim', GIT_AUTHOR_EMAIL: 'kim@x.com' });
@@ -283,7 +283,7 @@ test('B8 retro --git: commits, hotspots and per-author metrics plus reviewer hit
   assert.match(md, /quality 1\/2/);
 });
 
-test('B9 session create runs the baseline check in the new worktree and prints it', () => {
+test('session create runs the baseline check in the new worktree and prints it', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { test: PASS, lint: FAILC }, required: { quick: ['test', 'lint'] } } });
   const s = ok(mis(dir, ['session', 'create', 'feature', 'csv export']));
   assert.equal(s.baseline.status, 'FAIL');

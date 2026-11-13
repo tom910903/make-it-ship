@@ -1,4 +1,4 @@
-// M9 round-1 A/B/C/F verifier defects (D1, D2, D8, D9, D10, D13 trust) in the guard policy.
+// Guard policy for lasting changes: config keys, skills and trust, tty keys, Claude Code settings, CLAUDE.md, launch.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
@@ -22,7 +22,7 @@ const both = [{ repoRoot: REPO, activeRun: true, currentBranch: 'feature' }, { r
 const decide = (input) => { const ds = both.map((c) => classify(input, c).decision); assert.equal(ds[0], ds[1], `same with and without a run: ${JSON.stringify(input)}`); return ds[0]; };
 const expectAll = (want, cmds) => { for (const c of cmds) assert.equal(decide(typeof c === 'string' ? bash(c) : c), want, typeof c === 'string' ? c : JSON.stringify(c)); };
 
-test('D1: mis config set of a key that runs a command or contacts a URL asks; other keys pass; the guard list matches the schema', () => {
+test('mis config set of a key that runs a command or contacts a URL asks; other keys pass; the guard list matches the schema', () => {
   expectAll('ask', [`${M} config set statusLine.chain "touch /tmp/x"`, `${M} config set update.source http://example.invalid/v`,
     `${M} config set telemetry.endpoint https://example.invalid`, `${M} config set $K x`, `${M} config set bogus.key 1`,
     `${M} telemetry endpoint https://example.invalid`, `mis config set statusLine.chain x`]);
@@ -34,7 +34,7 @@ test('D1: mis config set of a key that runs a command or contacts a URL asks; ot
   for (const [k, s] of Object.entries(CONFIG_KEYS)) assert.ok(typeof s.doc === 'string' && s.doc.length > 10 && typeof s.check === 'function', `${k} has a doc and a check`);
 });
 
-test('D1: user-scope skills, repository trust, and direct claude mcp/plugin changes ask; reads and validate pass', () => {
+test('user-scope skills, repository trust, and direct claude mcp/plugin changes ask; reads and validate pass', () => {
   expectAll('ask', [`${M} skill add s.md --scope user`, `${M} skill edit x s.md --scope user`, `${M} skill add - --scope=user`, `${M} skill trust`,
     'claude mcp add x -- npx y', 'claude mcp add --scope user x -- npx y', 'claude mcp add-json x {}', 'claude mcp remove x',
     'claude plugin install make-it-ship@m', 'claude plugin uninstall make-it-ship', 'claude plugin update x', 'claude plugin enable x', 'claude plugin disable x',
@@ -43,7 +43,7 @@ test('D1: user-scope skills, repository trust, and direct claude mcp/plugin chan
     'claude plugin validate .', 'claude plugin list', 'claude plugin marketplace list', 'claude mcp list', 'claude mcp get x', 'claude --version', 'claude -p "hi"']);
 });
 
-test('D2: mis tty keys is classified like the text it types; tmux options in keys ask; plain key names pass', () => {
+test('mis tty keys is classified like the text it types; tmux options in keys ask; plain key names pass', () => {
   expectAll('ask', [`${M} tty keys sh 'rm -rf ~' Enter`, `${M} tty keys sh 'rm -rf ~'`, `${M} tty keys sh r 'm -rf ~' C-m`, `${M} tty keys sh rm Space -rf Space '~' Enter`,
     `${M} tty keys sh 'node /x/mis.mjs uninstall --yes' Enter`, `${M} tty keys sh 'git reset --hard' Enter`,
     `${M} tty keys sh -H 72 6d`, `${M} tty keys sh -t other 'ls' Enter`, `${M} tty keys sh -l x`]);
@@ -51,7 +51,7 @@ test('D2: mis tty keys is classified like the text it types; tmux options in key
   assert.equal(decide(bash(`${M} tty keys sh 'git push --force origin main' Enter`)), 'deny', 'a denied command typed by keys is denied');
 });
 
-test('D8: writes to Claude Code settings, global or foreign CLAUDE.md and Make It Ship user config ask (tools, MCP, shell)', () => {
+test('writes to Claude Code settings, global or foreign CLAUDE.md and Make It Ship user config ask (tools, MCP, shell)', () => {
   const C = join(HOME, '.claude');
   const targets = [join(C, 'settings.json'), join(C, 'settings.local.json'), join(C, 'CLAUDE.md'), join(HOME, '.claude.json'),
     join(REPO, '.claude', 'settings.json'), join(REPO, '.claude', 'settings.local.json'), join(HOME, 'other', '.claude', 'settings.json'),
@@ -71,13 +71,13 @@ test('D8: writes to Claude Code settings, global or foreign CLAUDE.md and Make I
     { tool_name: 'Write', tool_input: { file_path: join(REPO, '.claude', 'rules', 'a.md') }, cwd: REPO }, { tool_name: 'mcp__filesystem__read_file', tool_input: { path: join(C, 'settings.json') }, cwd: REPO }]);
 });
 
-test('D9: mis.mjs run by nodejs, bun, deno or through xargs is recognized', () => {
+test('mis.mjs run by nodejs, bun, deno or through xargs is recognized', () => {
   expectAll('ask', ['nodejs /x/mis.mjs uninstall --yes', 'bun /x/mis.mjs uninstall --yes', 'bun run /x/mis.mjs setup --write', 'deno run -A /x/mis.mjs setup --write',
     'deno run --allow-all /x/mis.mjs uninstall --yes', "echo 'setup --write' | xargs node /x/mis.mjs", 'xargs -n 2 node /x/mis.mjs < args.txt', '/usr/local/bin/bun /x/mis.mjs doctor --fix']);
   expectAll('allow', ['bun /x/mis.mjs status', 'deno run -A /x/mis.mjs status', 'nodejs /x/mis.mjs status', 'bun test', 'deno test', 'ls | xargs wc -l']);
 });
 
-test('D10: mis launch without permission prompts asks; a plain launch passes', () => {
+test('mis launch without permission prompts asks; a plain launch passes', () => {
   expectAll('ask', [`${M} launch --dangerously-skip-permissions -p x`, `${M} launch --allow-dangerously-skip-permissions`,
     `${M} launch --permission-mode bypassPermissions`, `${M} launch --permission-mode=bypassPermissions`]);
   expectAll('allow', [`${M} launch`, `${M} launch --resume`, `${M} launch --permission-mode plan`]);

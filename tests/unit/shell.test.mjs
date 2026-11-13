@@ -103,25 +103,25 @@ test('every command shape the skills and phases tell the model to run is allowed
   for (const c of shapes) assert.equal(decide(c), 'allow', c);
 });
 
-test('documented choice (revised after M5 L-7): text naming runs/ or current is denied even in a commit message; the bare dir name is not', () => {
+test('documented choice: text naming runs/ or current is denied even in a commit message; the bare dir name is not', () => {
   assert.equal(decide('git commit -m "docs: explain .git/make-it-ship/runs layout"'), 'deny');
   assert.equal(decide('git commit -m "docs: explain the .git/make-it-ship layout"'), 'allow');
 });
 
-// M1 round-4 residual risks R-1..R-6, folded into the matrix as new classes.
-test('R-1: node runtime flags and xargs before mis.mjs approve still ask', () => {
+// Residual risks, folded into the matrix as new classes.
+test('node runtime flags and xargs before mis.mjs approve still ask', () => {
   for (const c of [`node --no-warnings ${MIS} approve plan`, `node -- ${MIS} approve plan`, `node --trace-warnings --max-old-space-size 4096 ${MIS} approve plan`,
     `echo plan | xargs node ${MIS} approve`, `xargs -n 1 node ${MIS} approve < f`]) assert.equal(decide(c), 'ask', c);
   assert.equal(decide(`node --no-warnings ${MIS} status`), 'allow');
 });
 
-test('R-2: shell comments are not commands, and do not hide the next line', () => {
+test('shell comments are not commands, and do not hide the next line', () => {
   assert.equal(decide('npm test # done; npm install x'), 'allow');
   assert.equal(decide("echo done # don't forget\ngit push --force origin main"), 'deny');
   assert.equal(decide('echo a#b && git push'), 'ask', '# inside a word is not a comment');
 });
 
-test('R-3..R-6: shell options with values, HEAD on main, package-manager global flags, shell reading a heredoc', () => {
+test('shell options with values, HEAD on main, package-manager global flags, shell reading a heredoc', () => {
   assert.equal(decide('bash -o pipefail -c "git push origin x"'), 'ask');
   assert.equal(decide('bash +o errexit -e -c "git push origin x"'), 'ask');
   assert.equal(classify({ tool_name: 'Bash', tool_input: { command: 'git push --force origin HEAD' }, cwd: REPO }, { ...ctx, currentBranch: 'main' }).decision, 'deny');
@@ -147,13 +147,13 @@ for (const [cmd, want] of CASES) {
   });
 }
 
-test('read-only commands that merely mention the state dir in a pattern are allowed; runs/current paths stay denied (M5 L-7)', () => {
+test('read-only commands that merely mention the state dir in a pattern are allowed; runs/current paths stay denied', () => {
   assert.equal(decide("git ls-files | grep -v '^\\.git/make-it-ship'"), 'allow');
   assert.equal(decide('cat .git/make-it-ship/runs/r/state.json'), 'deny');
   assert.equal(decide('cd .git/make-it-ship && ls'), 'deny');
 });
 
-test('deleting or moving the run state dir is denied (M5 round-2 risk; reads of the bare dir name stay allowed)', () => {
+test('deleting or moving the run state dir is denied (reads of the bare dir name stay allowed)', () => {
   for (const c of ['rm -rf .git/make-it-ship', 'mv .git/make-it-ship /tmp/x', 'rm -r ./.git/make-it-ship/', 'cp -r x .git/make-it-ship']) assert.equal(decide(c), 'deny', c);
   assert.equal(decide("git ls-files | grep -v '^\\.git/make-it-ship'"), 'allow');
 });

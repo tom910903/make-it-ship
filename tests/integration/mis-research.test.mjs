@@ -1,4 +1,4 @@
-// M9-D D2: research loops — sciomc sessions, autoresearch evaluator contract and limits, self-improve approval gate, writer-memory.
+// Research loops — sciomc sessions, autoresearch evaluator contract and limits, self-improve approval gate, writer-memory.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, writeFileSync, readdirSync } from 'node:fs';

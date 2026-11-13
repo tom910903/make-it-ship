@@ -1,4 +1,4 @@
-// M9-A: doctor (+ --fix, session), update check / upgrade / uninstall, SessionStart maintenance, cancel --all, launch.
+// doctor (+ --fix, session), update check / upgrade / uninstall, SessionStart maintenance, cancel --all, launch.
 // Temp HOME / CLAUDE_CONFIG_DIR / MIS_STATE_HOME only; stub claude/tmux/git on PATH; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ const hook = (event, input, env) => {
   return JSON.parse(r.stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
 };
 
-test('A2 doctor --json: plugin, hooks, MCP tools/list, statusLine, state dir and coding agents', async () => {
+test('doctor --json: plugin, hooks, MCP tools/list, statusLine, state dir and coding agents', async () => {
   const h = fakeHome();
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { unit: { argv: ['true'] } } } });
   stub(h, 'codex', 'echo should-not-run; exit 3');
@@ -34,7 +34,7 @@ test('A2 doctor --json: plugin, hooks, MCP tools/list, statusLine, state dir and
   assert.equal(d.ok, true);
 });
 
-test('A2 doctor --fix: wrong statusLine path, stale run lock and broken mode state go from error to ok', () => {
+test('doctor --fix: wrong statusLine path, stale run lock and broken mode state go from error to ok', () => {
   const h = fakeHome();
   const dir = makeRepo();
   ok(mis(dir, ['start', '--input', 'x'], { env: h.env }));
@@ -60,7 +60,7 @@ test('A2 doctor --fix: wrong statusLine path, stale run lock and broken mode sta
   assert.equal(ok(mis(dir, ['doctor'], { env: h.env })).checks.some((c) => c.status === 'error'), false);
 });
 
-test('A2 doctor session: active run, loop, team, freeze and recent hook errors in one view', () => {
+test('doctor session: active run, loop, team, freeze and recent hook errors in one view', () => {
   const h = fakeHome();
   const dir = makeRepo();
   ok(mis(dir, ['start', '--input', 'x'], { env: h.env }));
@@ -84,7 +84,7 @@ test('A2 doctor session: active run, loop, team, freeze and recent hook errors i
   assert.match(s.hookErrors[0].error, /ENOTDIR|EEXIST|not a directory/i);
 });
 
-test('A6 update-check: 24h cache (second call does not read the source), --force rereads, unreachable source is silent', () => {
+test('update-check: 24h cache (second call does not read the source), --force rereads, unreachable source is silent', () => {
   const h = fakeHome();
   const src = join(h.home, 'remote-plugin.json');
   writeFileSync(src, JSON.stringify({ version: '99.0.0' }));
@@ -108,7 +108,7 @@ test('A6 update-check: 24h cache (second call does not read the source), --force
   assert.deepEqual(ok(mis(h.home, ['update-check'], { env })), { disabled: true });
 });
 
-test('A6 SessionStart: one line only when a newer version is cached; nothing after a network failure; stale cache refreshes in the background', async () => {
+test('SessionStart: one line only when a newer version is cached; nothing after a network failure; stale cache refreshes in the background', async () => {
   const h = fakeHome();
   const dir = makeRepo();
   const src = join(h.home, 'remote.json');
@@ -126,7 +126,7 @@ test('A6 SessionStart: one line only when a newer version is cached; nothing aft
   assert.match(hook('SessionStart', { source: 'startup', cwd: dir }, h2.env), /99\.0\.0 is available/);
 });
 
-test('A6 upgrade shows the update command and runs it only with --yes', () => {
+test('upgrade shows the update command and runs it only with --yes', () => {
   const h = fakeHome();
   const dry = ok(mis(h.home, ['upgrade'], { env: h.env }));
   assert.deepEqual(dry.commands, [`git -C ${ROOT} pull --ff-only`]);
@@ -138,7 +138,7 @@ test('A6 upgrade shows the update command and runs it only with --yes', () => {
   assert.equal(readFileSync(log, 'utf8').trim(), `-C ${ROOT} pull --ff-only`);
 });
 
-test('A6 uninstall: dry run lists what would go and changes nothing; --yes removes own state, keeps run records without --purge-runs', () => {
+test('uninstall: dry run lists what would go and changes nothing; --yes removes own state, keeps run records without --purge-runs', () => {
   const h = fakeHome();
   const dir = makeRepo();
   ok(mis(dir, ['setup', '--write'], { env: h.env }));
@@ -166,7 +166,7 @@ test('A6 uninstall: dry run lists what would go and changes nothing; --yes remov
   assert.ok(existsSync(h.claude));
 });
 
-test('A6 setup -> uninstall round trip restores a status line the user already had, whatever the checkout directory is called (M9 r3 N1)', () => {
+test('setup -> uninstall round trip restores a status line the user already had, whatever the checkout directory is called', () => {
   const h = fakeHome();
   const routing = '# Proj\n\n## Skill routing\n\n- review → /make-it-ship:review\n';
   const dir = makeRepo({ 'CLAUDE.md': routing });
@@ -180,7 +180,7 @@ test('A6 setup -> uninstall round trip restores a status line the user already h
   assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), routing);
 });
 
-test('A7 SessionStart maintenance: old finished runs, ended teams and dead browse dirs go; active run, loop and recent state stay; once a day', () => {
+test('SessionStart maintenance: old finished runs, ended teams and dead browse dirs go; active run, loop and recent state stay; once a day', () => {
   const h = fakeHome();
   const dir = makeRepo();
   const sd = stateDir(dir);
@@ -215,7 +215,7 @@ test('A7 SessionStart maintenance: old finished runs, ended teams and dead brows
   assert.ok(has('runs/old-done-2'), '0 turns cleanup off');
 });
 
-test('A7 SessionStart warns in one line about an invalid .make-it-ship.json and still exits 0', () => {
+test('SessionStart warns in one line about an invalid .make-it-ship.json and still exits 0', () => {
   const h = fakeHome();
   const dir = makeRepo({ '.make-it-ship.json': '{"version":2,"checks":{}}' });
   const ctx = hook('SessionStart', { source: 'startup', cwd: dir }, h.env);
@@ -223,7 +223,7 @@ test('A7 SessionStart warns in one line about an invalid .make-it-ship.json and 
   assert.doesNotMatch(hook('SessionStart', { source: 'startup', cwd: makeRepo() }, h.env), /make-it-ship\.json is invalid/);
 });
 
-test('A8 cancel --all ends loop, team and merge-readiness; the run only with --run', () => {
+test('cancel --all ends loop, team and merge-readiness; the run only with --run', () => {
   const h = fakeHome();
   const dir = makeRepo();
   stub(h, 'tmux', 'exit 0');
@@ -249,7 +249,7 @@ test('A8 cancel --all ends loop, team and merge-readiness; the run only with --r
   assert.equal(ok(mis(makeRepo(), ['cancel', '--all'], { env: h.env })).loop, false, 'works with nothing active');
 });
 
-test('A8 launch starts claude in a tmux session and prints the attach command; BLOCKED without tmux', () => {
+test('launch starts claude in a tmux session and prints the attach command; BLOCKED without tmux', () => {
   const h = fakeHome();
   const dir = makeRepo();
   const log = join(h.home, 'tmux-argv');

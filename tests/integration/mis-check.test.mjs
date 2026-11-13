@@ -109,7 +109,7 @@ test('verdict: dependency manifest change needs a reason; missing config is neve
   assert.ok(b.reasons.some((r) => /no \.make-it-ship\.json/.test(r)));
 });
 
-test('mis note dep records a reason that satisfies the dependency rule (M-4)', () => {
+test('mis note dep records a reason that satisfies the dependency rule', () => {
   const dir = makeRepo({ '.make-it-ship.json': { version: 1, checks: { pass: { argv: node('0') } } }, 'package.json': '{"name":"a"}' });
   ok(mis(dir, ['start', '--input', 'x']));
   write(dir, { 'package.json': '{"name":"a","dependencies":{"zod":"3"}}' });
@@ -139,7 +139,7 @@ test('config changed during the run (by any tool) keeps the verdict PARTIAL unti
   assert.equal(v.verdict, 'VERIFIED', v.reasons.join());
 });
 
-test('M9 fix1 D2: a check script (MIS_CLI) cannot run mis subcommands the guard would ask about (external transfers, approvals, stored external commands); read-only ones still run', async () => {
+test('a check script (MIS_CLI) cannot run mis subcommands the guard would ask about (external transfers, approvals, stored external commands); read-only ones still run', async () => {
   const { fakeHome } = await import('../helpers.mjs');
   const { writeFileSync, chmodSync, existsSync } = await import('node:fs');
   const h = fakeHome(), codexLog = join(h.home, 'codex.log');

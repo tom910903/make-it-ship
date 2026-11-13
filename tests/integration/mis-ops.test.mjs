@@ -1,4 +1,4 @@
-// M9-D D3: deploy setup/run against a local stub server, read-only landing-report and mission-board, wait, detach.
+// Deploy setup/run against a local stub server, read-only landing-report and mission-board, wait, detach.
 // No real gh or tmux: deploy runs get a PATH without gh unless a fake one is planted; tmux is a fake script.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -117,7 +117,7 @@ test('mis detach: the job survives a SIGTERM to the launching process group and 
   assert.equal(readFileSync(marker, 'utf8'), 'finished\n');
 });
 
-// ---------------------------------------------------------------- M9 completion: wait auto, canary rules, deploy gates, detach --lock
+// ---------------------------------------------------------------- wait auto, canary rules, deploy gates, detach --lock
 
 test('parseLimit reads Claude Code limit stops and their reset time (fixed clock); other text is not a stop', () => {
   const now = Date.parse('2026-10-20T01:00:00Z'); // a Tuesday

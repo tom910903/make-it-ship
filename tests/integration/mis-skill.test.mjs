@@ -1,4 +1,4 @@
-// M9-C: learned-skill management and authoring (mis skill). Every call uses a temp MIS_STATE_HOME; never the real home.
+// Learned-skill management and authoring (mis skill). Every call uses a temp MIS_STATE_HOME; never the real home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

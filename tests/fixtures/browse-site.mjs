@@ -43,7 +43,7 @@ location = URL.createObjectURL(new Blob(['<p id="b">blob page</p>'], { type: 'te
 <div class="card" id="card" onclick="this.dataset.hit = 'yes'"><span>Open card</span></div><div id="plain">Just text</div><button id="real">Real button</button>
 <p id="k" style="margin-top: 7px">styled</p>`],
 };
-// M8 R2-1: pages that send an uploaded file somewhere; R = the remote site (shop.test), recorded by /up and listed by /hits
+// pages that send an uploaded file somewhere; R = the remote site (shop.test), recorded by /up and listed by /hits
 const UPLOADS = {
   '/remoteform.html': (R) => `<form method="post" action="${R}/up" enctype="multipart/form-data"><input type="file" id="f" name="f"><button id="send">Send</button></form>`,
   '/formaction.html': () => `<form method="post" action="/up" enctype="multipart/form-data"><input type="file" id="f" name="f">

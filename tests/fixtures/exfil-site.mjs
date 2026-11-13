@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// M8 R3-1/R3-2 fixture: local attack pages (loopback) that try to send an attached file off the machine, and "remote"
+// Fixture: local attack pages (loopback) that try to send an attached file off the machine, and "remote"
 // listeners on this machine's non-loopback address (TCP and UDP; packets never leave the machine). Every byte the remote
 // listeners receive is recorded; GET /log on the loopback server returns them. Usage: node exfil-site.mjs <lan ipv4>
 import { createServer } from 'node:http';

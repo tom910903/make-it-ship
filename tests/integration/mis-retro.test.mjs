@@ -52,7 +52,7 @@ test('retro works with no runs', () => {
   assert.equal(r.metrics.runs, 0);
 });
 
-test('retro median uses the mean of the two middle runs for an even count (M5 L-5b)', async () => {
+test('retro median uses the mean of the two middle runs for an even count', async () => {
   const { retroMetrics } = await import('../../scripts/lib/retro.mjs');
   const run = (min) => ({ state: { state: 'REPORTED', startedAt: '2026-10-19T00:00:00Z' }, events: [{ type: 'start', at: '2026-10-19T00:00:00Z' }, { type: 'report', at: new Date(Date.parse('2026-10-19T00:00:00Z') + min * 60000).toISOString(), verdict: 'VERIFIED' }] });
   assert.equal(retroMetrics([run(2), run(10)]).medianMinutes, 6);

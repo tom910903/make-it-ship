@@ -1,4 +1,4 @@
-// M8-B project session manager (absorbs OMC project-session-manager/psm): worktrees for issues, PRs and features.
+// Project session manager (absorbs OMC project-session-manager/psm): worktrees for issues, PRs and features.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -81,7 +81,7 @@ test('--tmux opens a tmux session in the worktree (real tmux) or reports BLOCKED
   assert.notEqual(tmux('has-session', '-t', s.tmux).status, 0, 'tmux session closed on remove');
 });
 
-test('M8 D9: session --tmux without tmux says BLOCKED for the session, not for a team', () => {
+test('session --tmux without tmux says BLOCKED for the session, not for a team', () => {
   const dir = makeRepo();
   const bin = mkdtempSync(join(tmpdir(), 'mis-notmux-'));
   symlinkSync(spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim(), join(bin, 'git'));

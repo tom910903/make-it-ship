@@ -1,5 +1,5 @@
-// M9 round-1 A/B/C/F verifier defects, end to end: D1/D8 through guard.mjs, D4 config keys toggle hooks, D5 malformed
-// trace, D7 git stderr outside a repo, D11 design board, D12 CLAUDE.md block path, D13 repository skills, plan scope union.
+// End to end through guard.mjs and the hooks: asks before settings, config and CLAUDE.md changes, config keys toggle hooks,
+// malformed trace entries, no stderr outside a repo, the design board, the CLAUDE.md block path, repository skills, plan scope union.
 // Every process gets a temp HOME / CLAUDE_CONFIG_DIR / MIS_STATE_HOME (fakeHome); the real ~/.claude is never touched.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,7 +22,7 @@ const guard = (h, input, cwd = h.home) => {
   return { err: r.stderr, decision: r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'allow' };
 };
 
-test('D1/D8 end to end: the guard asks before config set of statusLine.chain, a user skill, claude mcp add, and writing ~/.claude/settings.json', () => {
+test('end to end: the guard asks before config set of statusLine.chain, a user skill, claude mcp add, and writing ~/.claude/settings.json', () => {
   const h = fakeHome(), dir = makeRepo();
   const b = (command) => guard(h, { tool_name: 'Bash', tool_input: { command }, cwd: dir }).decision;
   assert.equal(b(`node "${MIS}" config set statusLine.chain "touch /tmp/pwned"`), 'ask');
@@ -36,7 +36,7 @@ test('D1/D8 end to end: the guard asks before config set of statusLine.chain, a 
   assert.equal(guard(h, { tool_name: 'Write', tool_input: { file_path: join(dir, 'src', 'a.js') }, cwd: dir }).decision, 'allow');
 });
 
-test('D8 end to end: a CLAUDE.md outside the session repository asks (another repo, a missing dir, a non-repo dir); the repo\'s own pass', () => {
+test('end to end: a CLAUDE.md outside the session repository asks (another repo, a missing dir, a non-repo dir); the repo\'s own pass', () => {
   const h = fakeHome(), dir = makeRepo(), other = makeRepo(), plain = realpathSync(mkdtempSync(join(tmpdir(), 'mis-plain-')));
   const w = (file_path) => guard(h, { tool_name: 'Write', tool_input: { file_path }, cwd: dir }, dir).decision;
   for (const p of [join(other, 'CLAUDE.md'), join(h.home, 'notes', 'CLAUDE.md'), join(plain, 'x', 'CLAUDE.md'), join(plain, 'CLAUDE.md')]) assert.equal(w(p), 'ask', p);
@@ -45,7 +45,7 @@ test('D8 end to end: a CLAUDE.md outside the session repository asks (another re
   assert.equal(guard(h, { tool_name: 'mcp__filesystem__write_file', tool_input: { path: join(other, 'CLAUDE.md') }, cwd: dir }, dir).decision, 'ask');
 });
 
-test('D4: mis config set simplifier.enabled / proactive toggles the hooks; get lists every key with a doc', () => {
+test('mis config set simplifier.enabled / proactive toggles the hooks; get lists every key with a doc', () => {
   const h = fakeHome(), dir = makeRepo({ 'a.js': '' });
   const editAndStop = (sid) => {
     write(dir, { 'a.js': `x${sid}\n` });
@@ -70,7 +70,7 @@ test('D4: mis config set simplifier.enabled / proactive toggles the hooks; get l
   for (const k of ['proactive', 'simplifier.enabled', 'simplifier.maxFiles', 'keywords.disabled', 'subagentMatcher', 'statusLine.chain', 'style.default', 'update.check', 'update.source', 'maintenance.retainDays']) assert.ok(g.keys.includes(k), k);
 });
 
-test('D5: a non-string cwd is never traced, and doctor session skips (and counts) malformed trace entries', () => {
+test('a non-string cwd is never traced, and doctor session skips (and counts) malformed trace entries', () => {
   const h = fakeHome(), dir = makeRepo();
   for (const ev of ['SubagentStop', 'Stop', 'SessionStart']) assert.equal(hook(h, ev, { cwd: 123 }).code, 0);
   assert.equal(guard(h, { tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: 123 }).decision !== undefined, true);
@@ -82,7 +82,7 @@ test('D5: a non-string cwd is never traced, and doctor session skips (and counts
   assert.ok(Array.isArray(s.hookErrors) && Array.isArray(s.recentHooks));
 });
 
-test('D7: hooks and the guard outside a repository write nothing to stderr', () => {
+test('hooks and the guard outside a repository write nothing to stderr', () => {
   const h = fakeHome(), out = realpathSync(mkdtempSync(join(tmpdir(), 'mis-norepo-')));
   const base = { session_id: 'n', cwd: out };
   const cases = [['SessionStart', base], ['UserPromptSubmit', { ...base, prompt: 'hello' }], ['PostToolUse', { ...base, tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } }],
@@ -97,7 +97,7 @@ test('D7: hooks and the guard outside a repository write nothing to stderr', () 
   assert.equal(guard(h, { tool_name: 'Write', tool_input: { file_path: join(out, 'x') }, cwd: out }, out).err, '');
 });
 
-test('D11: design-board takes only design variants, not the HTML that mis diagram writes next to them', () => {
+test('design-board takes only design variants, not the HTML that mis diagram writes next to them', () => {
   const h = fakeHome(), dir = makeRepo();
   write(dir, { 'design/flow.mmd': 'flowchart TD\n  A[Start] --> B[End]\n', 'design/layout-a.html': '<p>a</p>', 'design/layout-b.html': '<p>b</p>' });
   ok(mis(dir, ['diagram', 'design/flow.mmd'], { env: h.env }));
@@ -107,7 +107,7 @@ test('D11: design-board takes only design variants, not the HTML that mis diagra
   assert.doesNotMatch(readFileSync(join(dir, 'design', 'board.html'), 'utf8'), /flow\.html/);
 });
 
-test('D12: the global CLAUDE.md block names the resolved plugin path (CLAUDE_PLUGIN_ROOT is not substituted there)', () => {
+test('the global CLAUDE.md block names the resolved plugin path (CLAUDE_PLUGIN_ROOT is not substituted there)', () => {
   const h = fakeHome();
   ok(mis(h.home, ['setup', '--write'], { env: h.env }));
   const md = readFileSync(join(h.claude, 'CLAUDE.md'), 'utf8');
@@ -119,7 +119,7 @@ test('D12: the global CLAUDE.md block names the resolved plugin path (CLAUDE_PLU
   assert.ok(again.changes.some((c) => c.file.endsWith('CLAUDE.md') && c.diff.includes('/old/plugin/1.0')));
 });
 
-test('D13: same-name skills are injected once (project wins); repository skills are listed as untrusted content until mis skill trust', () => {
+test('same-name skills are injected once (project wins); repository skills are listed as untrusted content until mis skill trust', () => {
   const h = fakeHome(), dir = makeRepo();
   const sk = (name, desc) => `---\nname: ${name}\ndescription: ${desc}\ntriggers: [csv export]\n---\nbody\n`;
   write(dir, { '.make-it-ship/skills/csv/SKILL.md': sk('csv', 'Repo CSV steps') });

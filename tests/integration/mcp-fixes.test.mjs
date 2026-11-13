@@ -15,7 +15,7 @@ const hook = (event, input, env) => {
   return r.stdout.trim() ? JSON.parse(r.stdout) : null;
 };
 
-test('M7 D1: workingDirectory outside the session repo is ignored; a missing path is an error', async () => {
+test('workingDirectory outside the session repo is ignored; a missing path is an error', async () => {
   const dir = makeRepo(), other = makeRepo();
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
   try {
@@ -26,7 +26,7 @@ test('M7 D1: workingDirectory outside the session repo is ignored; a missing pat
   } finally { s.close(); }
 });
 
-test('M7 D2: <remember> from an Agent result only (not its prompt), unescaped, without duplicates', () => {
+test('<remember> from an Agent result only (not its prompt), unescaped, without duplicates', () => {
   const dir = makeRepo(), h = home();
   const resp = { content: [{ type: 'text', text: 'done.\n<remember>Line one\n"quoted" two</remember>' }] };
   hook('PostToolUse', { cwd: dir, session_id: 'A', tool_name: 'Agent', tool_input: { prompt: 'save <remember>from the prompt</remember>' }, tool_response: resp }, { MIS_STATE_HOME: h });
@@ -35,7 +35,7 @@ test('M7 D2: <remember> from an Agent result only (not its prompt), unescaped, w
   assert.deepEqual(w, ['Line one\n"quoted" two']);
 });
 
-test('M7 D8: SessionStart detects the project once; a passing test command is learned', () => {
+test('SessionStart detects the project once; a passing test command is learned', () => {
   const dir = makeRepo({ 'package.json': JSON.stringify({ name: 'x' }) }), h = home();
   const ctx = hook('SessionStart', { cwd: dir, session_id: 'A', source: 'startup' }, { MIS_STATE_HOME: h }).hookSpecificOutput.additionalContext;
   assert.ok(projectRead(dir), 'project memory created');
@@ -44,26 +44,26 @@ test('M7 D8: SessionStart detects the project once; a passing test command is le
   assert.match(JSON.stringify(projectRead(dir)), /vitest run/);
 });
 
-test('M7 D3: guard decisions are traced', () => {
+test('guard decisions are traced', () => {
   const dir = makeRepo(), h = home();
   const e = { ...process.env, MIS_STATE_HOME: h }; delete e.NODE_TEST_CONTEXT;
   spawnSync(process.execPath, [join(ROOT, 'scripts', 'guard.mjs')], { input: JSON.stringify({ tool_name: 'mcp__plugin_make-it-ship_mis__wiki_add', tool_input: {}, cwd: dir }), encoding: 'utf8', env: e });
   assert.match(readFileSync(join(h, 'trace.jsonl'), 'utf8'), /"hook":"PreToolUse".*"tool":"mcp__plugin_make-it-ship_mis__wiki_add".*"decision":"allow"/);
 });
 
-test('M7 D4: wiki_ingest refuses files inside .git', async () => {
+test('wiki_ingest refuses files inside .git', async () => {
   const dir = makeRepo();
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
   try { assert.equal((await s.call('wiki_ingest', { path: '.git/config' })).isError, true); } finally { s.close(); }
 });
 
-test('M7 D5: diagnostics over a directory with nothing checkable is not a success', async () => {
+test('diagnostics over a directory with nothing checkable is not a success', async () => {
   const dir = makeRepo({ 'notes.txt': 'x' });
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
   try { assert.equal((await s.call('lsp_diagnostics_directory', { directory: dir })).json.success, false); } finally { s.close(); }
 });
 
-test('M7 D6: a python_repl whose process was killed restarts and runs the code', async () => {
+test('a python_repl whose process was killed restarts and runs the code', async () => {
   const dir = makeRepo();
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
   try {
@@ -74,34 +74,34 @@ test('M7 D6: a python_repl whose process was killed restarts and runs the code',
   } finally { s.close(); }
 });
 
-test('M7 D7: after compaction the priority note is injected once', async () => {
+test('after compaction the priority note is injected once', async () => {
   const dir = makeRepo(), h = home();
   (await import('../../scripts/lib/memory.mjs')).setPriority(dir, 'UNIQUE-PRIORITY-NOTE');
   const ctx = hook('SessionStart', { cwd: dir, session_id: 'A', source: 'compact' }, { MIS_STATE_HOME: h }).hookSpecificOutput.additionalContext;
   assert.equal(ctx.split('UNIQUE-PRIORITY-NOTE').length - 1, 1);
 });
 
-test('M7 N1: .git is refused in any case', async () => {
+test('.git is refused in any letter case', async () => {
   const dir = makeRepo();
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
   try { for (const p of ['.GIT/config', '.Git/HEAD']) assert.equal((await s.call('wiki_ingest', { path: p })).isError, true, p); } finally { s.close(); }
 });
 
-test('M7 N2: outside a repo SessionStart does not detect or store a project', () => {
+test('outside a repo SessionStart does not detect or store a project', () => {
   const h = home(), nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
   write(nr, { 'Cargo.toml': '[package]\nname="x"\n' });
   hook('SessionStart', { cwd: nr, session_id: 'A', source: 'startup' }, { MIS_STATE_HOME: h });
   assert.equal(existsSync(join(h, 'memory', 'project.json')), false);
 });
 
-test('M7 N3: after compaction the project block is still injected', () => {
+test('after compaction the project block is still injected', () => {
   const dir = makeRepo({ 'package.json': JSON.stringify({ scripts: { test: 'node --test' } }) }), h = home();
   hook('SessionStart', { cwd: dir, session_id: 'A', source: 'startup' }, { MIS_STATE_HOME: h });
   const ctx = hook('SessionStart', { cwd: dir, session_id: 'A', source: 'compact' }, { MIS_STATE_HOME: h }).hookSpecificOutput.additionalContext;
   assert.match(ctx, /## Project/);
 });
 
-test('M7 N4: only a plain whole-suite test command is learned', () => {
+test('only a plain whole-suite test command is learned', () => {
   const dir = makeRepo({ 'package.json': JSON.stringify({ name: 'x' }) }), h = home();
   const post = (command) => hook('PostToolUse', { cwd: dir, session_id: 'A', tool_name: 'Bash', tool_input: { command } }, { MIS_STATE_HOME: h });
   post('pytest tests/test_one.py -k slow');
@@ -111,7 +111,7 @@ test('M7 N4: only a plain whole-suite test command is learned', () => {
   assert.equal(projectRead(dir).build.testCommand, 'npm test');
 });
 
-test('M7 N5: code that kills its own interpreter is not run twice', async () => {
+test('code that kills its own interpreter is not run twice', async () => {
   const dir = makeRepo();
   const f = join(dir, 'count.txt');
   const s = await mcpSession(dir, { MIS_STATE_HOME: home() });
@@ -123,7 +123,7 @@ test('M7 N5: code that kills its own interpreter is not run twice', async () => 
   } finally { s.close(); }
 });
 
-test('M7 N2 (rest): outside a repo a passing test command is not learned into a global project', () => {
+test('outside a repo a passing test command is not learned into a global project', () => {
   const h = home(), nr = mkdtempSync(join(tmpdir(), 'mis-nr-'));
   hook('PostToolUse', { cwd: nr, session_id: 'A', tool_name: 'Bash', tool_input: { command: 'cargo test' } }, { MIS_STATE_HOME: h });
   assert.equal(existsSync(join(h, 'memory', 'project.json')), false);

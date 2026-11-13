@@ -71,7 +71,7 @@ test('doctor states that token budgets are not enforceable by a plugin', () => {
   assert.match(tb.detail, /not supported/);
 });
 
-test('M6 D11: freeze shows in the line; statusLine.chain appends another status line command', () => {
+test('freeze shows in the line; statusLine.chain appends another status line command', () => {
   const dir = makeRepo({ 'src/a.js': '' });
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const env = { ...process.env, MIS_STATE_HOME: home, NO_COLOR: '1' }; delete env.CLAUDE_CODE_SESSION_ID;
@@ -85,7 +85,7 @@ test('M6 D11: freeze shows in the line; statusLine.chain appends another status 
   assert.match(bad.stdout, /^MIS ▸ idle/, 'a failing chained command is ignored');
 });
 
-test('M6 R2-4: a chain that points back at this status line does not recurse', () => {
+test('a chain that points back at this status line does not recurse', () => {
   const dir = makeRepo();
   const home = mkdtempSync(join(tmpdir(), 'mis-home-'));
   const self = `MIS_STATE_HOME=${home} node ${join(ROOT, 'scripts', 'statusline.mjs')}`;
@@ -99,10 +99,10 @@ test('M6 R2-4: a chain that points back at this status line does not recurse', (
   assert.equal(ps.stdout.trim(), '', 'no leftover processes');
 });
 
-test('M9-F1: agents (with stale count) and todos sit between frozen and the branch; absent when zero', () => {
+test('agents (with stale count) and todos sit between frozen and the branch; absent when zero', () => {
   assert.equal(renderExtras({ style: 'full', agents: { running: 2, stale: 1 }, todo: { done: 1, total: 3 }, branch: 'main' }), ' · style full · agents 2 (1 stale) · todo 1/3 · main');
   assert.equal(renderExtras({ style: 'full', agents: { running: 1, stale: 0 }, branch: 'main' }), ' · style full · agents 1 · main');
-  assert.equal(renderExtras({ style: 'full', agents: { running: 0, stale: 0 }, todo: null, branch: 'main' }), ' · style full · main', 'M6 format unchanged without agents/todos');
+  assert.equal(renderExtras({ style: 'full', agents: { running: 0, stale: 0 }, todo: null, branch: 'main' }), ' · style full · main', 'format unchanged without agents/todos');
 });
 
 test('gauges: context and 5-hour / 7-day plan usage render as 10-cell bars with time to reset; absent windows are skipped', () => {

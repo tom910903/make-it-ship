@@ -1,4 +1,4 @@
-// M9-D D5: telemetry is off by default (no event file), on means a local JSONL only, sync goes only to the configured
+// Telemetry is off by default (no event file), on means a local JSONL only, sync goes only to the configured
 // endpoint (a local stub here), analytics reads the local file.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

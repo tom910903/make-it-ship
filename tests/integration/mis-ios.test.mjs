@@ -55,7 +55,7 @@ test('ios devices: parsing devicectl output; no connected device → device QA B
   assert.equal(deviceProfile([{ id: 'ABC', name: 'x', connected: true }]).blocked, undefined);
 });
 
-test('bridge-scan also finds a copied bridge package, a Package.swift dependency, and an Xcode project reference (M5 D-1)', () => {
+test('bridge-scan also finds a copied bridge package, a Package.swift dependency, and an Xcode project reference', () => {
   const dir = makeRepo({ 'App/Main.swift': 'import SwiftUI\n' });
   for (const [path, body] of [
     ['Packages/DebugBridge/Sources/DebugBridge/DebugBridge.swift', '#if DEBUG\npublic enum DebugBridge {}\n#endif\n'],

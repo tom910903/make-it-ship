@@ -1,4 +1,4 @@
-// M9-E browse commands against the real Chrome on this machine (own repo, daemon and fake HOME); without Chrome every
+// The wider browse command set against the real Chrome on this machine (own repo, daemon and fake HOME); without Chrome every
 // case asserts BLOCKED. Never touches the real home, the real browser profiles or the Keychain: HOME is a temp dir,
 // `security` is a stub on PATH, and the "real browser" cookie store is a synthetic SQLite file built here.
 import { test, before, after } from 'node:test';
@@ -36,7 +36,7 @@ let unlock = () => {};
 before(async () => {
   unlock = await browserLock();
   dir = makeRepo();
-  out = mkdtempSync(join(tmpdir(), 'mis-browse-m9e-out-'));
+  out = mkdtempSync(join(tmpdir(), 'mis-browse-extended-out-'));
   server = spawn(process.execPath, [SITE], { stdio: ['ignore', 'pipe', 'inherit'] });
   const [line] = await once(server.stdout, 'data');
   base = `http://127.0.0.1:${String(line).trim()}`;
@@ -159,7 +159,7 @@ test('cookie-import loads a JSON cookie file; the next goto sends them', () => {
   const r = ok(b('cookie-import', f));
   assert.equal(r.imported, 2);
   assert.doesNotMatch(JSON.stringify(r), /j1/, 'values are not printed');
-  // M9 fix1: browsing a non-local site that the imported cookies log into needs --remote (the guard asks every time)
+  // browsing a non-local site that the imported cookies log into needs --remote (the guard asks every time)
   failed(b('goto', `${site}/echo`), /imported credentials[\s\S]*--remote/);
   failed(b('chain', JSON.stringify([['goto', `${site}/echo`]])), /imported credentials/);
   ok(b('goto', `${base}/next`)); // local pages need no --remote
@@ -261,7 +261,7 @@ test('state save|load keeps cookies and pages across a browser restart; the file
   ok(b('restart')); // later tests start without the restored sessions
 });
 
-test('M9 fix1 D4: connect refuses the real data of every Chromium browser, through letter-case variants, symlinks and copies (a dir with a Local State that is not its own profile)', () => {
+test('connect refuses the real data of every Chromium browser, through letter-case variants, symlinks and copies (a dir with a Local State that is not its own profile)', () => {
   if (!chrome) return blocked(b('connect'));
   const mac = process.platform === 'darwin';
   const appSupport = (...p) => join(H.home, 'Library', 'Application Support', ...p);
