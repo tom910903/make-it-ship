@@ -29,6 +29,7 @@ const USAGE = `usage: mis browse <command> [args] [--remote]
               pdf [path] [--format letter|a4|legal] [--margins 0.5in] [--landscape] | diff <url1> <url2>
               media [--images|--videos|--audio] [sel] | inspect [sel] [--all] | ux-audit
               webgl [canvas sel] [--frames 10..600] [--reduced-motion]   (WebGL available, each canvas drawn/animating, fps)
+              a11y [sel] [--all]   (axe-core WCAG A/AA) | layout-check [--widths 1440,1024,820,768,390] [--stress]
   style       style <sel> <prop> <value> | style --undo [N] | cleanup [--ads|--cookies|--sticky|--social|--all]
               prettyscreenshot [--scroll-to sel|text] [--cleanup] [--hide sel]... [--width px] [path]
   snapshot    snapshot [-i] [-c] [-C] [-d N] [-s sel] [-D] [-a] [-o path] | snapshot -H '{"@e1":"green"}' [-o path]

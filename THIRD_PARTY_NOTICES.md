@@ -27,6 +27,17 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## Vendored code
 
+`vendor/ui-ux-pro-max/data/` is the data of ui-ux-pro-max-skill (https://github.com/nextlevelbuilder/ui-ux-pro-max-skill, commit
+in `vendor/ui-ux-pro-max/SOURCE`), CSV files copied unmodified; the Google Fonts and icon catalogues are left out. `mis design
+search` reads it. MIT license, Copyright (c) 2024 Next Level Builder, in `vendor/ui-ux-pro-max/LICENSE`.
+
+`vendor/axe-core/axe.min.js` is axe-core 4.14.0 (https://github.com/dequelabs/axe-core), unmodified. `mis browse a11y` loads it
+into the page under test. It is licensed under the Mozilla Public License 2.0 (MPL-2.0), in `vendor/axe-core/LICENSE`, with its
+third-party notices in `vendor/axe-core/LICENSE-3RD-PARTY.txt`; its source is at the address above.
+
+`scripts/lib/copy-lint.mjs` takes its word and phrase lists from taste-skill (https://github.com/Leonxlnx/taste-skill,
+scripts/copy-lint.mjs). MIT license, Copyright (c) 2026 Leonxlnx.
+
 `vendor/marked/marked.esm.js` is marked 18.0.2 (https://github.com/markedjs/marked), copied unmodified except for the
 removed `sourceMappingURL` line. It is used by `mis pdf`. Its license (MIT, plus the original Markdown BSD-style notice
 by John Gruber) is in `vendor/marked/LICENSE.md`:

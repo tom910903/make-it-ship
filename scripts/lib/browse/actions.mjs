@@ -8,6 +8,8 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { toUrl, lineDiff, toInches, BROWSE_ALWAYS_ASK, isLocalOrigin } from './util.mjs';
 import { decodePng, frameStats } from '../png.mjs';
 
+const AXE = fileURLToPath(new URL('../../../vendor/axe-core/axe.min.js', import.meta.url));
+
 export const EXTENSION_DIR = fileURLToPath(new URL('../../../extension', import.meta.url));
 const mb = (n) => Math.round(n / 1048576 * 10) / 10;
 
@@ -244,6 +246,47 @@ const JS = {
   webgl: (sel) => `(() => ({ reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
     canvases: [...document.querySelectorAll(${JSON.stringify(sel)})].filter((e) => e instanceof HTMLCanvasElement)
       .map((e, i) => ({ selector: e.id ? '#' + CSS.escape(e.id) : ${JSON.stringify(sel)} + ' [' + i + ']', width: e.width, height: e.height })) }))()`,
+  /** axe-core over the document (or one element): WCAG A/AA rules (with --all also best practices), violations only */
+  axeRun: (sel, all) => `(async () => {
+    const ctx = ${JSON.stringify(sel ?? null)} ? document.querySelector(${JSON.stringify(sel ?? '')}) : document;
+    if (!ctx) throw new Error('no element matches ' + ${JSON.stringify(sel ?? '')});
+    const r = await axe.run(ctx, { resultTypes: ['violations'], ${all ? '' : "runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },"} });
+    const v = r.violations.map((x) => ({ id: x.id, impact: x.impact, help: x.help, helpUrl: x.helpUrl, wcag: x.tags.filter((t) => /^wcag\\d/.test(t)),
+      count: x.nodes.length, targets: x.nodes.slice(0, 3).map((n) => n.target.join(' ')) }));
+    const counts = {}; for (const x of v) counts[x.impact ?? 'unknown'] = (counts[x.impact ?? 'unknown'] ?? 0) + x.count;
+    return { engine: 'axe-core ' + axe.version, rules: ${all ? "'all'" : "'wcag a/aa'"}, violations: v, counts, passes: r.passes.length }; })()`,
+  /**
+   * What a reviewer marks by eye, at the current width: horizontal overflow (and what sticks out), text cut off by its box,
+   * touch targets under 24x24 CSS px (WCAG 2.5.8; inline links in text are exempt) and text under 12px. stress first appends
+   * long words to headings, buttons, links, labels and table cells, checks, then puts every text back.
+   */
+  layoutCheck: (stress) => `(() => {
+    const visible = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && +s.opacity !== 0; };
+    const desc = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : e.classList[0] ? '.' + e.classList[0] : '') + (e.textContent.trim() ? ' "' + e.textContent.trim().replace(/\\s+/g, ' ').slice(0, 30) + '"' : '');
+    const restore = [];
+    if (${!!stress}) for (const e of document.querySelectorAll('h1,h2,h3,h4,button,a,label,th,td,[role=button]')) {
+      if (e.children.length || !e.textContent.trim()) continue;
+      restore.push([e, e.textContent]); e.textContent = e.textContent + ' Internationalisierungsverbesserungsvorschläge and a much longer label than planned';
+    }
+    try {
+      const all = [...document.body.querySelectorAll('*')].slice(0, 4000).filter(visible);
+      const overflowX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+      const scrolls = (e) => { for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o === 'auto' || o === 'scroll') return true; } return false; };
+      const ownText = (e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+      // what makes the page wider: a box that sticks out, or text wider than its own box (a long word that does not wrap)
+      const sticksOut = (e) => { const r = e.getBoundingClientRect(); return r.right > innerWidth + 1 && r.left < innerWidth; };
+      const textSpills = (e) => ownText(e) && e.scrollWidth > e.clientWidth + 1 && !/hidden|clip|auto|scroll/.test(getComputedStyle(e).overflowX);
+      const offscreen = overflowX ? all.filter((e) => (sticksOut(e) || textSpills(e)) && !scrolls(e)).filter((e, i, a) => !a.includes(e.parentElement)).slice(0, 10).map(desc) : [];
+      const clipped = all.filter((e) => { if (!ownText(e)) return false; const s = getComputedStyle(e);
+        const hides = /hidden|clip/.test(s.overflowX + s.overflowY);
+        return hides && s.textOverflow !== 'ellipsis' && (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1); }).slice(0, 10).map(desc);
+      const inline = (e) => e.tagName === 'A' && [...e.parentElement.childNodes].some((n) => n !== e && n.nodeType === 3 && n.textContent.trim());
+      const smallTargets = all.filter((e) => e.matches('a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=checkbox],[role=tab]') && !inline(e))
+        .map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width < 24 || r.height < 24).slice(0, 10).map(([e, r]) => desc(e) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+      const smallText = all.filter((e) => ownText(e) && parseFloat(getComputedStyle(e).fontSize) < 12).slice(0, 10).map((e) => desc(e) + ' ' + getComputedStyle(e).fontSize);
+      return { overflowX, offscreen, clipped, smallTargets, smallText };
+    } finally { for (const [e, t] of restore) e.textContent = t; }
+  })()`,
   /** scrolls canvas i of sel into view and returns its box in page coordinates (what capture() clips) */
   canvasBox: (sel, i) => `(() => { const e = [...document.querySelectorAll(${JSON.stringify(sel)})].filter((x) => x instanceof HTMLCanvasElement)[${i}];
     if (!e) return { x: 0, y: 0, width: 0, height: 0 }; // removed by the page since it was listed
@@ -776,6 +819,30 @@ const HANDLERS = {
       boxModel: m ? { content: side(m.content), padding: side(m.padding), border: side(m.border), margin: side(m.margin) } : null };
   },
   async 'ux-audit'(b, tab) { return b.evaluate(tab, JS.uxAudit); },
+  // Accessibility with axe-core (vendor/axe-core, MPL-2.0, unmodified): loaded into the page for the run, then WCAG A/AA rules.
+  async a11y(b, tab, args) {
+    const [o, [sel]] = flags(args, { '--all': true });
+    await b.evaluate(tab, `${readFileSync(AXE, 'utf8')}\n;true`);
+    return b.evaluate(tab, JS.axeRun(sel, !!o['--all']));
+  },
+  // Layout at several widths (default the five a reviewer checks); --stress repeats each with long texts put in.
+  async 'layout-check'(b, tab, args) {
+    const [o] = flags(args, { '--widths': 1, '--stress': true });
+    const widths = (o['--widths'] ?? '1440,1024,820,768,390').split(',').map(Number);
+    if (!widths.length || widths.some((w) => !Number.isInteger(w) || w < 240 || w > 3840)) throw USAGE_ERR('layout-check [--widths 1440,1024,820,768,390] [--stress]');
+    const saved = { ...b.viewport }, out = [];
+    try {
+      for (const width of widths) {
+        b.viewport = { ...saved, width, height: saved.height || 900, scale: 1 };
+        await b.applyViewport(tab);
+        await sleep(200); // media queries and layout settle
+        const r = await b.evaluate(tab, JS.layoutCheck(false));
+        out.push({ width, ...r, ...(o['--stress'] ? { stress: await b.evaluate(tab, JS.layoutCheck(true)) } : {}) });
+      }
+    } finally { b.viewport = saved; await b.applyViewport(tab); }
+    const bad = (r) => (r.overflowX > 0 ? 1 : 0) + r.clipped.length + r.smallTargets.length + r.smallText.length;
+    return { ok: out.every((r) => !bad(r) && (!r.stress || !bad(r.stress))), widths: out };
+  },
   // 3D: whether this browser runs WebGL (the browser's own GPU report: no context is created in the page), and for each canvas
   // whether anything is drawn and whether it moves, judged from two screenshots of its box (the page is only scrolled to it);
   // the frame rate is how often requestAnimationFrame fires, which a page that drops frames lowers.
@@ -1098,7 +1165,7 @@ async function history(b, tab, delta) {
 const GATED = new Set(['storage', 'js', 'eval', 'upload']);
 
 // Commands a browser skill may replay (skillify): the rest only observe, or are lifecycle/meta.
-const NOT_IN_SKILLS = new Set(['history', 'url', 'tabs', 'console', 'network', 'dialog', 'perf', 'webgl', 'memory', 'inbox', 'watch', 'focus', 'connect', 'disconnect', 'handoff', 'resume', 'cdp']);
+const NOT_IN_SKILLS = new Set(['history', 'url', 'tabs', 'console', 'network', 'dialog', 'perf', 'webgl', 'a11y', 'layout-check', 'memory', 'inbox', 'watch', 'focus', 'connect', 'disconnect', 'handoff', 'resume', 'cdp']);
 
 export async function runCommand(b, cmd, args, ctx) {
   if (cmd === 'chain') return chain(b, args[0], ctx);

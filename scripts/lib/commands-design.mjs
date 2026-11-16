@@ -1,10 +1,13 @@
 // M9-D D7: AI design mockups (absorbs gstack design/ binary: generate, variants, iterate, evolve, compare, gallery).
 // Generation calls the OpenAI image API with the user's own key: the brief (and any input image) leaves the machine,
 // the guard asks every time (policy.mjs EXTERNAL_MIS), and company policy may forbid it. Output: design/variants/.
+// search and copy-lint are local: design knowledge from vendor/ui-ux-pro-max, copy rules from copy-lint.mjs.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fail, flag, rootOf, readJson, writeJson, slug, stamp, textArg } from './cli-util.mjs';
 import { homeDir } from './home.mjs';
+import { BRIEF, DOMAINS, brief, search, stacks } from './design-knowledge.mjs';
+import { lintFiles } from './copy-lint.mjs';
 
 const apiBase = () => (process.env.MIS_OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
 function apiKey() {
@@ -39,8 +42,35 @@ function record(cwd, entry, png) {
 
 const opts = (args) => ({ size: flag(args, '--size'), quality: flag(args, '--quality'), name: flag(args, '--name') });
 
+/** mis design search <query> [--domain d | --stack s] [--limit n] [--full]; without either: a first brief over BRIEF. */
+function searchCmd(args) {
+  const take = (f) => { const i = args.indexOf(f); return i < 0 ? undefined : args.splice(i, 2)[1]; };
+  const domain = take('--domain'), stack = take('--stack'), limit = Number(take('--limit') ?? (domain || stack ? 5 : 2));
+  const full = args.includes('--full'); if (full) args.splice(args.indexOf('--full'), 1);
+  if (args[0] === 'stacks') return { stacks: stacks(), domains: Object.keys(DOMAINS), brief: BRIEF };
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) fail('usage: mis design search <query> [--domain d | --stack s] [--limit 1..20] [--full]');
+  const query = args.join(' ');
+  try {
+    if (domain && stack) fail('use one of --domain and --stack');
+    return domain || stack ? { query, ...(stack ? { stack } : { domain }), results: search(query, { domain, stack, limit, full }) } : { query, brief: brief(query, { limit }) };
+  } catch (e) { return fail(e.message); }
+}
+
+/** mis design copy-lint <file…>: copy that reads as machine-written; exits 1 when there is any. */
+function copyLint(files, cwd) {
+  if (!files.length) fail('usage: mis design copy-lint <file…> (HTML, JSX, Swift, Kotlin, string resources, Markdown)');
+  const missing = files.filter((f) => !existsSync(resolve(cwd, f)));
+  if (missing.length) fail(`no such file: ${missing.join(', ')}`);
+  const results = lintFiles(files.map((f) => resolve(cwd, f))).filter((r) => r.findings.length);
+  const count = results.reduce((n, r) => n + r.findings.length, 0);
+  if (count) process.exitCode = 1;
+  return { clean: !count, findings: count, files: results };
+}
+
 async function design([sub, ...argv], cwd) {
   const args = [...argv];
+  if (sub === 'search') return searchCmd(args);
+  if (sub === 'copy-lint') return copyLint(args, cwd);
   if (sub === 'generate') {
     const o = opts(args), brief = args.length === 1 ? textArg(cwd, args[0]) : args.join(' ');
     if (!brief) fail('usage: mis design generate <brief|file> [--size 1536x1024] [--quality high] [--name n]');
@@ -85,7 +115,7 @@ async function design([sub, ...argv], cwd) {
     writeFileSync(board, html);
     return { board, variants: pngs.length };
   }
-  return fail('usage: mis design generate <brief> | variants <brief> [--count N] | iterate <id|png> <feedback> | evolve <png> <brief> | compare | gallery');
+  return fail('usage: mis design search <query> [--domain d | --stack s] [--limit n] [--full] | search stacks | copy-lint <file…> | generate <brief> | variants <brief> [--count N] | iterate <id|png> <feedback> | evolve <png> <brief> | compare | gallery');
 }
 
 export const designCommands = { design };

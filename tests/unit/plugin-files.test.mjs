@@ -368,3 +368,15 @@ test('references, 3D and motion cover web, desktop and mobile, each with its own
   for (const re of [/gfx <package>/, /reduced-motion on\|off\|status/]) assert.match(read('skills/android/SKILL.md'), re);
   for (const re of [/simctl/, /mis frames/, /Instruments/]) assert.match(read('skills/ios/SKILL.md'), re);
 });
+
+test('design knowledge, copy, accessibility and layout checks are wired into the flow, with their licenses noticed', () => {
+  const de = read('skills/run/phases/design-explore.md');
+  for (const re of [/mis design search/, /--stack/, /threejs/]) assert.match(de, re);
+  const designer = read('agents/designer.md');
+  for (const re of [/mis design search/, /mis design copy-lint/, /mis browse a11y/, /mis browse layout-check/]) assert.match(designer, re);
+  const qa = read('skills/run/phases/qa.md');
+  for (const re of [/mis browse a11y/, /mis browse layout-check --stress/, /mis design copy-lint/, /Accessibility Inspector|Accessibility Scanner/]) assert.match(qa, re);
+  const notices = read('THIRD_PARTY_NOTICES.md');
+  for (const re of [/ui-ux-pro-max/, /axe-core[\s\S]*MPL-2\.0/, /taste-skill/]) assert.match(notices, re);
+  for (const f of ['vendor/ui-ux-pro-max/LICENSE', 'vendor/axe-core/LICENSE']) assert.ok(existsSync(join(ROOT, f)), f);
+});
