@@ -13,6 +13,17 @@ const AXE = fileURLToPath(new URL('../../../vendor/axe-core/axe.min.js', import.
 export const EXTENSION_DIR = fileURLToPath(new URL('../../../extension', import.meta.url));
 const mb = (n) => Math.round(n / 1048576 * 10) / 10;
 
+/**
+ * The browser's GPU report → whether pages get WebGL: on the GPU, in software only, or not at all. Without a GPU (the Linux
+ * CI) Chrome reports WebGL as software only and draws it with SwiftShader: a scene is drawn and moves, but its frame rate
+ * says nothing about a GPU.
+ */
+export function webglSupport(status = 'unknown', renderer = null) {
+  const available = status === 'unknown' ? null : /^enabled/.test(status) || /_software$/.test(status);
+  const software = !!available && (/_software$/.test(status) || /swiftshader|llvmpipe|softpipe/i.test(renderer ?? ''));
+  return { available, ...(software ? { software } : {}), status, renderer };
+}
+
 const realish = (p) => { let base = p, rest = ''; while (!existsSync(base) && dirname(base) !== base) { rest = join(basename(base), rest); base = dirname(base); } try { return join(realpathSync(base), rest).replace(/\/$/, ''); } catch { return p; } };
 
 /** The existing ancestors of a path, nearest first (a profile dir may not exist yet). */
@@ -861,7 +872,7 @@ const HANDLERS = {
       if (!info.canvases.length) throw new Error(`no canvas matches ${sel}`);
       const gpu = (await b.cdp.send('SystemInfo.getInfo', {}, undefined, 10000).catch(() => null))?.gpu;
       const status = gpu?.featureStatus?.webgl ?? 'unknown';
-      const webgl = { available: status === 'unknown' ? null : /^enabled/.test(status), status, renderer: gpu?.auxAttributes?.glRenderer ?? null };
+      const webgl = webglSupport(status, gpu?.auxAttributes?.glRenderer ?? null);
       const canvases = [];
       for (const [i, c] of info.canvases.slice(0, 10).entries()) {
         const box = await b.evaluate(tab, JS.canvasBox(sel, i));
@@ -872,8 +883,11 @@ const HANDLERS = {
         canvases.push({ ...c, visible: true, colors, blank, animating });
       }
       const fps = await b.evaluate(tab, JS.fps(frames));
-      const note = webgl.available === false ? `WebGL is not available in this browser (${status}: no GPU, or it is turned off): a WebGL canvas stays blank here, which says nothing about the page`
-        : webgl.available === null ? 'the browser did not report whether WebGL works; judge the canvases from the screenshots' : null;
+      const allBlank = canvases.some((c) => c.visible) && canvases.every((c) => !c.visible || c.blank);
+      const note = webgl.available === false ? `WebGL is not available in this browser (${status}: turned off, or no GPU and no software rendering): a WebGL canvas stays blank here, which says nothing about the page`
+        : webgl.available === null ? 'the browser did not report whether WebGL works; judge the canvases from the screenshots'
+        : webgl.software ? `WebGL runs in software in this browser (${status}${webgl.renderer ? `, ${webgl.renderer}` : ''}: no GPU): whether a scene is drawn and moves counts, its frame rate says nothing about a GPU${allBlank ? '; every canvas is blank, which can also be the browser refusing WebGL in software' : ''}`
+        : null;
       return { webgl, reducedMotion: info.reducedMotion, fps, canvases, ...(note ? { note } : {}) };
     } finally {
       if (reduce) { await b.send(tab, 'Emulation.setEmulatedMedia', { features: [] }).catch(() => {}); await HANDLERS.reload(b, tab).catch(() => {}); }

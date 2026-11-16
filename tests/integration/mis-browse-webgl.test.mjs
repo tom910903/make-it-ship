@@ -1,6 +1,7 @@
-// mis browse webgl against the real Chrome on this machine; without Chrome every case asserts BLOCKED. Where Chrome has no
-// WebGL (a machine without a GPU, as on the Linux CI), the command must say so instead of reporting a blank canvas as a
-// rendering bug; a second workspace runs Chrome with --disable-gpu so that case is always tested.
+// mis browse webgl against the real Chrome on this machine; without Chrome every case asserts BLOCKED. Without a GPU Chrome
+// either draws WebGL in software (Linux, the CI: SwiftShader) or has none (macOS with --disable-gpu); the command must say
+// which, never report a blank canvas as a rendering bug nor a software scene as missing. A second workspace runs Chrome with
+// --disable-gpu so the no-GPU case is always tested.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -58,8 +59,9 @@ test('webgl: renderer, a drawn and animating canvas, a blank canvas, and the fra
   assert.deepEqual([scene.selector, scene.width, scene.height, empty.selector], ['#scene', 240, 160, '#empty']);
   assert.equal(empty.blank, true, 'nothing is drawn on #empty');
   assert.equal(r.reducedMotion, false);
-  if (!r.webgl.available) return noWebgl(r); // a machine without a GPU (the Linux CI)
-  assert.match(r.webgl.status, /^enabled/);
+  if (!r.webgl.available) return noWebgl(r); // WebGL turned off, or no GPU and no software rendering
+  if (r.webgl.software) softwareWebgl(r); // a machine without a GPU (the Linux CI)
+  else assert.match(r.webgl.status, /^enabled/);
   assert.ok(r.webgl.renderer, JSON.stringify(r.webgl));
   assert.equal(scene.blank, false, 'the triangle is drawn');
   assert.ok(scene.colors >= 2, `colors ${scene.colors}`);
@@ -69,16 +71,27 @@ test('webgl: renderer, a drawn and animating canvas, a blank canvas, and the fra
 
 /** No WebGL in this browser: said plainly (status and a note), and the scene cannot draw. */
 function noWebgl(r) {
-  assert.equal(r.webgl.available, false);
+  assert.equal(r.webgl.available, false, JSON.stringify(r.webgl));
   assert.ok(r.webgl.status && !/^enabled/.test(r.webgl.status), r.webgl.status);
   assert.match(r.note, /WebGL is not available/);
-  assert.equal(r.canvases.find((c) => c.selector === '#scene').blank, true);
+  assert.equal(r.canvases.find((c) => c.selector === '#scene').blank, true, `no WebGL, yet #scene is drawn: ${JSON.stringify(r.webgl)}`);
 }
 
-test('webgl in a browser without a GPU (--disable-gpu): not available, with the reason, and the scene stays blank', () => {
+/** WebGL only in software: available, said plainly (status and a note on the frame rate), and the scene is drawn. */
+function softwareWebgl(r) {
+  assert.deepEqual([r.webgl.available, r.webgl.software], [true, true], JSON.stringify(r.webgl));
+  assert.match(r.note, /WebGL runs in software/);
+  assert.match(r.note, /frame rate says nothing about a GPU/);
+  assert.equal(r.canvases.find((c) => c.selector === '#scene').blank, false, `software WebGL, yet #scene is blank: ${JSON.stringify(r.webgl)}`);
+}
+
+test('webgl in a browser without a GPU (--disable-gpu): no GPU in the report; drawn in software and said so, or no WebGL, blank and said so', () => {
   if (!chrome) return assert.match(nb('goto', pathToFileURL(page).href).err, /BLOCKED: no Chrome, Chromium or Edge/);
   ok(nb('goto', pathToFileURL(page).href));
-  noWebgl(ok(nb('webgl')));
+  const r = ok(nb('webgl'));
+  assert.ok(!/^enabled/.test(r.webgl.status) || r.webgl.software, `the GPU is off: ${JSON.stringify(r.webgl)}`);
+  if (r.webgl.available) softwareWebgl(r); // Linux: Chrome falls back to SwiftShader
+  else noWebgl(r); // macOS: no WebGL at all
 });
 
 test('webgl --reduced-motion: the page sees prefers-reduced-motion and its animation stops; the tab is normal afterwards', () => {
