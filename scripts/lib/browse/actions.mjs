@@ -6,6 +6,7 @@ import { browserDataDirs } from './cookies.mjs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { toUrl, lineDiff, toInches, BROWSE_ALWAYS_ASK, isLocalOrigin } from './util.mjs';
+import { decodePng, frameStats } from '../png.mjs';
 
 export const EXTENSION_DIR = fileURLToPath(new URL('../../../extension', import.meta.url));
 const mb = (n) => Math.round(n / 1048576 * 10) / 10;
@@ -240,6 +241,17 @@ const JS = {
     return { title: document.title, jsonld, og, twitter, meta }; })()`,
   storage: `(() => { const dump = (s) => Object.fromEntries(Array.from({ length: s.length }, (_, i) => [s.key(i), s.getItem(s.key(i))]));
     return { localStorage: dump(localStorage), sessionStorage: dump(sessionStorage) }; })()`,
+  webgl: (sel) => `(() => ({ reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    canvases: [...document.querySelectorAll(${JSON.stringify(sel)})].filter((e) => e instanceof HTMLCanvasElement)
+      .map((e, i) => ({ selector: e.id ? '#' + CSS.escape(e.id) : ${JSON.stringify(sel)} + ' [' + i + ']', width: e.width, height: e.height })) }))()`,
+  /** scrolls canvas i of sel into view and returns its box in page coordinates (what capture() clips) */
+  canvasBox: (sel, i) => `(() => { const e = [...document.querySelectorAll(${JSON.stringify(sel)})].filter((x) => x instanceof HTMLCanvasElement)[${i}];
+    if (!e) return { x: 0, y: 0, width: 0, height: 0 }; // removed by the page since it was listed
+    e.scrollIntoView({ block: 'center', behavior: 'instant' }); const r = e.getBoundingClientRect();
+    return { x: r.left + scrollX, y: r.top + scrollY, width: Math.round(r.width), height: Math.round(r.height) }; })()`,
+  fps: (n) => `new Promise((done) => { let k = 0; const t0 = performance.now();
+    const stop = setTimeout(() => done(k ? Math.round(k * 1000 / (performance.now() - t0)) : 0), ${Math.max(5000, n * 50)});
+    (function f() { if (++k < ${n}) requestAnimationFrame(f); else { clearTimeout(stop); done(Math.round(k * 1000 / (performance.now() - t0))); } })(); })`,
   media: (scope) => `(() => { const root = ${JSON.stringify(scope ?? null)} ? document.querySelector(${JSON.stringify(scope ?? '')}) : document;
     if (!root) throw new Error(${JSON.stringify(`no element matches ${scope}`)});
     const abs = (u) => { try { return u ? new URL(u, document.baseURI).href : null; } catch { return null; } };
@@ -764,6 +776,42 @@ const HANDLERS = {
       boxModel: m ? { content: side(m.content), padding: side(m.padding), border: side(m.border), margin: side(m.margin) } : null };
   },
   async 'ux-audit'(b, tab) { return b.evaluate(tab, JS.uxAudit); },
+  // 3D: whether this browser runs WebGL (the browser's own GPU report: no context is created in the page), and for each canvas
+  // whether anything is drawn and whether it moves, judged from two screenshots of its box (the page is only scrolled to it);
+  // the frame rate is how often requestAnimationFrame fires, which a page that drops frames lowers.
+  // --reduced-motion reloads the page with prefers-reduced-motion: reduce, then lifts the emulation and reloads again.
+  async webgl(b, tab, args) {
+    const [o, [sel = 'canvas']] = flags(args, { '--reduced-motion': true, '--frames': 1 });
+    const frames = o['--frames'] === undefined ? 60 : Number(o['--frames']);
+    if (!Number.isInteger(frames) || frames < 10 || frames > 600) throw USAGE_ERR('webgl [selector] [--frames 10..600] [--reduced-motion]');
+    const reduce = !!o['--reduced-motion'];
+    if (reduce) {
+      await b.send(tab, 'Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await HANDLERS.reload(b, tab);
+    }
+    try {
+      const info = await b.evaluate(tab, JS.webgl(sel));
+      if (!info.canvases.length) throw new Error(`no canvas matches ${sel}`);
+      const gpu = (await b.cdp.send('SystemInfo.getInfo', {}, undefined, 10000).catch(() => null))?.gpu;
+      const status = gpu?.featureStatus?.webgl ?? 'unknown';
+      const webgl = { available: status === 'unknown' ? null : /^enabled/.test(status), status, renderer: gpu?.auxAttributes?.glRenderer ?? null };
+      const canvases = [];
+      for (const [i, c] of info.canvases.slice(0, 10).entries()) {
+        const box = await b.evaluate(tab, JS.canvasBox(sel, i));
+        if (!box.width || !box.height) { canvases.push({ ...c, visible: false }); continue; }
+        const a = decodePng(await capture(b, tab, { clip: box }));
+        await sleep(400);
+        const { colors, blank, animating } = frameStats(a, decodePng(await capture(b, tab, { clip: box })));
+        canvases.push({ ...c, visible: true, colors, blank, animating });
+      }
+      const fps = await b.evaluate(tab, JS.fps(frames));
+      const note = webgl.available === false ? `WebGL is not available in this browser (${status}: no GPU, or it is turned off): a WebGL canvas stays blank here, which says nothing about the page`
+        : webgl.available === null ? 'the browser did not report whether WebGL works; judge the canvases from the screenshots' : null;
+      return { webgl, reducedMotion: info.reducedMotion, fps, canvases, ...(note ? { note } : {}) };
+    } finally {
+      if (reduce) { await b.send(tab, 'Emulation.setEmulatedMedia', { features: [] }).catch(() => {}); await HANDLERS.reload(b, tab).catch(() => {}); }
+    }
+  },
   async style(b, tab, args) {
     if (args[0] === '--undo') {
       const n = Number(args[1] ?? 1);
@@ -1050,7 +1098,7 @@ async function history(b, tab, delta) {
 const GATED = new Set(['storage', 'js', 'eval', 'upload']);
 
 // Commands a browser skill may replay (skillify): the rest only observe, or are lifecycle/meta.
-const NOT_IN_SKILLS = new Set(['history', 'url', 'tabs', 'console', 'network', 'dialog', 'perf', 'memory', 'inbox', 'watch', 'focus', 'connect', 'disconnect', 'handoff', 'resume', 'cdp']);
+const NOT_IN_SKILLS = new Set(['history', 'url', 'tabs', 'console', 'network', 'dialog', 'perf', 'webgl', 'memory', 'inbox', 'watch', 'focus', 'connect', 'disconnect', 'handoff', 'resume', 'cdp']);
 
 export async function runCommand(b, cmd, args, ctx) {
   if (cmd === 'chain') return chain(b, args[0], ctx);

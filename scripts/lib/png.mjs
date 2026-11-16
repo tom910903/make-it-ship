@@ -169,3 +169,23 @@ export function compareImages(a, b, { tolerance = 16, grid = 8, maxShift = 8 } =
   return { score: pick.score, diffPixels: pick.n, contentPixels: pick.content, totalPixels: total, sizeMatch,
     hotspots, diff, ...(pick.dx || pick.dy ? { shift: { dx: -pick.dx || 0, dy: -pick.dy || 0 } } : {}) }; // shift: where the second image's content sits
 }
+
+/**
+ * Two screenshots of the same area (any platform): distinct colors of the first (4 bits a channel), whether it is one flat
+ * color (nothing drawn) and whether the second differs in more than 0.2% of its pixels (it moves). clip = {x, y, width, height}.
+ */
+export function frameStats(a, z, clip = { x: 0, y: 0, width: a.width, height: a.height }) {
+  if (a.width !== z.width || a.height !== z.height) throw new Error(`the two images are not the same size (${a.width}x${a.height} and ${z.width}x${z.height})`);
+  const { x, y, width, height } = clip;
+  if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > a.width || y + height > a.height) throw new Error(`clip ${x},${y},${width},${height} is outside the image (${a.width}x${a.height})`);
+  const colors = new Set();
+  let changed = 0;
+  for (let row = y; row < y + height; row++) {
+    for (let col = x; col < x + width; col++) {
+      const i = (row * a.width + col) * 4, d = a.data, e = z.data;
+      colors.add(((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4));
+      if (Math.abs(d[i] - e[i]) + Math.abs(d[i + 1] - e[i + 1]) + Math.abs(d[i + 2] - e[i + 2]) > 24) changed++;
+    }
+  }
+  return { width, height, colors: colors.size, blank: colors.size <= 1, animating: changed / (width * height) > 0.002 };
+}

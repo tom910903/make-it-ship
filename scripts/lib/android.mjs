@@ -74,6 +74,33 @@ export function launchArgs(pkg) {
   return ['monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1'];
 }
 
+/** Frame statistics from `dumpsys gfxinfo <pkg>` (total and janky frames, frame-time percentiles in ms); null when the app is not running. */
+export function parseGfx(text) {
+  if (/No process found/i.test(text) || !/Total frames rendered/.test(text)) return null;
+  const num = (re) => { const m = text.match(re); return m ? Number(m[1]) : null; };
+  return { totalFrames: num(/Total frames rendered:\s*(\d+)/), jankyFrames: num(/^Janky frames:\s*(\d+)/m), jankyPercent: num(/^Janky frames:\s*\d+\s*\(([\d.]+)%\)/m),
+    percentilesMs: Object.fromEntries([50, 90, 95, 99].map((p) => [`p${p}`, num(new RegExp(`^${p}th percentile:\\s*(\\d+)ms`, 'm'))])) };
+}
+
+/** An app's layer names from `dumpsys SurfaceFlinger --list`: Android 14+ prints RequestedLayerState{<name> parentId=…}, older
+ * Android one name per line. A 3D scene in a SurfaceView or a child surface (GL, Vulkan) is one of these layers, not a HWUI frame. */
+export function packageLayers(list, pkg) {
+  const mine = new RegExp(`(^|[^\\w.])${pkg.replace(/\./g, '\\.')}/`);
+  return [...new Set(String(list).split(/\r?\n/).map((l) => {
+    const m = l.match(/^RequestedLayerState\{(.*)$/);
+    return (m ? m[1].replace(/ parentId=.*$/, '').replace(/\}$/, '') : l).trim();
+  }).filter((n) => n && mine.test(n)))];
+}
+
+const NOT_PRESENTED = '9223372036854775807';
+/** `dumpsys SurfaceFlinger --latency <layer>`: frames presented in its window (the last 127) and their rate from actualPresent. */
+export function latencyFps(text) {
+  const t = String(text).trim().split(/\r?\n/).slice(1).map((l) => l.trim().split(/\s+/)[1]).filter((v) => v && v !== '0' && v !== NOT_PRESENTED).map(Number);
+  if (t.length < 2) return { frames: t.length, fps: 0 };
+  const span = Math.max(...t) - Math.min(...t);
+  return { frames: t.length, fps: span > 0 ? Math.round((t.length - 1) * 1e10 / span) / 10 : 0 };
+}
+
 const ok = (r, what) => (r.status === 0 ? r : fail(`adb ${what} failed: ${String(r.stderr || r.error?.message || '').trim()}`));
 export const screenshot = (serial) => ok(adb(['-s', serial, 'exec-out', 'screencap', '-p'], { encoding: 'buffer' }), 'screencap').stdout;
 export const uiNodes = (serial) => nodesFromUiXml(ok(adb(['-s', serial, 'exec-out', 'uiautomator', 'dump', '/dev/tty']), 'uiautomator dump').stdout);

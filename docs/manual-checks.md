@@ -13,6 +13,7 @@
 | 7 | Android on a real phone | Passed on the emulator only (2026-10-22); an emulator does not count as a device | | | |
 | 8 | Second opinion from another model | Passed with codex in tmux (2026-10-22, gemini not installed); not checked by a person | | | |
 | 9 | Codex adapter (`adapters/codex/AGENTS.md`) | Passed in tmux (2026-10-22); not checked by a person | | | |
+| 10 | 3D and motion on real devices and desktops | Checked by Claude on 2026-11-16 with a WebGL scene: Chrome on macOS with the GPU on and off (reduced motion through the browser's emulation, `--reduced-motion`), and the Android emulator (Chrome) and the iOS simulator (Safari) with the system's reduced motion off, on and off again. No real phone, no desktop app, no Windows or Linux, no frame rate on iOS | | | |
 
 ## Setup
 
@@ -133,3 +134,13 @@ The data warning of check 8 applies.
 3. The run goes through `mis` start, plan, check, review and verdict. At the approval it asks you to run `mis approve plan` yourself, and the final verdict matches `mis verdict`.
 
 Pass: all of 3. If Codex runs `mis approve plan` itself instead of asking you, the check fails.
+
+## 10. 3D and motion on real devices and desktops
+
+A 3D screen of the app under test, or the WebGL scene in `tests/integration/mis-browse-webgl.test.mjs` served from this Mac (`adb reverse tcp:<port> tcp:<port>` for an Android phone). Each check that turns reduced motion on turns it back off.
+
+1. Android phone: `mis android gfx <package> --reset`, five seconds of the scene, `mis android gfx <package>`: the scene's surface presents frames at or above the `DESIGN.md` budget. `mis android reduced-motion on`, relaunch: two `mis android shot`s and `mis frames` show the scene drawn and still. `mis android reduced-motion off` restores the old values.
+2. iPhone: an Instruments trace of the scene (`Game Performance`, or `Animation Hitches` for UI) shows the frame rate at or above the budget. Settings > Accessibility > Motion > Reduce Motion on: the scene is still; then off.
+3. Desktop app (macOS, Windows): two screenshots of the app's window and `mis frames`; with the system's reduced motion on (macOS: System Settings > Accessibility > Display > Reduce motion; Windows: Settings > Accessibility > Visual effects > Animation effects off) the scene is still; then off. Frame rate from the app's counter or the platform's profiler.
+
+Pass: 1 to 3 behave as described on the platforms the product ships on.

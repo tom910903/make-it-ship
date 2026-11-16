@@ -10,6 +10,26 @@ import { makeRepo, mis, fakeHome, SYS_PATH } from '../helpers.mjs';
 
 const ok = (r) => { assert.equal(r.code, 0, r.err + r.out); return r.json; };
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const GFX = `Applications Graphics Acceleration Info:
+** Graphics info for pid 4242 [com.android.settings] **
+Stats since: 123ns
+Total frames rendered: 240
+Janky frames: 12 (5.00%)
+Janky frames (legacy): 30 (12.50%)
+50th percentile: 8ms
+90th percentile: 14ms
+95th percentile: 18ms
+99th percentile: 32ms
+Number Missed Vsync: 2
+`;
+// SurfaceFlinger layer list as API 34+ prints it; OLD_SFLIST is the one-name-per-line form of older Android.
+const SFLIST = `RequestedLayerState{Leaf:0:0#5 parentId=4}
+RequestedLayerState{ActivityRecord{1 u0 com.android.settings/.Settings t5}#40 parentId=3}
+RequestedLayerState{com.android.settings/com.android.settings.Settings#50 parentId=40}
+RequestedLayerState{6ccdc74 SurfaceView[com.android.settings/com.android.settings.Settings](BLAST)#52 parentId=51}
+RequestedLayerState{com.other.app/x.Main#60 parentId=1}
+`;
+const OLD_SFLIST = 'Leaf:0:0#5\ncom.android.settings/com.android.settings.Settings#50\n6ccdc74 SurfaceView[com.android.settings/com.android.settings.Settings](BLAST)#52\ncom.other.app/x.Main#60\n';
 const XML = '<?xml version="1.0"?><hierarchy><node text="Settings" resource-id="" class="android.widget.TextView" content-desc="" clickable="true" bounds="[0,0][100,50]" /></hierarchy>UI hierchary dumped to: /dev/tty';
 
 /** Stub adb/emulator: logs argv as JSON lines to <home>/adb.log; device list comes from <home>/devices.txt. */
@@ -26,6 +46,28 @@ else if (s.endsWith('getprop sys.boot_completed')) process.stdout.write('1\\n');
 else if (s.endsWith('emu avd name')) process.stdout.write('Medium_Phone\\r\\nOK\\r\\n');
 else if (s.endsWith('exec-out screencap -p')) process.stdout.write(Buffer.from(${JSON.stringify(PNG)}, 'base64'));
 else if (s.endsWith('exec-out uiautomator dump /dev/tty')) process.stdout.write(${JSON.stringify(XML)});
+else if (s.endsWith('dumpsys gfxinfo com.android.settings')) process.stdout.write(${JSON.stringify(GFX)});
+else if (s.includes('dumpsys gfxinfo com.example.gone')) process.stdout.write('No process found for: com.example.gone\\n');
+else if (a[3] === 'dumpsys' && a[4] === 'SurfaceFlinger') {
+  // --latency: refresh period, then desiredPresent actualPresent frameReady per frame (0 = empty slot, INT64_MAX = not presented yet)
+  const name = String(a[6] ?? '').replace(/^'|'$/g, ''), lf = ${JSON.stringify(join(h.home, 'sflist.txt'))};
+  if (a[5] === '--list') process.stdout.write(fs.existsSync(lf) ? fs.readFileSync(lf, 'utf8') : ${JSON.stringify(SFLIST)});
+  else if (a[5] === '--latency') {
+    const rows = ['16666667'];
+    if (name.includes('SurfaceView[com.android.settings')) {
+      for (let i = 0; i < 61; i++) { const t = 1000000000 + i * 16666667; rows.push(t + ' ' + (t + 5) + ' ' + (t + 2)); }
+      rows.push('0 9223372036854775807 0', '0 0 0');
+    } else if (name === 'com.android.settings/com.android.settings.Settings#50') rows.push('5000 2000000000 5000', '6000 2100000000 6000');
+    process.stdout.write(rows.join('\\n') + '\\n');
+  }
+}
+else if (a[3] === 'settings') {
+  const f = ${JSON.stringify(join(h.home, 'settings.json'))}, st = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : { animator_duration_scale: '1.0', window_animation_scale: '1.0' };
+  if (a[4] === 'get') process.stdout.write((st[a[6]] ?? 'null') + '\\n');
+  else if (a[4] === 'put') st[a[6]] = a[7];
+  else if (a[4] === 'delete') delete st[a[6]];
+  fs.writeFileSync(f, JSON.stringify(st));
+}
 `);
   writeFileSync(join(h.bin, 'emulator'), `#!${process.execPath}
 const fs = require('fs'); const a = process.argv.slice(2);
@@ -129,4 +171,39 @@ test('relay: fixed endpoints over adb on loopback; tailnet needs an android toke
   } finally {
     assert.equal(ok(mis(dir, ['android', 'daemon', 'stop'], { env: a.env })).stopped, true);
   }
+});
+
+test('gfx: frame statistics of a running app from dumpsys gfxinfo; --reset clears them first; a stopped app is an error', () => {
+  const h = androidHome('emulator-5554 device model:sdk_gphone64');
+  const r = ok(mis(makeRepo(), ['android', 'gfx', 'com.android.settings'], { env: h.env }));
+  const surfaces = [{ layer: '6ccdc74 SurfaceView[com.android.settings/com.android.settings.Settings](BLAST)#52', frames: 61, fps: 60 },
+    { layer: 'com.android.settings/com.android.settings.Settings#50', frames: 2, fps: 10 }];
+  assert.deepEqual(r, { serial: 'emulator-5554', package: 'com.android.settings', totalFrames: 240, jankyFrames: 12, jankyPercent: 5,
+    percentilesMs: { p50: 8, p90: 14, p95: 18, p99: 32 }, surfaces });
+  assert.ok(!h.calls().some((c) => c.join(' ').includes('com.other.app')), 'another app\'s layers are never queried');
+  writeFileSync(join(h.home, 'sflist.txt'), OLD_SFLIST);
+  assert.deepEqual(ok(mis(makeRepo(), ['android', 'gfx', 'com.android.settings', '--serial', 'emulator-5554'], { env: h.env })).surfaces, surfaces, 'older Android list format');
+  ok(mis(makeRepo(), ['android', 'gfx', 'com.android.settings', '--reset'], { env: h.env }));
+  const calls = h.calls().map((c) => c.join(' '));
+  assert.ok(calls.includes('-s emulator-5554 shell dumpsys gfxinfo com.android.settings reset'));
+  assert.ok(calls.includes("-s emulator-5554 shell dumpsys SurfaceFlinger --latency-clear 'com.android.settings/com.android.settings.Settings#50'"), 'reset clears the app\'s layers');
+  assert.ok(!calls.some((c) => c.includes('com.other.app')));
+  assert.match(mis(makeRepo(), ['android', 'gfx', 'com.example.gone'], { env: h.env }).err, /com\.example\.gone is not running/);
+  assert.match(mis(makeRepo(), ['android', 'gfx', 'com.example.gone', '--reset'], { env: h.env }).err, /com\.example\.gone is not running/, 'no silent reset of nothing');
+  assert.match(mis(makeRepo(), ['android', 'gfx', 'x; reboot'], { env: h.env }).err, /package must look like/);
+});
+
+test('reduced-motion: on sets the three animation scales to 0 and remembers them; off puts back exactly what was there', () => {
+  const h = androidHome('emulator-5554 device model:sdk_gphone64');
+  const run = (...a) => ok(mis(makeRepo(), ['android', 'reduced-motion', ...a], { env: h.env }));
+  assert.deepEqual(run('status'), { serial: 'emulator-5554', reduced: false,
+    scales: { window_animation_scale: '1.0', transition_animation_scale: 'null', animator_duration_scale: '1.0' } });
+  const on = run('on');
+  assert.equal(on.reduced, true);
+  assert.deepEqual(Object.values(on.scales), ['0', '0', '0']);
+  run('on'); // twice: the first saved values stay the ones to restore
+  const off = run('off');
+  assert.deepEqual(off.scales, { window_animation_scale: '1.0', transition_animation_scale: 'null', animator_duration_scale: '1.0' });
+  assert.equal(off.reduced, false);
+  assert.match(mis(makeRepo(), ['android', 'reduced-motion', 'maybe'], { env: h.env }).err, /usage: mis android reduced-motion on\|off\|status/);
 });

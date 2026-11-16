@@ -15,7 +15,7 @@ import { inRepo, outFiles } from './commands-flow.mjs';
 import { repoRoot } from './tree-hash.mjs';
 import { loadConfig } from './config.mjs';
 import { DEFAULT_DOCS } from './layout.mjs';
-import { decodePng, encodePng, compareImages } from './png.mjs';
+import { decodePng, encodePng, compareImages, frameStats } from './png.mjs';
 
 const USAGE = `usage: mis browse <command> [args] [--remote]
   lifecycle   start [--local-only] | status | stop | restart  (--local-only: only this machine is reachable; plain upload runs only there)
@@ -28,6 +28,7 @@ const USAGE = `usage: mis browse <command> [args] [--remote]
   visual      screenshot [--viewport|--selector css|--clip x,y,w,h] [sel|@ref] [path] | responsive [prefix]
               pdf [path] [--format letter|a4|legal] [--margins 0.5in] [--landscape] | diff <url1> <url2>
               media [--images|--videos|--audio] [sel] | inspect [sel] [--all] | ux-audit
+              webgl [canvas sel] [--frames 10..600] [--reduced-motion]   (WebGL available, each canvas drawn/animating, fps)
   style       style <sel> <prop> <value> | style --undo [N] | cleanup [--ads|--cookies|--sticky|--social|--all]
               prettyscreenshot [--scroll-to sel|text] [--cleanup] [--hide sel]... [--width px] [path]
   snapshot    snapshot [-i] [-c] [-C] [-d N] [-s sel] [-D] [-a] [-o path] | snapshot -H '{"@e1":"green"}' [-o path]
@@ -265,4 +266,18 @@ function openUrl([target, ...rest], cwd) {
   return { opened: url, with: cmd };
 }
 
-export const browseCommands = { browse, pdf, doc, slides, 'visual-verdict': visualVerdict, 'open-url': openUrl };
+/** mis frames <a.png> <b.png> [--clip x,y,w,h]: two screenshots of the same screen (browser, Android, iOS simulator, a desktop
+ * window) → whether the area is drawn (blank) and whether it moves (animating). Read-only. */
+function frames(argv, cwd) {
+  const args = [...argv], ci = args.indexOf('--clip');
+  const clipArg = ci >= 0 ? args.splice(ci, 2)[1] : null;
+  if (args.length !== 2) throw new Error('usage: mis frames <a.png> <b.png> [--clip x,y,w,h]');
+  const read = (f) => { const p = resolve(cwd, f); if (!existsSync(p)) throw new Error(`no such file: ${p}`); return decodePng(readFileSync(p)); };
+  const a = read(args[0]), z = read(args[1]);
+  const nums = clipArg?.split(',');
+  if (nums && (nums.length !== 4 || !nums.every((v) => /^\d+$/.test(v)))) throw new Error('usage: mis frames <a.png> <b.png> [--clip x,y,w,h] (whole pixels)');
+  const clip = nums ? (([x, y, width, height]) => ({ x, y, width, height }))(nums.map(Number)) : undefined;
+  return frameStats(a, z, clip);
+}
+
+export const browseCommands = { browse, pdf, doc, slides, 'visual-verdict': visualVerdict, frames, 'open-url': openUrl };

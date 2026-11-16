@@ -6,13 +6,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail, flag } from './cli-util.mjs';
 import { relayFamily } from './relay-daemon.mjs';
-import { adb, sdkTool, listDevices, pickSerial, screenshot, uiNodes, input, launch } from './android.mjs';
+import { adb, sdkTool, listDevices, pickSerial, screenshot, uiNodes, input, launch, launchArgs, parseGfx, packageLayers, latencyFps } from './android.mjs';
+import { readHome, writeHome } from './home.mjs';
 
 const RELAY = fileURLToPath(new URL('./android-relay.mjs', import.meta.url));
 const relay = relayFamily('android');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const USAGE = 'usage: mis android <devices|avds|boot <avd> [--timeout 300]|kill <emulator-serial>|shot [--out f.png]|ui|tap <x> <y>'
-  + '|swipe <x1> <y1> <x2> <y2> [ms]|type <text>|key <KEYCODE_*>|launch <package>|install <apk>'
+  + '|swipe <x1> <y1> <x2> <y2> [ms]|type <text>|key <KEYCODE_*>|launch <package>|install <apk>|gfx <package> [--reset]|reduced-motion on|off|status'
   + '|daemon start [--port 9098] [--tailnet]|status|stop|mint <name>|tokens [revoke <name>]> [--serial <serial>]';
 
 function avds() {
@@ -76,7 +77,50 @@ async function daemon([sub, ...args]) {
   return relay.start(RELAY, { serial, port, tailnetAddr, tailnetPort: tailnet ? Number(flag(args, '--tailnet-port') ?? 0) : null });
 }
 
+/**
+ * Frame statistics of a running app: the UI toolkit's frames (`dumpsys gfxinfo`: janky share, frame-time percentiles) and, per
+ * surface of the app (a GL or Vulkan scene in a SurfaceView, a browser's content surface), the frames SurfaceFlinger presented
+ * and their rate. `--reset` clears both first: reset, use the screen for a few seconds, then read. Reads only; changes nothing else.
+ */
+function gfx([pkg, ...rest], cwd, serial) {
+  launchArgs(pkg); // the same package-name check as launch
+  const reset = rest.includes('--reset');
+  const r = adb(['-s', serial, 'shell', 'dumpsys', 'gfxinfo', pkg, ...(reset ? ['reset'] : [])]);
+  if (r.status !== 0) fail(`adb dumpsys gfxinfo failed: ${String(r.stderr).trim()}`);
+  if (/No process found/i.test(r.stdout)) fail(`${pkg} is not running: launch it first`);
+  const sf = (...a) => adb(['-s', serial, 'shell', 'dumpsys', 'SurfaceFlinger', ...a]).stdout;
+  // the device shell gets one command line: names (with spaces, brackets) go in single quotes, so a name with one is skipped
+  const layers = packageLayers(sf('--list'), pkg).filter((n) => !n.includes("'"));
+  if (reset) { for (const n of layers) sf('--latency-clear', `'${n}'`); return { serial, package: pkg, reset: true }; }
+  const s = parseGfx(r.stdout);
+  if (!s) fail(`${pkg} is not running (or has drawn nothing): launch it first`);
+  const surfaces = layers.map((n) => ({ layer: n, ...latencyFps(sf('--latency', `'${n}'`)) })).filter((x) => x.frames > 0).sort((x, y) => y.frames - x.frames);
+  return { serial, package: pkg, ...s, surfaces };
+}
+
+// Android's "Remove animations": the three animation scales at 0 (apps see ValueAnimator.areAnimatorsEnabled() false).
+// `on` remembers the values it replaced (per device, the first time), `off` puts exactly those back (deleting unset ones).
+const SCALES = ['window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'];
+function reducedMotion([sub], cwd, serial) {
+  if (!['on', 'off', 'status'].includes(sub)) fail('usage: mis android reduced-motion on|off|status [--serial <serial>]');
+  const sh = (...a) => { const r = adb(['-s', serial, 'shell', 'settings', ...a]); if (r.status !== 0) fail(`adb settings failed: ${String(r.stderr).trim()}`); return r.stdout.trim(); };
+  const read = () => Object.fromEntries(SCALES.map((k) => [k, sh('get', 'global', k)]));
+  const saved = readHome('android-motion.json', {}) ?? {};
+  if (sub === 'on') {
+    if (!saved[serial]) writeHome('android-motion.json', { ...saved, [serial]: read() });
+    for (const k of SCALES) sh('put', 'global', k, '0');
+  } else if (sub === 'off') {
+    const back = saved[serial] ?? Object.fromEntries(SCALES.map((k) => [k, '1.0']));
+    for (const k of SCALES) back[k] === 'null' ? sh('delete', 'global', k) : sh('put', 'global', k, back[k]);
+    const { [serial]: _, ...rest } = saved;
+    writeHome('android-motion.json', rest);
+  }
+  const scales = read();
+  return { serial, reduced: SCALES.every((k) => Number(scales[k]) === 0 && scales[k] !== 'null'), scales };
+}
+
 const ON_DEVICE = {
+  gfx, 'reduced-motion': reducedMotion,
   shot, install,
   ui: (a, cwd, serial) => ({ serial, nodes: uiNodes(serial) }),
   tap: ([x, y], cwd, serial) => (input(serial, 'tap', { x, y }), { serial, tapped: [Number(x), Number(y)] }),

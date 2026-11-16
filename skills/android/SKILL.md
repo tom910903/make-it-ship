@@ -13,7 +13,9 @@ description: Make It Ship Android devices and emulators over adb (iOS-family equ
 - `mis android avds` lists AVDs; `mis android boot <avd>` starts one and waits until it has booted; `mis android kill emulator-5554` stops it (emulators only).
 - With more than one device online, every command needs `--serial <serial>`.
 - `mis android ui` returns the screen's UI nodes (text, id, desc, clickable, tap `center`). Prefer it over guessing coordinates from a screenshot.
-- `mis android shot [--out f.png]` saves a screenshot (default under the MIS state dir, not the repo, so evidence does not go stale).
+- `mis android shot [--out f.png]` saves a screenshot (default under the MIS state dir, not the repo, so evidence does not go stale). `mis frames <a.png> <b.png> [--clip x,y,w,h]` on two shots half a second apart: whether the area is drawn and whether it moves.
+- `mis android gfx <package> [--reset]`: frame statistics. The UI toolkit's frames (janky share, frame-time percentiles) and, for each surface of the app, the frames SurfaceFlinger presented and their rate: a GL or Vulkan scene, or a page in Chrome, draws to a surface, not to UI frames. Reset, use the screen a few seconds, then read.
+- `mis android reduced-motion on|off|status`: Android's Remove animations (the three animation scales at 0). Apps see `ValueAnimator.areAnimatorsEnabled()` false and Chrome pages `prefers-reduced-motion: reduce`. `off` puts back exactly the values `on` replaced: run it after the check, also when the check fails.
 - `mis android tap <x> <y>`, `swipe <x1> <y1> <x2> <y2> [ms]`, `type <text>` (letters, digits, spaces and `. , _ @ : / + = -` only), `key KEYCODE_BACK`, `launch <package>`, `install <apk>`.
 
 ## QA / fix / design review loop

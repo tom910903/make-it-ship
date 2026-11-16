@@ -2,6 +2,13 @@
 
 Each version is tagged `v<version>` on the commit that set it (`v0.9.0`: the release head).
 
+## 1.1.0 — 2026-11-16
+- Design starts from current references, on every platform the plan targets (web, desktop, iOS, Android): the design phase reads the platform's current guidelines (Apple Human Interface Guidelines, Material Design, Fluent), searches the web for the category with generic terms only (never company or product details), and writes `design/references.md` with each URL, a screenshot, what to borrow and what to avoid, and the trends seen with their sources.
+- 3D and motion: when a scene earns its place, `DESIGN.md` gets a "3D and motion" section with the library for the platform (three.js or React Three Fiber, RealityKit, Filament or SceneView, a GL or Vulkan view, ...), a frame-rate and size budget, a still frame under each platform's reduced-motion setting (`prefers-reduced-motion`, `accessibilityReduceMotion`, `ValueAnimator.areAnimatorsEnabled()`, `UISettings.AnimationsEnabled`, ...) and a fallback without 3D. The designer agent and QA follow it; QA says BLOCKED where nothing here can measure (no GPU, frame rate without a real iOS device, a desktop OS not at hand).
+- `mis frames <a.png> <b.png> [--clip x,y,w,h]`: whether an area of two screenshots from any platform is drawn and whether it moves.
+- `mis browse webgl [sel] [--frames N] [--reduced-motion]`: WebGL status and renderer from the browser's GPU report (nothing is created in the page), each canvas drawn and moving, the frame rate; `--reduced-motion` reloads with the preference and checks the scene stops. Without WebGL the result says so instead of reporting a blank canvas.
+- Android: `mis android gfx <package> [--reset]` gives UI jank and the frame rate of each surface the app presents (where GL and Vulkan scenes and Chrome pages draw, which `dumpsys gfxinfo` does not see); `mis android reduced-motion on|off|status` switches Android's Remove animations, which apps and Chrome pages receive, and `off` puts back the previous values.
+
 ## 1.0.1 — 2026-11-13
 - Updates arrive by themselves: `mis setup` on a marketplace install also turns on Claude Code's auto-update for its marketplace (`autoUpdate` under `extraKnownMarketplaces`; off by default for a GitHub marketplace).
 - After an update, session start points the status line and the CLAUDE.md block at the new version folder, with backups, so the status line no longer breaks when the old folder goes. Only our own entries, and only to a newer version.

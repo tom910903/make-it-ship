@@ -340,3 +340,31 @@ test('layout: the run flow reads .ai/, plans follow the layout, writer and revie
   for (const re of [/\.ai\//, /English/, /\.ko\.md/, /separate files/, /decisions\.md/, /tech\.md/]) assert.match(read('agents/writer.md'), re, `writer: ${re}`);
   assert.match(read('skills/setup/SKILL.md'), /mis layout write/);
 });
+
+test('design references and 3D: research before proposing, 3D rules for the designer, WebGL checks in QA', () => {
+  const de = read('skills/run/phases/design-explore.md');
+  assert.match(de, /design\/references\.md/);
+  assert.match(de, /source URL|its URL/i);
+  assert.match(de, /never (paste|put|send) (company|internal)|no company or product details/i, 'search terms stay generic: company policy');
+  assert.match(de, /3D/);
+  for (const re of [/prefers-reduced-motion/, /fallback/i, /fps|frame rate/i, /three\.js|React Three Fiber/]) assert.match(de, re);
+  const designer = read('agents/designer.md');
+  for (const re of [/3D/, /mis browse webgl/, /reduced.motion/i, /fallback/i]) assert.match(designer, re);
+  const qa = read('skills/run/phases/qa.md');
+  assert.match(qa, /mis browse webgl/);
+  assert.match(qa, /--reduced-motion/);
+  assert.match(qa, /BLOCKED/);
+  assert.match(read('skills/browse/SKILL.md'), /webgl/);
+});
+
+test('references, 3D and motion cover web, desktop and mobile, each with its own reduced-motion signal and checks', () => {
+  const de = read('skills/run/phases/design-explore.md');
+  for (const re of [/Human Interface Guidelines/, /Material/, /Fluent/, /desktop/i, /RealityKit/, /Filament|SceneView/,
+    /accessibilityReduceMotion/, /areAnimatorsEnabled/, /disableAnimations/, /AccessibilityInfo\.isReduceMotionEnabled/, /UISettings\.AnimationsEnabled/]) assert.match(de, re);
+  const qa = read('skills/run/phases/qa.md');
+  for (const re of [/mis frames/, /mis android gfx/, /mis android reduced-motion on/, /simctl io/, /ReduceMotionEnabled/, /never capture the user's whole screen/i]) assert.match(qa, re);
+  assert.match(qa, /(turn|put|write) it back|restore/i, 'reduced motion is put back after a check');
+  for (const re of [/mis frames/, /mis android gfx/]) assert.match(read('agents/designer.md'), re);
+  for (const re of [/gfx <package>/, /reduced-motion on\|off\|status/]) assert.match(read('skills/android/SKILL.md'), re);
+  for (const re of [/simctl/, /mis frames/, /Instruments/]) assert.match(read('skills/ios/SKILL.md'), re);
+});
